@@ -5,7 +5,8 @@ if (!defined('OP_PLUGIN')) die(420);
 
 add_filter('init', function() {
   $uri = explode('?', $_SERVER['REQUEST_URI'])[0];
-  $shop_url = op_settings()->shop_url;
+  $shop_url = @op_settings()->shop_url;
+  if (!$shop_url) return;
   $shop_url = trim($shop_url, '/');
   $slash = '\/';
   $pieces = explode('/', $uri);
