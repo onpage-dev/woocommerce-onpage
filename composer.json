@@ -1,0 +1,19 @@
+{
+    "name": "jake/woocommerce-onpace",
+    "authors": [
+        {
+            "name": "Giacomo rizzi",
+            "email": "gufoes@gmail.com"
+        }
+    ],
+    "require": {
+        "tareq1988/wp-eloquent": "dev-master",
+        "tightenco/collect": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+          "OpLib\\": "op-models/",
+          "Op\\": "db-models/"
+        }
+    }
+}
