@@ -14,7 +14,7 @@
 
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
-    <h1>OnPage Settings</h1>
+    <h1>OnPage Settings v1.0</h1>
     <table class="form-table">
     	<tbody>
         <tr>
