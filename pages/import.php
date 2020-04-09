@@ -6,15 +6,30 @@
 .op-card {
   background: #fff;
   padding: 1rem;
-  border-left: 4px solid #11a0d2;
+  border-left: 4px solid #56bd48;
   box-shadow: 0 0 8px -2px rgba(0,0,0,.3);
   margin: 2rem 0;
+}
+.op-card .op-card {
+  border-left-width: 2px;
+}
+#op-app h1 {
+  color: #56bd48;
+}
+#op-app .button {
+  background: #56bd48!important;
+  border: 1px solid #46ad38!important;
+  color: #fff!important;
+}
+#op-app .button:disabled {
+  opacity: .5;
 }
 </style>
 
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
-    <h1>OnPage Settings v1.0</h1>
+    <img src="<?=op_path_url(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 100px;">
+    <h1>OnPage&reg; Woocommerce Plugin 1.0</h1>
     <table class="form-table">
     	<tbody>
         <tr>
@@ -51,26 +66,6 @@
         <h2>{{ res.label }}:</h2>
         <table class="form-table">
         	<tbody>
-            <tr>
-              <th><label>Description field</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-content`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'html', 'text'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <th><label>Short description field</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-excerpt`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'html', 'text'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
             <tr>
               <th><label>Price field</label></th>
               <td>
@@ -172,6 +167,7 @@
     </div>
   </div>
 
+
   <div v-if="schema" class="op-card">
     <h1>File importer</h1>
 
@@ -185,6 +181,22 @@
       </div>
       <div v-else>
         All your files have been imported :-)
+      </div>
+    </div>
+  </div>
+
+  <div v-if="schema" class="op-card" style="line-height: 1.8">
+    <h1>Variable names</h1>
+
+    <div v-for="res in schema.resources" class="op-card">
+      <h2 style="margin: 0 0 0"><b>{{ res.label }}</b>: <code>{{ res.name }} | {{ toCamel(res.name) }}</code></h2>
+      <div style="margin: 0.3rem 0"><b>Relations:</b></div>
+      <div v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
+        {{ field.label }}: <code>{{ field.name }}</code>
+      </div>
+      <div style="margin: 0.3rem 0"><b>Fields:</b></div>
+      <div v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
+        {{ field.label }}: <code>{{ field.name }} | {{ field.type }}</code>
       </div>
     </div>
   </div>
@@ -319,6 +331,12 @@ new Vue({
       .finally(res => {
         this.is_updating = false
       })
+    },
+
+    toCamel (str) {
+      return str.split('_').map(x => {
+        return x[0].toLocaleUpperCase() + x.substring(1)
+      }).join('')
     },
   },
 
