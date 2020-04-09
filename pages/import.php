@@ -171,10 +171,41 @@
       <pre>{{ res.log.join('\n') }}</pre>
     </div>
   </div>
+
+  <div v-if="schema" class="op-card">
+    <h1>File importer</h1>
+
+    <div v-if="is_loading_media || !media">
+      Loading...
+    </div>
+    <div v-else>
+      <b>You have imported {{ media.length - non_imported_media.length }} / {{ media.length }} files.</b>
+      <div v-if="non_imported_media.length < media.length">
+        We are importing the rest, please do not close this page.
+      </div>
+    </div>
+  </div>
 </div>
 
 
 <script type="text/javascript">
+axios.interceptors.response.use(function (response) {
+  return response
+}, function (err) {
+  if (err.response) {
+    if (err.response.status == 400) {
+      alert('Error: '+err.response.data.error)
+    } else {
+      alert(`Error ${err.response.status}`)
+    }
+  } else if (err.request) {
+    alert('Request error')
+  } else {
+    alert('Connection error: ' + err.message)
+  }
+  return Promise.reject(err)
+})
+
 new Vue({
   el: '#op-app',
   data: {
@@ -185,6 +216,9 @@ new Vue({
     is_loading_schema: false,
     import_result: null,
     schema: null,
+    media: null,
+    is_loading_media: false,
+    is_caching_media: false,
   },
   computed: {
     form_unsaved () {
@@ -192,6 +226,9 @@ new Vue({
     },
     connection_string() {
       return (this.settings.company||'')+(this.settings.token||'')
+    },
+    non_imported_media () {
+      return (this.media || []).filter(x => !x.is_imported)
     },
   },
   created () {
@@ -203,12 +240,8 @@ new Vue({
         settings: this.settings_form,
       }).then(res => {
         console.log(res.data)
-        if (res.data.error) {
-          alert(`Error: ${res.data.error}`)
-        } else {
-          this.settings = _.clone(res.data)
-        }
-      }, err => alert(err.message))
+        this.settings = _.clone(res.data)
+      })
       .finally(res => {
         this.is_saving = false
       })
@@ -217,13 +250,9 @@ new Vue({
       this.is_importing = true
       this.import_result = null
       axios.post('?op-api=import').then(res => {
-        if (res.data.error) {
-          alert(`Error: ${res.data.error}`)
-        } else {
-          alert('Import completed!')
-          this.import_result = res.data
-        }
-      }, err => alert(err.message))
+        alert('Import completed!')
+        this.import_result = res.data
+      })
       .finally(res => {
         this.is_importing = false
       })
@@ -231,17 +260,40 @@ new Vue({
     refreshSchema() {
       this.is_loading_schema = true
       axios.post('?op-api=schema').then(res => {
-        console.log(res.data)
-        if (res.data.error) {
-          alert(`Error: ${res.data.error}`)
-        } else {
-          this.schema = res.data
-        }
-      }, err => alert(err.message))
+        this.schema = res.data
+      })
       .finally(res => {
         this.is_loading_schema = false
       })
-    }
+    },
+    refreshMedia() {
+      this.is_loading_media = true
+      axios.post('?op-api=media').then(res => {
+        this.media = res.data
+        this.cacheMedia()
+      })
+      .finally(res => {
+        this.is_loading_media = false
+      })
+    },
+    cacheMedia() {
+      let file = this.non_imported_media[0]
+      if (!file || this.is_caching_media) return
+      clearTimeout(this._media_timeout)
+
+      this.is_caching_media = true
+
+      console.log('caching', file.token)
+
+
+      axios.post(`?op-api=cache-media&token=${file.token}`).then(res => {
+        this.$set(file, 'is_imported', true)
+      }, err => console.log(err.message))
+      .finally(res => {
+        this.is_caching_media = false
+        this._media_timeout = setTimeout(() => this.cacheMedia(), 1000)
+      })
+    },
   },
 
   watch: {
@@ -253,6 +305,9 @@ new Vue({
         }
       },
     },
+    schema () {
+      this.refreshMedia()
+    }
   },
 })
 </script>

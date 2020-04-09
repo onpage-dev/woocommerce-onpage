@@ -11,7 +11,7 @@ class TermMeta extends Model {
     public $timestamps = false;
     protected $primaryKey = 'meta_id';
 
-    public function meta() {
+    public function parent() {
       return $this->belongsTo(Term::class, 'term_id');
     }
 }

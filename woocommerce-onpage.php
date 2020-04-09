@@ -38,6 +38,13 @@ add_filter('init', function() {
 
       case 'schema':
         op_ret(op_extract_schema());
+
+      case 'media':
+        op_ret(op_list_media());
+
+      case 'cache-media':
+        op_ret(op_api_cache_file($_REQUEST['token']));
+      default: op_err('Not implemented');
     }
   } catch ( Exception $e ) {
      op_ret([

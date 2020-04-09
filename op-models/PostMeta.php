@@ -11,7 +11,7 @@ class PostMeta extends Model {
     public $timestamps = false;
     protected $primaryKey = 'post_id';
 
-    public function meta() {
-      return $this->belongsTo(Post::class);
+    public function parent() {
+      return $this->belongsTo(Post::class, 'post_id');
     }
 }

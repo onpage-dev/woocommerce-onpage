@@ -28,15 +28,15 @@ function op_slug(string $base, string $table, string $field, string $old_slug = 
 }
 
 function op_download_json($url) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_HEADER, 0);
-    $result = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    return $status == 200 && $result ? json_decode($result) : null;
-  }
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  curl_setopt($ch, CURLOPT_HEADER, 0);
+  $result = curl_exec($ch);
+  $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return $status == 200 && $result ? json_decode($result) : null;
+}
 
 function op_initdb() {
   // $op_db = new DB();
@@ -183,7 +183,17 @@ function op_schema(object $set = null) {
   return $schema;
 }
 
+function op_err($msg, $data = []) {
+  $data = (array) $data;
+  $data['error'] = $msg;
+  op_ret($data);
+}
+
 function op_ret($data) {
+  $data = (array) $data;
+  if (@$data['error']) {
+    http_response_code(400);
+  }
   header("Content-Type: application/json");
   echo json_encode($data);
   exit;
@@ -237,6 +247,15 @@ function op_snake_to_camel($str) {
 
 
 function op_import_snapshot(object $sett = null) {
+  if (!is_dir(op_file_path('/'))) {
+    mkdir(op_file_path('/'));
+  }
+  if (!is_dir(op_file_path('cache'))) {
+    mkdir(op_file_path('cache'));
+  }
+  if (!is_dir(__DIR__.'/db-models')) {
+    mkdir(__DIR__.'/db-models');
+  }
 
   $db = op_download_snapshot($sett);
   op_record('download completed');
@@ -502,20 +521,237 @@ function op_gen_model(object $schema, object $res) {
   file_put_contents($file, $code);
 }
 
+function op_path_url(string $path) {
+  return plugins_url('', $path).'/'.basename($path);
+}
 
+function op_file_url($file, $w = null, $h = null, $contain = null) {
+  $path = op_file_path($file->token);
+  if (is_file($path)) {
 
-function op_file_url($file, $w = null, $h = null, $crop_type = null) {
-  $url = 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$file->token;
+    // Original
+    if (!$w && !$h) {
+      $target_path = op_file_path('/cache/'.substr($file->token, 0, 4).$file->name);
+      if (!file_exists($target_path)) {
+        symlink($path, $target_path);
+      }
+      return op_path_url($target_path);
+    } else {
+      $target_path = op_file_path('/cache/'.$file->token);
+      $target_path.= '.'.implode('x', [$w ?: '', $h ?: '']);
+      if ($contain) {
+        $target_path.= '-contain';
+      }
+      $target_path.= '.jpg';
+      if (!is_file($target_path));
 
-  if ($w || $h) {
-    $url.= '.'.implode('x', [$w ?: '', $h ?: '']);
-    if ($crop_type) {
-      $url.= '-'.$crop_type;
+      $opts = [
+        'width' => $w,
+        'height' => $h,
+        'crop' => !$contain,
+        'format' => 'jpeg',
+      ];
+      if (!op_resize($path, $target_path, $opts)) {
+        die("Cannot resize image ".basename($path));
+      }
+      return op_path_url($target_path);
     }
   }
 
-  $url.= '.png';
-
+  // Use onpage as a fallback
+  $url = 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$file->token;
+  if ($w || $h) {
+    $url.= '.'.implode('x', [$w ?: '', $h ?: '']);
+    if ($contain) {
+      $url.= '-contain';
+    }
+    $url.= '.png';
+  }
   $url.= '?name='.urlencode($file->name);
   return $url;
+}
+
+function op_list_media() {
+  $files = [];
+  foreach (op_schema()->resources as $res) {
+    $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
+    $res_files = $class::whereHas('parent', function($q) use ($res) {
+      $q->where('op_res', $res->id);
+    })
+    ->whereIn('meta_key', collect($res->fields)->whereIn('type', ['file', 'image'])->map(function($f) {
+      return "op_{$f->name}";
+    })->all())
+    ->pluck('meta_value')
+    ->map(function($el) {
+      return json_decode($el);
+    })
+    ->filter()
+    ->all();
+
+    $files = array_merge($files, $res_files);
+  }
+  foreach ($files as &$f) {
+    $f->is_imported = is_file(op_file_path($f->token));
+  }
+  return $files;
+}
+
+function op_file_path($token) {
+  return __DIR__."/storage/$token";
+}
+
+
+function op_api_cache_file($token) {
+  $path =op_file_path($token);
+  $url = $url = op_endpoint()."/storage/$token";
+  $bytes = copy($url, $path);
+  $ret = [
+    'url' => $url,
+    'path' => $path,
+    'bytes' => $bytes,
+  ];
+  if (!$bytes) {
+    op_err('Cannot import media', $ret);
+  } else {
+    op_ret($ret);
+  }
+}
+
+function op_endpoint()
+{
+  return "https://".op_getopt('company').'.onpage.it/api';
+}
+
+
+
+function op_resize($src_path, $dest_path, $params = []) {
+  /**
+  * Images scaling.
+  * @param string  $src_path Path to initial image.
+  * @param string $dest_path Path to save new image.
+  * @param array $params [optional] Must be an associative array of params
+  * $params['width'] int New image width.
+  * $params['height'] int New image height.
+  * $params['constraint'] array.$params['constraint']['width'], $params['constraint'][height]
+  * If specified the $width and $height params will be ignored.
+  * New image will be resized to specified value either by width or height.
+  * $params['aspect_ratio'] bool If false new image will be stretched to specified values.
+  * If true aspect ratio will be preserved an empty space filled with color $params['rgb']
+  * It has no sense for $params['constraint'].
+  * $params['crop'] bool If true new image will be cropped to fit specified dimensions. It has no sense for $params['constraint'].
+  * $params['rgb'] Hex code of background color. Default 0xFFFFFF.
+  * $params['quality'] int New image quality (0 - 100). Default 100.
+  * @return bool True on success.
+  */
+  $width = !empty($params['width']) ? $params['width'] : null;
+  $height = !empty($params['height']) ? $params['height'] : null;
+  $constraint = !empty($params['constraint']) ? $params['constraint'] : false;
+  $rgb = !empty($params['rgb']) ?  $params['rgb'] : 0xFFFFFF;
+  $quality = !empty($params['quality']) ?  $params['quality'] : 100;
+  $aspect_ratio = isset($params['aspect_ratio']) ?  $params['aspect_ratio'] : true;
+  $crop = isset($params['crop']) ?  $params['crop'] : true;
+
+  if (!file_exists($src_path)) {
+    return false;
+  }
+
+  if (!is_dir($dir = dirname($dest_path))) {
+    mkdir($dir);
+  }
+
+  $img_info = getimagesize($src_path);
+  if ($img_info === false) {
+    // die('xx: no size');
+    return false;
+  }
+
+  $ini_p = $img_info[0] / $img_info[1];
+  if ($constraint) {
+    $con_p = $constraint['width'] / $constraint['height'];
+    $calc_p = $constraint['width'] / $img_info[0];
+
+    if ($ini_p < $con_p) {
+      $height = $constraint['height'];
+      $width = $height * $ini_p;
+    } else {
+      $width = $constraint['width'];
+      $height = $img_info[1] * $calc_p;
+    }
+  } else {
+    if (!$width && $height) {
+      $width = ($height * $img_info[0]) / $img_info[1];
+    } elseif (!$height && $width) {
+      $height = ($width * $img_info[1]) / $img_info[0];
+    } elseif (!$height && !$width) {
+      $width = $img_info[0];
+      $height = $img_info[1];
+    }
+  }
+
+  $mime = $img_info['mime'];
+  preg_match('/^image\/([a-z]+)$/i', "$mime", $match);
+  $ext = strtolower(@$match[1]);
+  if (!in_array($ext, ['jpeg', 'jpg', 'png', 'gif'])) {
+    // die('xx: wrong format');
+    return false;
+  }
+  $output_format = ($ext == 'jpg') ? 'jpeg' : $ext;
+
+  $format = strtolower(substr($img_info['mime'], strpos($img_info['mime'], '/') + 1));
+  $icfunc = 'imagecreatefrom'.$format;
+
+  $iresfunc = 'image'.$output_format;
+
+  if (!function_exists($icfunc)) {
+    die('error: install gd library - no function: '.$icfunc);
+    return false;
+  }
+
+  $dst_x = $dst_y = 0;
+  $src_x = $src_y = 0;
+  $res_p = $width / $height;
+  if ($crop && !$constraint) {
+    $dst_w = $width;
+    $dst_h = $height;
+    if ($ini_p > $res_p) {
+      $src_h = $img_info[1];
+      $src_w = $img_info[1] * $res_p;
+      $src_x = ($img_info[0] >= $src_w) ? floor(($img_info[0] - $src_w) / 2) : $src_w;
+    } else {
+      $src_w = $img_info[0];
+      $src_h = $img_info[0] / $res_p;
+      $src_y = ($img_info[1] >= $src_h) ? floor(($img_info[1] - $src_h) / 2) : $src_h;
+    }
+  } else {
+    if ($ini_p > $res_p) {
+      $dst_w = $width;
+      $dst_h = $aspect_ratio ? floor($dst_w / $img_info[0] * $img_info[1]) : $height;
+      $dst_y = $aspect_ratio ? floor(($height - $dst_h) / 2) : 0;
+    } else {
+      $dst_h = $height;
+      $dst_w = $aspect_ratio ? floor($dst_h / $img_info[1] * $img_info[0]) : $width;
+      $dst_x = $aspect_ratio ? floor(($width - $dst_w) / 2) : 0;
+    }
+    $src_w = $img_info[0];
+    $src_h = $img_info[1];
+  }
+
+  $isrc = $icfunc($src_path);
+  $idest = imagecreatetruecolor($width, $height);
+  if (($format == 'png' || $format == 'gif') && $output_format == $format) {
+    imagealphablending($idest, false);
+    imagesavealpha($idest, true);
+    imagefill($idest, 0, 0, IMG_COLOR_TRANSPARENT);
+    imagealphablending($isrc, true);
+    $quality = 0;
+  } else {
+    imagefill($idest, 0, 0, $rgb);
+  }
+  imagecopyresampled($idest, $isrc, $dst_x, $dst_y, $src_x, $src_y, $dst_w, $dst_h, $src_w, $src_h);
+  $res = $iresfunc($idest, $dest_path, $quality);
+
+  imagedestroy($isrc);
+  imagedestroy($idest);
+
+  return $res;
 }
