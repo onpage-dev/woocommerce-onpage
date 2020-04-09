@@ -14,8 +14,6 @@ global $wpdb;
 define('OP_PLUGIN', true);
 define('PFX', $wpdb->prefix);
 
-require_once __DIR__.'/import.php';
-
 
 function op_slug(string $base, string $table, string $field, string $old_slug = null) {
   $base_slug = strtolower(trim(preg_replace('/[^A-Za-z0-9_]+/', '-', $base)));
