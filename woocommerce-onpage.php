@@ -18,6 +18,8 @@ require_once __DIR__.'/functions.php';
 op_initdb();
 
 add_filter('init', function() {
+  if (!current_user_can('administrator')) return;
+
   $api = @$_REQUEST['op-api'];
   if (!$api) return;
   try {
@@ -44,6 +46,10 @@ add_filter('init', function() {
 
       case 'cache-media':
         op_ret(op_api_cache_file($_REQUEST['token']));
+
+      case 'upgrade':
+        op_ret(op_upgrade());
+
       default: op_err('Not implemented');
     }
   } catch ( Exception $e ) {

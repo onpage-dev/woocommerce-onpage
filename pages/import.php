@@ -180,10 +180,22 @@
     </div>
     <div v-else>
       <b>You have imported {{ media.length - non_imported_media.length }} / {{ media.length }} files.</b>
-      <div v-if="non_imported_media.length < media.length">
+      <div v-if="non_imported_media.length > 0">
         We are importing the rest, please do not close this page.
       </div>
+      <div v-else>
+        All your files have been imported :-)
+      </div>
     </div>
+  </div>
+
+  <div class="op-card">
+    <h1>Update plugin</h1>
+    <i>Just click this button to download an update from github</i>
+    <br>
+    <br>
+    <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
+    <i v-else>Upgrading...</i>
   </div>
 </div>
 
@@ -218,6 +230,7 @@ new Vue({
     schema: null,
     media: null,
     is_loading_media: false,
+    is_updating: false,
     is_caching_media: false,
   },
   computed: {
@@ -252,6 +265,7 @@ new Vue({
       axios.post('?op-api=import').then(res => {
         alert('Import completed!')
         this.import_result = res.data
+        this.refreshMedia()
       })
       .finally(res => {
         this.is_importing = false
@@ -291,7 +305,18 @@ new Vue({
       }, err => console.log(err.message))
       .finally(res => {
         this.is_caching_media = false
-        this._media_timeout = setTimeout(() => this.cacheMedia(), 1000)
+        this._media_timeout = setTimeout(() => this.cacheMedia(), 300)
+      })
+    },
+    updatePlugin() {
+      if (this.is_updating) return
+      this.is_updating = true
+
+      axios.post(`?op-api=upgrade`).then(res => {
+        alert('Upgrade completato')
+      }, err => console.log(err.message))
+      .finally(res => {
+        this.is_updating = false
       })
     },
   },
