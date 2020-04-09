@@ -314,6 +314,7 @@ new Vue({
 
       axios.post(`?op-api=upgrade`).then(res => {
         alert('Upgrade completato')
+        location.reload()
       }, err => console.log(err.message))
       .finally(res => {
         this.is_updating = false
