@@ -37,25 +37,7 @@ function op_download_json($url) {
 }
 
 function op_initdb() {
-  // $op_db = new DB();
-  // $op_db->addConnection([
-  //   'driver'    => 'mysql',
-  //   'host'      => DB_HOST,
-  //   'database'  => DB_NAME,
-  //   'username'  => DB_USER,
-  //   'password'  => DB_PASSWORD,
-  //   'charset'   => DB_CHARSET,
-  //   // 'collation' => DB_COLLATE,
-  //   'prefix'    => '',
-  // ]);
-  // $op_db->setAsGlobal();
-
   DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
-  // try {
-  // } catch (PDOException $e) {
-  //   echo($e);
-  //   exit;
-  // };
 
   // Create helper columns
   if (op_settings()->migration < 33) {
@@ -410,7 +392,7 @@ function op_import_resource(object $db, object $res, array $res_map) {
     if ($lab_img_field && $thing->fields->$lab_img_field) {
       $meta[] = [
         $base_tablemeta_ref => $object_id,
-        'meta_key' => '_thumbnail_id',
+        'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
         'meta_value' => json_encode(
           $thing->fields->$lab_img_field,
         ),

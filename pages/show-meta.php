@@ -61,6 +61,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
 }
 #onpage_meta table td img {
   background: #fff;
+  max-width: 200px;
 }
 #onpage_meta table td input {
   background: #fff;

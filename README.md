@@ -170,7 +170,7 @@ op_page('/Section/products.articles', function(Op\Article $article) {
 ```
 
 
-__NOTE:__ let's breakdown '/Section/products.articles':
+__NOTE:__ let's breakdown that `/Section/products.articles`:
 - `Section` is the name of the Eloquent Model (Op\Section must exist)
 - `products` is the relation starting from Section (e.g. the one you use when you do `$section->products`)
 - `articles` is the relation starting from the Product resource (e.g. $product->articles)
