@@ -65,9 +65,10 @@ function op_build_page_path(array $page, array $pieces = []) {
   foreach ($page as $i => $step) {
     $rels = explode('.', $step);
     if ($i == 0) {
-      $res_name = array_shift($rels);
-      $res = @op_schema()->resources->$res_name;
-      if (!$res) die("Resource not found: $res_name");
+      $class_name = array_shift($rels);
+      $class_name = "Op\\$class_name";
+      $res = @$class_name::getResource();
+      if (!$res) throw new Exception("Resource not found: $class_name");
       $path = [
         [
           'res' => $res,
@@ -77,7 +78,7 @@ function op_build_page_path(array $page, array $pieces = []) {
     foreach ($rels as $rel_name) {
       $prev_res = $path[count($path)-1]['res'];
       $rel_field = $prev_res->fields->$rel_name;
-      if (!$rel_field) die("Relation not found: $rel_name");
+      if (!$rel_field) throw new Exception("Relation not found: $rel_name");
       $path[] = [
         'rel' => $rel_field->rel_field,
         'res' => $rel_field->rel_res,
@@ -99,7 +100,7 @@ function op_use_page($action, $page, $pieces) {
     $element = $query->first();
 
     if (!$element) {
-      die('Cannot find model 404');
+      throw new Exception('Cannot find model 404');
     }
   } else {
     $element = null;
