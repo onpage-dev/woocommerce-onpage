@@ -88,7 +88,7 @@ function pn_change_product_image_link( $image, $attachment_id, $size, $icon ){
     $src = op_file_url($file);
   }
   $img = [
-    $src,
+    $src, '', '',
   ];
   return $img;
 }
