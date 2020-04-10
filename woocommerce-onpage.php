@@ -41,11 +41,11 @@ add_filter('init', function() {
       case 'schema':
         op_ret(op_extract_schema());
 
-      case 'media':
-        op_ret(op_list_media());
+      case 'list-file':
+        op_ret(op_list_files());
 
-      case 'cache-media':
-        op_ret(op_api_cache_file($_REQUEST['token']));
+      case 'import-files':
+        op_ret(op_import_files(op_request('files')));
 
       case 'upgrade':
         op_ret(op_upgrade());
@@ -70,6 +70,47 @@ add_filter('admin_menu', function() {
     function() { require __DIR__.'/pages/import.php'; },
   );
 });
+
+
+
+// Set image for posts
+add_filter( 'wp_get_attachment_image_src', 'pn_change_product_image_link', 50, 4 );
+function pn_change_product_image_link( $image, $attachment_id, $size, $icon ){
+  if (@$attachment_id[0] != '{') return $image;
+  $file = json_decode($attachment_id);
+  $sizes = [
+    'thumbnail' => [150, 150],
+  ];
+  $size = @$sizes[$size];
+  if ($size) {
+    $src = op_file_url($file, $size[0], $size[1], 'zoom');
+  } else {
+    $src = op_file_url($file);
+  }
+  $img = [
+    $src,
+  ];
+  return $img;
+}
+
+
+// Add tab with product info
+add_filter( 'woocommerce_product_data_tabs', function ( $tabs ) {
+    $tabs['onpage-meta'] = array(
+        'label' => __( 'OnPage Meta', 'op' ),
+        'target' => 'onpage_meta',
+    );
+    // print_r($tabs);
+    return $tabs;
+} , 99 , 1 );
+
+
+add_action('woocommerce_product_data_panels', function() {
+	global $woocommerce, $post;
+  require_once __DIR__.'/pages/show-meta.php';
+});
+
+
 
 
 require_once(__DIR__.'/router.php');

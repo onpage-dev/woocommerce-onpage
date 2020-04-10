@@ -242,8 +242,6 @@ function op_snake_to_camel($str) {
   return $ret;
 }
 
-
-
 function op_import_snapshot(object $sett = null) {
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
@@ -295,7 +293,7 @@ function op_import_snapshot(object $sett = null) {
 
 
   while ($res = $next_res()) {
-    op_import($db, $res, $res_map);
+    op_import_resource($db, $res, $res_map);
     op_record("fine $res->label");
   }
   delete_option("product_cat_children");
@@ -317,10 +315,11 @@ function op_import_snapshot(object $sett = null) {
   op_record('transaction committed');
 }
 
-
-function op_import(object $db, object $res, array $res_map) {
+function op_import_resource(object $db, object $res, array $res_map) {
   $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
   $lab_field = $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '');
+  $lab_img = collect($res->fields)->where('type', 'image')->first();
+  $lab_img_field = $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '');
 
   $base_table = $res->is_product ? 'posts' : 'terms';
   $base_table_key = $res->is_product ? 'ID' : 'term_id';
@@ -404,6 +403,15 @@ function op_import(object $db, object $res, array $res_map) {
 
     // Calculate new metadata
     $meta = [];
+    if ($lab_img_field && $thing->fields->$lab_img_field) {
+      $meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => '_thumbnail_id',
+        'meta_value' => json_encode(
+          $thing->fields->$lab_img_field,
+        ),
+      ];
+    }
 
 
     // Fields
@@ -480,15 +488,21 @@ function op_import(object $db, object $res, array $res_map) {
   } // end $thing->data cycle
 
   op_record('cycle ended');
-  DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)->delete();
+  DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)
+    ->where(function($q) {
+      $q->where('meta_key', 'like', 'op\_%')
+        ->orWhereIn('meta_key', [
+          '_sale_price', '_regular_price', '_price',
+          '_sku', '_weight', '_width', '_length', '_height',
+          '_thumbnail_id',
+        ]);
+    })->delete();
   op_record('deleted meta');
   DB::table($base_tablemeta)->insert($all_meta);
   op_record('created meta');
+
   return true;
 }
-
-
-
 
 function op_gen_model(object $schema, object $res) {
   $camel_name = op_snake_to_camel($res->name);
@@ -519,7 +533,7 @@ function op_gen_model(object $schema, object $res) {
   file_put_contents($file, $code);
 }
 
-function op_path_url(string $path) {
+function op_link(string $path) {
   return plugins_url('', $path).'/'.basename($path);
 }
 
@@ -533,7 +547,7 @@ function op_file_url($file, $w = null, $h = null, $contain = null) {
       if (!file_exists($target_path)) {
         symlink($path, $target_path);
       }
-      return op_path_url($target_path);
+      return op_link($target_path);
     } else {
       $target_path = op_file_path('/cache/'.$file->token);
       $target_path.= '.'.implode('x', [$w ?: '', $h ?: '']);
@@ -552,7 +566,7 @@ function op_file_url($file, $w = null, $h = null, $contain = null) {
       if (!op_resize($path, $target_path, $opts)) {
         die("Cannot resize image ".basename($path));
       }
-      return op_path_url($target_path);
+      return op_link($target_path);
     }
   }
 
@@ -569,38 +583,55 @@ function op_file_url($file, $w = null, $h = null, $contain = null) {
   return $url;
 }
 
-function op_list_media() {
+function op_list_files() {
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
+    $meta_col = $res->is_product ? 'post_id' : 'term_id';
     $res_files = $class::whereHas('parent', function($q) use ($res) {
       $q->where('op_res', $res->id);
     })
     ->whereIn('meta_key', collect($res->fields)->whereIn('type', ['file', 'image'])->map(function($f) {
       return "op_{$f->name}";
     })->all())
-    ->pluck('meta_value')
+    ->pluck('meta_value', $meta_col)
     ->map(function($el) {
       return json_decode($el);
     })
     ->filter()
     ->all();
-
-    $files = array_merge($files, $res_files);
+    foreach ($res_files as $object_id => $file) {
+      if (!isset($files[$file->token])) {
+        $files[$file->token] = (object) [
+          'info' => (object) $file,
+          'term_id' => [],
+          'post_id' => [],
+        ];
+      }
+      $files->$meta_col[] = $object_id;
+    }
   }
   foreach ($files as &$f) {
     $f->is_imported = is_file(op_file_path($f->token));
   }
-  return $files;
+  return array_values($files);
 }
 
 function op_file_path($token) {
   return __DIR__."/storage/$token";
 }
 
+function op_import_files(array $files) {
+  $ret = [];
+  foreach ($files as $file) {
+    $ret[$file->info->token] = op_import_file($file);
+  }
+  return $ret;
+}
 
-function op_api_cache_file($token) {
-  $path =op_file_path($token);
+function op_import_file(object $file) {
+  $token = $file->info->token;
+  $path = op_file_path($token);
   $url = $url = op_endpoint()."/storage/$token";
   $bytes = copy($url, $path);
   $ret = [
@@ -608,19 +639,12 @@ function op_api_cache_file($token) {
     'path' => $path,
     'bytes' => $bytes,
   ];
-  if (!$bytes) {
-    op_err('Cannot import media', $ret);
-  } else {
-    op_ret($ret);
-  }
+  return $bytes;
 }
 
-function op_endpoint()
-{
+function op_endpoint() {
   return "https://".op_getopt('company').'.onpage.it/api';
 }
-
-
 
 function op_resize($src_path, $dest_path, $params = []) {
   /**
@@ -754,7 +778,6 @@ function op_resize($src_path, $dest_path, $params = []) {
   return $res;
 }
 
-
 function op_upgrade() {
   $zip_path = __DIR__.'/storage/upgrade.zip';
   $source = 'https://github.com/gufoe/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
@@ -763,4 +786,41 @@ function op_upgrade() {
   require_once(ABSPATH .'/wp-admin/includes/file.php');
   WP_Filesystem();
   unzip_file($zip_path, __DIR__);
+}
+
+function op_set_post_image($post_id, $path, $filename){
+  $upload_dir = wp_upload_dir();
+  if(wp_mkdir_p($upload_dir['path'])) {
+    $file = $upload_dir['path'] . '/' . $filename;
+  } else {
+    $file = $upload_dir['basedir'] . '/' . $filename;
+  }
+  copy($path, $file);
+
+
+  $wp_filetype = wp_check_filetype($filename, null );
+  $attachment = array(
+    'post_mime_type' => $wp_filetype['type'],
+    'post_title' => sanitize_file_name($filename),
+    'post_content' => '',
+    'post_status' => 'inherit'
+  );
+  $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
+  require_once(ABSPATH . 'wp-admin/includes/image.php');
+  $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
+  $res1 = wp_update_attachment_metadata( $attach_id, $attach_data );
+  $res2 = set_post_thumbnail( $post_id, $attach_id );
+}
+
+function op_request(string $name = null) {
+  static $req = null;
+  if (!$req) {
+    $data = file_get_contents('php://input');
+    $req = (object) json_decode($data);
+  }
+  return $name ? @$req->$name : $req;
+}
+
+function op_locale() {
+  return substr(get_locale(), 0, 2);
 }

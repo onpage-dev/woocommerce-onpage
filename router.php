@@ -1,6 +1,6 @@
 <?php
 
-if (!defined('OP_PLUGIN')) die(420);
+if (!defined('OP_PLUGIN')) die(400);
 
 
 add_filter('init', function() {

@@ -2,7 +2,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" charset="utf-8"></script>
 
-<style media="screen">
+<style file="screen">
 .op-card {
   background: #fff;
   padding: 1rem;
@@ -28,7 +28,7 @@
 
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
-    <img src="<?=op_path_url(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
+    <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
     <h1>OnPage&reg; Woocommerce Plugin 1.0</h1>
     <table class="form-table">
     	<tbody>
@@ -171,12 +171,15 @@
   <div v-if="schema" class="op-card">
     <h1>File importer</h1>
 
-    <div v-if="is_loading_media || !media">
+    <div v-if="is_loading_file || !files">
       Loading...
     </div>
     <div v-else>
-      <b>You have imported {{ media.length - non_imported_media.length }} / {{ media.length }} files.</b>
-      <div v-if="non_imported_media.length > 0">
+      <b>You have imported {{ files.length - non_imported_files.length }} / {{ files.length }} files.</b>
+      <div v-if="file_error">
+        Error while importing file, please <a @click.prevent="cacheFiles()" href="#">click here</a> to try again
+      </div>
+      <div v-else-if="non_imported_files.length > 0">
         We are importing the rest, please do not close this page.
       </div>
       <div v-else>
@@ -240,10 +243,11 @@ new Vue({
     is_loading_schema: false,
     import_result: null,
     schema: null,
-    media: null,
-    is_loading_media: false,
+    files: null,
+    is_loading_file: false,
     is_updating: false,
-    is_caching_media: false,
+    is_caching_file: false,
+    file_error: true,
   },
   computed: {
     form_unsaved () {
@@ -252,8 +256,8 @@ new Vue({
     connection_string() {
       return (this.settings.company||'')+(this.settings.token||'')
     },
-    non_imported_media () {
-      return (this.media || []).filter(x => !x.is_imported)
+    non_imported_files () {
+      return (this.files || []).filter(x => !x.is_imported)
     },
   },
   created () {
@@ -277,7 +281,7 @@ new Vue({
       axios.post('?op-api=import').then(res => {
         alert('Import completed!')
         this.import_result = res.data
-        this.refreshMedia()
+        this.refreshFiles()
       })
       .finally(res => {
         this.is_importing = false
@@ -292,32 +296,40 @@ new Vue({
         this.is_loading_schema = false
       })
     },
-    refreshMedia() {
-      this.is_loading_media = true
-      axios.post('?op-api=media').then(res => {
-        this.media = res.data
-        this.cacheMedia()
+    refreshFiles() {
+      this.is_loading_file = true
+      axios.post('?op-api=list-file').then(res => {
+        this.files = res.data
+        this.cacheFiles()
       })
       .finally(res => {
-        this.is_loading_media = false
+        this.is_loading_file = false
       })
     },
-    cacheMedia() {
-      let file = this.non_imported_media[0]
-      if (!file || this.is_caching_media) return
-      clearTimeout(this._media_timeout)
+    cacheFiles() {
+      let files = this.non_imported_files.slice(0, 2)
+      if (!files.length || this.is_caching_file) return
+      clearTimeout(this._file_timeout)
+      this.file_error = false
+      this.is_caching_file = true
 
-      this.is_caching_media = true
+      console.log('caching', files)
 
-      console.log('caching', file.token)
-
-
-      axios.post(`?op-api=cache-media&token=${file.token}`).then(res => {
-        this.$set(file, 'is_imported', true)
-      }, err => console.log(err.message))
+      axios.post('?op-api=import-files', { files }).then(res => {
+        for (var token in res.data) {
+          let m = files.find(x => x.info.token == token)
+          let ok = res.data[token]
+          if (ok) {
+            this.$set(m, 'is_imported', true)
+            this.$delete(m, 'error')
+          } else this.$set(m, 'error', true)
+        }
+        this._file_timeout = setTimeout(() => this.cacheFiles(), 300)
+      }, err => {
+        this.file_error = err
+      })
       .finally(res => {
-        this.is_caching_media = false
-        this._media_timeout = setTimeout(() => this.cacheMedia(), 300)
+        this.is_caching_file = false
       })
     },
     updatePlugin() {
@@ -350,7 +362,7 @@ new Vue({
       },
     },
     schema () {
-      this.refreshMedia()
+      this.refreshFiles()
     }
   },
 })
