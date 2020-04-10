@@ -11,6 +11,13 @@ class Post extends Model {
   public $timestamps = false;
   protected $primaryKey = 'ID';
 
+  public static function boot() {
+    parent::boot();
+    self::addGlobalScope('op', function($q) {
+      $q->whereNotNull('op_id')->loaded();
+    });
+  }
+
   public function unsafe_val($name, $lang = null) {
     $f = $this->resource->fields->$name;
     if ($f->is_translatable) {
