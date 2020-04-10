@@ -57,7 +57,7 @@ trait MetaFunctions {
   }
 
   public function getIdAttribute() {
-    return $this->$primaryKey;
+    return $this->{$this->primaryKey};
   }
 
   public function getResourceAttribute() {
