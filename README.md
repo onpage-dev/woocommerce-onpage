@@ -92,7 +92,7 @@ This plugins implements a simple router with link generation. To use it set up t
 
 ```php
 // This will handle the shop home (e.g. /shop/)
-op_page('/', function($el) {
+op_page('/', function() {
   include __DIR__.'/shop-home.php';
 });
 op_page('/category/', function($category) {
