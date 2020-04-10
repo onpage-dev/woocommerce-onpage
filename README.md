@@ -174,4 +174,5 @@ __NOTE:__ let's breakdown '/Section/products.articles':
 - `Section` is the name of the Eloquent Model (Op\Section must exist)
 - `products` is the relation starting from Section (e.g. the one you use when you do `$section->products`)
 - `articles` is the relation starting from the Product resource (e.g. $product->articles)
-In this last example, calling `$product->link()` will throw an exception because there is no route to handle a `Op\Product`
+
+__NOTE:__ In this last example, calling `$product->link()` will throw an exception because there is no route to handle a `Op\Product`
