@@ -56,6 +56,10 @@ trait MetaFunctions {
     return op_file_url($img, $w, $h, $crop);
   }
 
+  public function getIdAttribute() {
+    return $this->$primaryKey;
+  }
+
   public function getResourceAttribute() {
     return op_schema()->id_to_res[$this->op_res];
   }
