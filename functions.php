@@ -188,7 +188,7 @@ function op_err($msg, $data = []) {
 }
 
 function op_ret($data) {
-  $data = (array) $data;
+  if (is_object($data)) $data = (array) $data;
   if (@$data['error']) {
     http_response_code(400);
   }
@@ -339,6 +339,10 @@ function op_import_resource(object $db, object $res, array $res_map) {
   foreach (DB::table($base_table)->where('op_res', $res->id)->get() as $x) {
     $current_objects[$x->op_id] = $x;
   }
+  $current_taxonomies = [];
+  foreach (DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->get() as $x) {
+    $current_taxonomies[$x->term_id] = $x;
+  }
   op_record('mapped $current_objects');
 
   foreach ($res->data as $thing_i => $thing) {
@@ -483,7 +487,15 @@ function op_import_resource(object $db, object $res, array $res_map) {
     if ($res->is_product) {
       wp_set_object_terms($object_id, 'simple', 'product_type');
     } else {
-      // do_action('edit_terms', $object_id, 'product_cat');
+      if (!isset($current_taxonomies[$object_id])) {
+        DB::table('term_taxonomy')->insert([[
+          'term_id' => $object_id,
+          'taxonomy' => 'product_cat',
+          'description' => '',
+          'parent' => 0,
+          'count' => 1,
+        ]]);
+      }
     }
   } // end $thing->data cycle
 
@@ -516,6 +528,9 @@ function op_gen_model(object $schema, object $res) {
     self::addGlobalScope('op', function(\$q) {
       \$q->where('op_res', $res->id)->loaded();
     });
+  }\n";
+  $code.= "  public static function getResource() {
+    return op_schema()->resources->{$res->name};
   }\n";
 
   foreach ($res->fields as $f) {
@@ -612,7 +627,7 @@ function op_list_files() {
     }
   }
   foreach ($files as &$f) {
-    $f->is_imported = is_file(op_file_path($f->token));
+    $f->is_imported = is_file(op_file_path($f->info->token));
   }
   return array_values($files);
 }

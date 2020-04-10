@@ -60,33 +60,38 @@ function op_page_query($path, $q = null, $with = false, $i = null) {
   return $q;
 }
 
+function op_build_page_path(array $page, array $pieces = []) {
+  $path = [];
+  foreach ($page as $i => $step) {
+    $rels = explode('.', $step);
+    if ($i == 0) {
+      $res_name = array_shift($rels);
+      $res = @op_schema()->resources->$res_name;
+      if (!$res) die("Resource not found: $res_name");
+      $path = [
+        [
+          'res' => $res,
+        ],
+      ];
+    }
+    foreach ($rels as $rel_name) {
+      $prev_res = $path[count($path)-1]['res'];
+      $rel_field = $prev_res->fields->$rel_name;
+      if (!$rel_field) die("Relation not found: $rel_name");
+      $path[] = [
+        'rel' => $rel_field->rel_field,
+        'res' => $rel_field->rel_res,
+      ];
+    }
+    $path[count($path)-1]['slug'] = @$pieces[$i];
+  }
+  return $path;
+}
+
 function op_use_page($action, $page, $pieces) {
   if (count($pieces)) {
     $schema = op_schema();
-    $path = [];
-    foreach ($page as $i => $step) {
-      $rels = explode('.', $step);
-      if ($i == 0) {
-        $res_name = array_shift($rels);
-        $res = @$schema->resources->$res_name;
-        if (!$res) die("Resource not found: $res_name");
-        $path = [
-          [
-            'res' => $res,
-          ],
-        ];
-      }
-      foreach ($rels as $rel_name) {
-        $prev_res = $path[count($path)-1]['res'];
-        $rel_field = $prev_res->fields->$rel_name;
-        if (!$rel_field) die("Relation not found: $rel_name");
-        $path[] = [
-          'rel' => $rel_field->rel_field,
-          'res' => $rel_field->rel_res,
-        ];
-      }
-      $path[count($path)-1]['slug'] = $pieces[$i];
-    }
+    $path = op_build_page_path($page, $pieces);
 
     $query = op_page_query($path);
     $query = op_page_query($path, $query, true);
@@ -105,4 +110,32 @@ function op_use_page($action, $page, $pieces) {
     $action($element);
     exit;
   }, 9999999);
+}
+
+function op_link_to($item) {
+  $pages = op_page();
+  foreach ($pages as $page => $action) {
+    $page = explode('/', $page);
+    $page = array_filter($page);
+    $page = array_values($page);
+    $path = op_build_page_path($page);
+    $path = array_reverse($path);
+    if (@$path[0]['res']->id == $item->resource->id) {
+      $link = [];
+      foreach ($path as $i => $block) {
+        if (array_key_exists('slug', $block)) {
+          $link[] = $item->getSlug();
+          if (count($page) == count($link)) {
+            $link[] = trim(op_settings()->shop_url, '/');
+            $link[] = trim(get_site_url(), '/');
+            $link = array_reverse($link);
+            return implode('/', $link);
+          };
+        }
+        // var_dump($block['rel']->name);
+        $item = $item->{$block['rel']->name}()->first();
+        if (!$item) break;
+      }
+    }
+  }
 }

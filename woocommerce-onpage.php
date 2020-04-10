@@ -39,6 +39,9 @@ add_filter('init', function() {
         ]);
 
       case 'schema':
+        op_ret(op_getopt('schema'));
+
+      case 'next-schema':
         op_ret(op_extract_schema());
 
       case 'list-file':
@@ -105,9 +108,17 @@ add_filter( 'woocommerce_product_data_tabs', function ( $tabs ) {
 } , 99 , 1 );
 
 
-add_action('woocommerce_product_data_panels', function() {
+add_action('woocommerce_product_data_panels', function($post) {
 	global $woocommerce, $post;
+  $item = OpLib\Post::find($post->ID);
   require_once __DIR__.'/pages/show-meta.php';
+});
+
+
+add_action('product_cat_edit_form_fields', function($tag) {
+  $item = OpLib\Term::find($tag->term_id);
+  include __DIR__.'/pages/show-meta.php';
+  exit;
 });
 
 

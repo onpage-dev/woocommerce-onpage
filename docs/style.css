@@ -1,0 +1,13 @@
+@media print {
+  .sidebar {
+    display: none;
+  }
+  .content {
+    left: 0;
+    margin: 5rem;
+    /* top: 5rem;
+    bottom: 5rem; */
+    height: 80vh;
+    width: auto;
+  }
+}

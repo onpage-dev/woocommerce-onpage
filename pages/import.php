@@ -55,17 +55,25 @@
       </tbody>
     </table>
 
+    <p class="submit">
+      <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+      <div v-if="is_saving">
+        Saving...
+      </div>
+    </p>
 
-    <div v-if="is_loading_schema">
-      Loading...
-    </div>
-    <div v-else-if="schema">
-      <h1>Import settings</h1>
-      <div v-for="res in Object.values(schema.resources).filter(x => x.is_product)" >
+  </form>
+
+
+  <div class="op-card">
+    <h1>Data importer</h1>
+
+    <div v-if="next_schema">
+      <div v-for="res in Object.values(next_schema.resources).filter(x => x.is_product)" >
         <br>
         <h2>{{ res.label }}:</h2>
         <table class="form-table">
-        	<tbody>
+          <tbody>
             <tr>
               <th><label>Price field</label></th>
               <td>
@@ -129,27 +137,14 @@
           </tbody>
         </table>
       </div>
+      <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
     </div>
-
-    <p class="submit">
-      <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-      <div v-if="is_saving">
-        Saving...
-      </div>
-    </p>
-
-  </form>
-
-
-  <div v-if="schema" class="op-card">
-    <h1>Data importer</h1>
-
-
     <!-- Import button and log -->
-    <input type="button" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
     <br>
     <br>
-    <i v-if="is_importing">Importing... please wait</i>
+    <i v-if="is_loading_next_schema">Loading...</i>
+    <i v-else-if="!next_schema">Configure above</i>
+    <i v-else-if="is_importing">Importing... please wait</i>
     <div v-if="res = import_result">
       <b style="margin: 0 0 .5rem">Import result:</b>
       <br>
@@ -241,8 +236,10 @@ new Vue({
     is_saving: false,
     is_importing: false,
     is_loading_schema: false,
+    is_loading_next_schema: false,
     import_result: null,
     schema: null,
+    next_schema: null,
     files: null,
     is_loading_file: false,
     is_updating: false,
@@ -261,6 +258,7 @@ new Vue({
     },
   },
   created () {
+    this.refreshSchema()
   },
   methods: {
     saveSettings() {
@@ -278,13 +276,24 @@ new Vue({
     startImport() {
       this.is_importing = true
       this.import_result = null
-      axios.post('?op-api=import').then(res => {
+      axios.post('?op-api=import', {
+        settings: this.settings_form,
+      }).then(res => {
         alert('Import completed!')
         this.import_result = res.data
-        this.refreshFiles()
+        this.refreshSchema()
       })
       .finally(res => {
         this.is_importing = false
+      })
+    },
+    refreshNextSchema() {
+      this.is_loading_next_schema = true
+      axios.post('?op-api=next-schema').then(res => {
+        this.next_schema = res.data
+      })
+      .finally(res => {
+        this.is_loading_next_schema = false
       })
     },
     refreshSchema() {
@@ -307,10 +316,10 @@ new Vue({
       })
     },
     cacheFiles() {
-      let files = this.non_imported_files.slice(0, 2)
+      this.file_error = false
+      let files = this.non_imported_files.slice(0, 4)
       if (!files.length || this.is_caching_file) return
       clearTimeout(this._file_timeout)
-      this.file_error = false
       this.is_caching_file = true
 
       console.log('caching', files)
@@ -357,13 +366,13 @@ new Vue({
       immediate: true,
       handler (s) {
         if (s) {
-          this.refreshSchema()
+          this.refreshNextSchema()
         }
       },
     },
     schema () {
       this.refreshFiles()
-    }
+    },
   },
 })
 </script>
