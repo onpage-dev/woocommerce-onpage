@@ -1,1 +1,142 @@
-# op-woocommerce
+# Onpage Woocommerce Docs
+
+# Intro
+This plugin is used to import a project snapshot into your woocommerce website. It uses the wordpress tables so you can use it the way you are used to. __All field data is saved into the object meta table.__
+You can create a project snapshot (and the corresponding token) using the *App Mobile* feature in OnPage.
+
+# Handling data
+When you import your snapshots, the plugin will generate [Eloquent Models](https://laravel.com/docs/7.x/eloquent) for your data, in the plugin directory `db-models/` these models are updated every time you import your data.
+
+You can view the models generated for your project in the plugin import page. For each model, you'll find the list of relations and fields imported.
+
+## Selecting data
+For instance, assuming you want to select all your products (codenamed `Product`), you can run:
+```php
+$prods = Op\Product::all();
+foreach ($prods as $prod) {
+  // get the name in the current language
+  echo $prod->val('name')."<br>\n";
+  // get the name in a custom language and without encoding HTML characters
+  echo $prod->val_unsafe('name', 'it')."<br>\n";
+  // Gets a file name
+  echo $p->filename('info_file'); // e.g. MK100.pdf
+  // Gets the original image/file url
+  echo '<a href="'. $p->url('info_file') .'">Download PDF</a>'
+  // Resize image to width 100 and automatic height (generated in run-time and cached)
+  echo '<img src="'. $p->thumb('cover', 100) .'">'
+  // Generate thumbnail cropping (zooming) the image
+  echo '<img src="'. $p->thumb('cover', 200, 100) .'">'
+  // Generate thumbnail containing (out-zooming) the image
+  echo '<img src="'. $p->thumb('cover', 200, 100, true) .'">'
+}
+```
+
+__NOTE:__ All the above functions will return the value __already HTML encoded__, so if the name contains special characters, they will be returnes as HTML entities (`&` becomes `&amp;`). You can disable this behaviour by using their `_unsafe` variant, for example `->val_unsafe('name')` or `->url_unsafe('info_file')` function.
+
+
+## Filtering data
+You can use all the eloquent methods to filter your data, but because the fields are stored inside the meta table, we provide some helper functions as follow:
+```php
+// Get the first chapter named "Boats"
+$prods = Op\Chapter::whereField('name', 'Boats')->first()
+// Get all the elements longer than 10cm
+$prods = Op\Chapter::whereField('length', '>', 10)->get()
+// Full text search in all the fields (will search for %boa% in all fields)
+$prods = Op\Chapter::search('boa')->get()
+// Full text search only in some attributes
+$prods = Op\Chapter::search('boa', ['name', 'description'])->get()
+```
+
+## Relations
+You can easily access related elements using the relation name
+```php
+// Get all the products for the given category
+$products = $category->products;
+// Query all the products
+$products = $category->products()->search('MK1')->get();
+```
+
+
+## Eager loading
+All the query seen so far automatically preload all the meta attributes, to reduce the amount of stress on the database.
+
+```php
+// the following line runs two queries, one for the products on wp_posts, the second to fetch all the metadata on wp_post_meta
+$prods = Op\Product::all();
+```
+
+
+### Relations
+The related elements are not preloaded, so the following code will result in 2 + N*2 queries where N is the number of products.
+```php
+$prods = Op\Product::all();
+foreach ($prods as $p) {
+  foreach ($p->colors as $p) {
+    echo $p->val('name')."<br>";
+  }
+}
+```
+To reduce the number of queries, you can easily preload the related elements (this only produces 2 or 4 queries - depending on whether the relation is `post->post`/`term->term`, or `post->term`/`term->post`):
+```php
+$prods = Op\Product::with('colors')->get();
+foreach ($prods as $p) {
+  foreach ($p->colors as $p) {
+    echo $p->val('name')."<br>";
+  }
+}
+```
+
+
+# Routing
+This plugins implements a simple router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
+
+```php
+// This will handle the shop home (e.g. /shop/)
+op_page('/', function($el) {
+  include __DIR__.'/shop-home.php';
+});
+op_page('/category/', function($category) {
+  include __DIR__.'/shop-category.php';
+});
+op_page('/category/', function($product) {
+  include __DIR__.'/shop-product.php';
+});
+```
+
+Then create the related files as follows:
+## Shop Page
+```php
+<?php
+defined( 'ABSPATH' ) || exit;
+get_header();
+
+foreach (Op\Category::all() as $cat): ?>
+  <a href="<?= $cat->link() ?>">
+    <?= $cat->val('name') ?>
+  </a>
+<?php endforeach; ?>
+
+<?php get_footer(); ?>
+```
+
+## Category Page
+```php
+<?php
+defined( 'ABSPATH' ) || exit;
+get_header();
+?>
+<h1><?= $category->val('name') ?></h1>
+<?php
+foreach ($category->products as $prod): ?>
+  <a href="<?= $prod->link() ?>">
+    <?= $prod->val('name') ?>
+  </a>
+<?php endforeach; ?>
+
+<?php get_footer(); ?>
+```
+
+## Product Page
+You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
+
+__NOTE:__ the `->link()` method will fail with an error if no route is present for the intended resource.

@@ -46,14 +46,14 @@ trait MetaFunctions {
     return $img->name;
   }
 
-  public function thumb($name, $w = null, $h = null, $crop_type = null, $lang = null) {
-    return op_e($this->thumb_unsafe($name, $w, $h, $crop_type, $lang));
+  public function thumb($name, $w = null, $h = null, $crop = null, $lang = null) {
+    return op_e($this->thumb_unsafe($name, $w, $h, $crop, $lang));
   }
-  public function thumb_unsafe($name, $w = null, $h = null, $crop_type = null, $lang = null) {
+  public function thumb_unsafe($name, $w = null, $h = null, $crop = null, $lang = null) {
     $img = $this->val_unsafe($name, $lang);
     if (!$img) return null;
     $img = json_decode($img);
-    return op_file_url($img, $w, $h, $crop_type);
+    return op_file_url($img, $w, $h, $crop);
   }
 
   public function getResourceAttribute() {
@@ -96,6 +96,19 @@ trait MetaFunctions {
       ->where('meta_key', self::fieldToMetaKey($name, $lang))
       ->pluck('meta_value')
       ->all();
+  }
+
+  public static function scopeSearch($q, $string, array $fields = []) {
+    if (empty($fields)) {
+      $fields = array_keys((array)self::getResource()->fields);
+    }
+    $string = str_replace('%', '\\%', $string);
+    $string = str_replace('_', '\\_', $string);
+    $q->where(function($q) use ($fields, $string) {
+      foreach ($fields as $field_name) {
+        $q->orWhereField($field_name, 'like', "%$string%");
+      }
+    });
   }
 
   public static function getPrimaryKey() {

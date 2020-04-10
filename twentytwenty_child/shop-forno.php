@@ -2,7 +2,6 @@
 defined( 'ABSPATH' ) || exit;
 get_header();
 
-$forno = $element;
 ?>
 <main id="site-content" role="main">
   <header class="entry-header has-text-align-center header-footer-group">
@@ -15,8 +14,11 @@ $forno = $element;
   		<div class="entry-content">
 
         <h2><?= $forno->val('nome') ?></h2>
-        <img src="<?=$forno->thumb('immagine', 700, 400)?>"/>
-        <?=$forno->file('immagine')?>
+        <div class="">
+          <img src="<?=$forno->thumb('immagine', 700, 400)?>"/>
+          <br>
+          <?=$forno->filename('immagine')?>
+        </div>
         <div class="">
           <h4>Power supply:</h4>
           <ul>

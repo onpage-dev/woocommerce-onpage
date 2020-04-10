@@ -12,16 +12,21 @@ get_header();
 
         <h2>Home</h2>
         <ul>
-          <?php foreach (Op\Settore::with('gamme')->get() as $settore): ?>
+          <?= print_r( Op\Settore::pluckField('nome'), 1) ?>
+          <?php foreach (Op\Settore::with(['gamme' => function($q) {
+            $q->whereField('nome', 'like', '%top%');
+          }])->get() as $settore): ?>
             <li>
               <b><?= $settore->val('nome') ?></b>
 
               <ul>
                 <?php foreach ($settore->gamme as $gamma): ?>
                   <li>
-                    <a href="./<?=$gamma->slug?>">
+                    <a href="<?= $gamma->link() ?>">
                       <b><?= $gamma->val('nome') ?></b>
                     </a>
+                    <br>
+                    <code><?= $gamma->link() ?></code>
                   </li>
                 <?php endforeach ?>
               </ul>

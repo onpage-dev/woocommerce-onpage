@@ -2,7 +2,6 @@
 defined( 'ABSPATH' ) || exit;
 get_header();
 
-$gamma = $element;
 ?>
 <main id="site-content" role="main">
   <header class="entry-header has-text-align-center header-footer-group">
@@ -25,8 +24,10 @@ $gamma = $element;
                   <?php foreach ($versione_teglie->forni as $forno): ?>
                     <li>
                       <img src="<?=$forno->thumb('immagine', 100, 100)?>"/>
-                      <a href="./<?=$forno->post_name?>">
+                      <a href="<?= $forno->link() ?>">
                         <b><?= $forno->val('nome') ?></b>
+                        <br>
+                        <code><?= $forno->link() ?></code>
                       </a>
                     </li>
                   <?php endforeach ?>
