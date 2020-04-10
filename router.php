@@ -16,12 +16,12 @@ add_filter('init', function() {
   array_shift($pieces);
 
   $pages = op_page();
-  foreach ($pages as $page => $file) {
+  foreach ($pages as $page => $action) {
     $page = explode('/', $page);
     $page = array_filter($page);
     $page = array_values($page);
     if (count($page) == count($pieces)) {
-      op_use_page($file, $page, $pieces);
+      op_use_page($action, $page, $pieces);
     }
   }
 
@@ -60,7 +60,7 @@ function op_page_query($path, $q = null, $with = false, $i = null) {
   return $q;
 }
 
-function op_use_page($file, $page, $pieces) {
+function op_use_page($action, $page, $pieces) {
   if (count($pieces)) {
     $schema = op_schema();
     $path = [];
@@ -101,11 +101,8 @@ function op_use_page($file, $page, $pieces) {
   }
 
 
-  if (!$file) return die('file not specified for '.count($pieces).' parameters');
-  if (!is_file($file)) return die("File not found: $file");
-
-  add_filter('template_include', function($template) use ($file, $element) {
-    include($file);
+  add_filter('template_include', function($template) use ($action, $element) {
+    $action($element);
     exit;
   }, 9999999);
 }
