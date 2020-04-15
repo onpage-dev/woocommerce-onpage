@@ -330,7 +330,7 @@ function op_import_resource(object $db, object $res, array $res_map) {
   foreach ($res->data as $thing_i => $thing) {
     if (!@$thing->fields->$lab_field) continue;
     $log = "$res->name $thing->id ".memory_get_usage();
-    file_put_contents(__DIR__.'/log.txt', "$log\n", FILE_APPEND);
+    // file_put_contents(__DIR__.'/log.txt', "$log\n", FILE_APPEND);
     // Commit every X elements for speed (we like speed)
     if (($thing_i+1) % 10 == 0) {
       // DB::commit();
