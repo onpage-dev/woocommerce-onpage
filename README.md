@@ -87,8 +87,27 @@ foreach ($prods as $p) {
 ```
 
 
+# Templating
+You can use the normal woocommerce templating system as you're used to.
+The only thing you need is to obtain an instance of the eloquent model.
+You can easily do so by using the following functions:
+```php
+// To retrieve the model from a term
+op_category('slug', 'the-category-slug'); // will return an instance to Op\MyCategory
+
+// To retrieve the model from a post
+op_post('ID', 123); // will return an instance to Op\MyProduct
+
+// Notice you can use any column name as the first argument
+$cat = op_category('term_id', 123);
+$cat->getResource()->name; // 'my_category'
+$cat->val('name'); // 'The Category Name'
+```
+
+
+
 # Routing
-This plugins implements a simple router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
+This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
 
 ```php
 // This will handle the shop home (e.g. /shop/)

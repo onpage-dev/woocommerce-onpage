@@ -821,3 +821,23 @@ function op_request(string $name = null) {
 function op_locale() {
   return substr(get_locale(), 0, 2);
 }
+
+function op_category($key, $value) {
+  $term = OpLib\Term::where($key, $value)->first();
+  if (!$term) return null;
+
+  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
+  $model = new $class($term->getAttributes());
+  $model->setRelation('meta', $term->meta);
+  return $model;
+}
+
+function op_product($key, $value) {
+  $term = OpLib\Post::where($key, $value)->first();
+  if (!$term) return null;
+
+  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
+  $model = new $class($term->getAttributes());
+  $model->setRelation('meta', $term->meta);
+  return $model;
+}
