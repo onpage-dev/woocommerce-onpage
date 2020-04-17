@@ -3,6 +3,7 @@ namespace OpLib;
 
 if (!defined('OP_PLUGIN')) die(400);
 
+
 trait MetaFunctions {
   public static function boot() {
     parent::boot();
@@ -11,44 +12,29 @@ trait MetaFunctions {
     });
   }
 
-  public function val_unsafe($name, $lang = null) {
-    $f = $this->resource->fields->$name;
-    if (!$f) {
-      throw new \Exception("Cannot find field $name");
-    }
-    if ($f->is_translatable) {
-      $name.= '_'.($lang ?: (op_locale() ?: op_schema()->langs[0]));
-    }
-    return @$this->meta->firstWhere('meta_key', "op_$name")->meta_value;
-  }
-
   public function val($name, $lang = null) {
-    return op_e($this->val_unsafe($name, $lang));
+    $field = @$this->resource->fields->$name;
+    if (!$field) return;
+    $meta_key = op_field_to_meta_key($field, $lang);
+    if (!$meta_key) return null;
+    $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
+    return $field->is_multiple ? $values->all() : $values->first();
   }
 
-  public function url($name, $lang = null) {
-    return op_e($this->url_unsafe($name, $lang));
-  }
-  public function url_unsafe($name, $lang = null) {
-    $img = $this->val_unsafe($name, $lang);
-    if (!$img) return null;
-    $img = json_decode($img);
-    return op_file_url($img);
+  public function file($name, $lang = null) {
+    $value = $this->val($name, $lang);
+    if (is_null($value)) return;
+
+    $_m = is_array($value);
+    if (!$_m) $value = [$value];
+    $value = array_map(function($json) {
+      $v = @json_decode($json);
+      if (!$v) throw new \Exception("cannot parse $json");
+      return new File($v);
+    }, $value);
+    return $_m ? $value : @$value[0];
   }
 
-  public function filename($name, $lang = null) {
-    return op_e($this->filename_unsafe($name, $lang));
-  }
-  public function filename_unsafe($name, $lang = null) {
-    $img = $this->val_unsafe($name, $lang);
-    if (!$img) return null;
-    $img = json_decode($img);
-    return $img->name;
-  }
-
-  public function thumb($name, $w = null, $h = null, $crop = null, $lang = null) {
-    return op_e($this->thumb_unsafe($name, $w, $h, $crop, $lang));
-  }
   public function thumb_unsafe($name, $w = null, $h = null, $crop = null, $lang = null) {
     $img = $this->val_unsafe($name, $lang);
     if (!$img) return null;
@@ -121,18 +107,23 @@ trait MetaFunctions {
   }
 
   public static function fieldToMetaKey(string $name, string $lang = null) {
-    $f = @self::getResource()->fields->$name;
+    $res = self::getResource();
+    $f = @$res->fields->$name;
     if (!$f) {
-      throw new \Exception("Cannot find field $name");
+      return null;
+      // throw new \Exception("Cannot find field $name");
     }
-    if ($f->is_translatable) {
-      $name.= '_'.($lang ?: (op_locale() ?: op_schema()->langs[0]));
-    }
-    return "op_$name";
+    return op_field_to_meta_key($f, $lang);
   }
 
   public function link() {
     return op_link_to($this);
+  }
+
+  public function permalink() {
+    return $this->is_post
+      ? get_permalink($this->id)
+      : get_category_link($this->id);
   }
 
   public function getSlug() {

@@ -16,22 +16,24 @@ $prods = Op\Product::all();
 foreach ($prods as $prod) {
   // get the name in the current language
   echo $prod->val('name')."<br>\n";
-  // get the name in a custom language and without encoding HTML characters
-  echo $prod->val_unsafe('name', 'it')."<br>\n";
+  // get the name in a custom language
+  echo $prod->val('name', 'zh')."<br>\n";
   // Gets a file name
-  echo $p->filename('info_file'); // e.g. MK100.pdf
+  echo $p->file('info_file')->name; // e.g. MK100.pdf
   // Gets the original image/file url
-  echo '<a href="'. $p->url('info_file') .'">Download PDF</a>'
+  echo '<a href="'. $p->file('info_file')->link() .'">Download PDF</a>'
   // Resize image to width 100 and automatic height (generated in run-time and cached)
-  echo '<img src="'. $p->thumb('cover', 100) .'">'
+  echo '<img src="'. $p->file('cover')->thumb(100) .'">'
   // Generate thumbnail cropping (zooming) the image
-  echo '<img src="'. $p->thumb('cover', 200, 100) .'">'
+  echo '<img src="'. $p->file('cover')->thumb(200, 100) .'">'
   // Generate thumbnail containing (out-zooming) the image
-  echo '<img src="'. $p->thumb('cover', 200, 100, true) .'">'
+  echo '<img src="'. $p->file('cover')->thumb(200, 100, true) .'">'
 }
 ```
 
-__NOTE:__ All the above functions will return the value __already HTML encoded__, so if the name contains special characters, they will be returnes as HTML entities (`&` becomes `&amp;`). You can disable this behaviour by using their `_unsafe` variant, for example `->val_unsafe('name')` or `->url_unsafe('info_file')` function.
+__NOTE:__ All the above functions will return the value __as is__, so if the name contains special characters, they will __not__ be returned as HTML entities (`&` becomes `&amp;`). You have the responsibility to escape the output with functions such as `htmlentities` or the shorthand `op_e($string)`.
+
+__NOTE:__ All the above functions will return an array of values if the field is set to multiple.
 
 
 ## Filtering data
@@ -102,6 +104,7 @@ op_post('ID', 123); // will return an instance to Op\MyProduct
 $cat = op_category('term_id', 123);
 $cat->getResource()->name; // 'my_category'
 $cat->val('name'); // 'The Category Name'
+$cat->products; // A collection of products
 ```
 
 

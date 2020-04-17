@@ -11,6 +11,7 @@ class Post extends Model {
   protected $table = PFX.'posts';
   protected $guarded = [];
   public $timestamps = false;
+  public $is_post = true;
   protected $primaryKey = 'ID';
   protected static $meta_ref = 'post_id';
   protected static $meta_class = PostMeta::class;

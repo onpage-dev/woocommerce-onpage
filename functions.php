@@ -212,7 +212,11 @@ function op_page($name = null, $file = null) {
 }
 
 function op_e($string) {
-  return htmlentities($string, ENT_QUOTES);
+  if (is_array($string)) {
+    return array_map('op_e', $string);
+  } else {
+    return htmlentities($string, ENT_QUOTES);
+  }
 }
 
 function op_snake_to_camel($str) {
@@ -389,6 +393,17 @@ function op_import_resource(object $db, object $res, array $res_map) {
 
     // Calculate new metadata
     $meta = [];
+    $meta[] = [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_res*',
+      'meta_value' => $res->id,
+    ];
+    $meta[] = [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_id*',
+      'meta_value' => $thing->id,
+    ];
+
     if ($lab_img_field && $thing->fields->$lab_img_field) {
       $meta[] = [
         $base_tablemeta_ref => $object_id,
@@ -401,15 +416,20 @@ function op_import_resource(object $db, object $res, array $res_map) {
 
 
     // Fields
-    foreach ($thing->fields as $name => $value) {
+    foreach ($thing->fields as $name => $values) {
       $e = explode('_', $name);
       $f = $field_map[$e[0]];
       $lang = @$e[1];
-      $meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_'.$f->name.($lang ? "_$lang" : ''),
-        'meta_value' => is_scalar($value) ? $value : json_encode($value),
-      ];
+      if (!$f->is_multiple) {
+        $values = [ $values ];
+      }
+      foreach ($values as $value) {
+        $meta[] = [
+          $base_tablemeta_ref => $object_id,
+          'meta_key' => 'op_'.$f->name.($lang ? "_$lang" : ''),
+          'meta_value' => is_scalar($value) ? $value : json_encode($value),
+        ];
+      }
     }
 
     // Relations
@@ -534,7 +554,7 @@ function op_link(string $path) {
   return plugins_url('', $path).'/'.basename($path);
 }
 
-function op_file_url($file, $w = null, $h = null, $contain = null) {
+function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   $path = op_file_path($file->token);
   if (is_file($path)) {
 
@@ -840,4 +860,49 @@ function op_product($key, $value) {
   $model = new $class($term->getAttributes());
   $model->setRelation('meta', $term->meta);
   return $model;
+}
+
+function op_prod_res(WC_Product $product) {
+  $id = $product->get_meta('op_res*');
+  if (!$id) return;
+  return @op_schema()->id_to_res[$id];
+}
+
+function op_field_to_meta_key($field, $lang) {
+  if (!$lang) $lang = op_locale();
+  $key = "op_{$field->name}";
+  if ($field->is_translatable) $key.= "_$lang";
+  return $key;
+}
+
+function op_prod_value(WC_Product $product, $field_name, $lang = null) {
+
+  $res = op_prod_res($product);
+  if (!$res) return;
+
+  $field = $res->fields->$field_name;
+  if (!$field) return;
+
+  $key = op_field_to_meta_key($field, $lang);
+
+  $metas = array_values($product->get_meta($key, false));
+
+  $values = array_map(function(WC_Meta_Data $meta) {
+    return $meta->get_data()['value'];
+  }, $metas);
+  return $field->is_multiple ? $values : @$values[0];
+}
+
+function op_prod_file(WC_Product $product, $field, $lang = null) {
+  $value = op_prod_value($product, $field, $lang);
+  if (is_null($value)) return;
+
+  $_m = is_array($value);
+  if (!$_m) $value = [$value];
+  $value = array_map(function($json) {
+    $v = @json_decode($json);
+    if (!$v) throw new \Exception("cannot parse $json");
+    return new OpLib\File($v);
+  }, $value);
+  return $_m ? $value : @$value[0];
 }

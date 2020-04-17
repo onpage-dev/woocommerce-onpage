@@ -11,6 +11,7 @@ class Term extends Model {
   protected $table = PFX.'terms';
   protected $guarded = [];
   public $timestamps = false;
+  public $is_post = false;
   protected $primaryKey = 'term_id';
   protected static $meta_ref = 'term_id';
   protected static $meta_class = TermMeta::class;
