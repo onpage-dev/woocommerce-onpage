@@ -575,11 +575,11 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
       if (!is_file($target_path));
 
       $opts = [
-        'width' => $w,
-        'height' => $h,
         'crop' => !$contain,
         'format' => 'jpeg',
       ];
+      if (is_numeric($w)) $opts['width'] = $w;
+      if (is_numeric($h)) $opts['height'] = $h;
       if (!op_resize($path, $target_path, $opts)) {
         die("Cannot resize image ".basename($path));
       }
