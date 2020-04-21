@@ -82,8 +82,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
   color: #000;
 }
 #onpage_meta .op-file {
-  display: inline-block;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   margin: 0 0 1rem;
 }
