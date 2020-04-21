@@ -24,7 +24,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
            <td>
              <div style="overflow-y: auto; max-height: 220px;">
                <?php if ($f->type == 'file' || $f->type == 'image'): ?>
-                 <?php $files = $f->is_multiple ? $item->file($f->name) : [$item->file($f->name)]; ?>
+                 <?php $files = $f->is_multiple ? $item->file($f->name) : array_filter([$item->file($f->name)]); ?>
                  <?php foreach ($files as $file): ?>
                    <a target="_blank" href="<?= $file->link() ?>" class="op-file">
                      <?php if ($f->type == 'image'): ?>
