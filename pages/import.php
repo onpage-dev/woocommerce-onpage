@@ -356,7 +356,7 @@ new Vue({
 
     toCamel (str) {
       return str.split('_').map(x => {
-        return x[0].toLocaleUpperCase() + x.substring(1)
+        return (x[0] || '').toLocaleUpperCase() + x.substring(1)
       }).join('')
     },
   },

@@ -18,6 +18,9 @@ trait MetaFunctions {
     $meta_key = op_field_to_meta_key($field, $lang);
     if (!$meta_key) return null;
     $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
+    if ($field->type == 'dim1' || $field->type == 'dim2' || $field->type == 'dim3') {
+      $values = $values->map('json_decode');
+    }
     return $field->is_multiple ? $values->all() : $values->first();
   }
 
@@ -34,7 +37,7 @@ trait MetaFunctions {
     }, $value);
     return $_m ? $value : @$value[0];
   }
-  
+
   public function getIdAttribute() {
     return $this->attributes[$this->primaryKey];
   }
