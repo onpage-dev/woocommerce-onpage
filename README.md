@@ -30,6 +30,10 @@ foreach ($prods as $prod) {
   echo '<img src="'. $p->file('cover')->thumb(200, 100, true) .'">'
 }
 ```
+You can use the `pluckField` method to get the field from the query.
+```php
+$prods = Op\Product::pluckField('name'); // ['Product A', 'Product B', 'Product C']
+```
 
 __NOTE:__ All the above functions will return the value __as is__, so if the name contains special characters, they will __not__ be returned as HTML entities (`&` becomes `&amp;`). You have the responsibility to escape the output with functions such as `htmlentities` or the shorthand `op_e($string)`.
 

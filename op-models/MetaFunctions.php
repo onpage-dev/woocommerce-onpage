@@ -34,14 +34,7 @@ trait MetaFunctions {
     }, $value);
     return $_m ? $value : @$value[0];
   }
-
-  public function thumb_unsafe($name, $w = null, $h = null, $crop = null, $lang = null) {
-    $img = $this->val_unsafe($name, $lang);
-    if (!$img) return null;
-    $img = json_decode($img);
-    return op_file_url($img, $w, $h, $crop);
-  }
-
+  
   public function getIdAttribute() {
     return $this->attributes[$this->primaryKey];
   }

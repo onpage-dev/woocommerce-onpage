@@ -11,7 +11,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
   <h1 style="margin: 10px 20px 0">OnPage Fields - <?= op_e($item->resource->label) ?></h1>
   <table>
     <tbody>
-      <?php foreach (collect($item->resource->fields)->whereNotIn('type', ['relation']) as $f): ?>
+      <?php foreach (collect($item->resource->fields)->sortBy(function($f) { if ($f->type == 'relation') return 9999+$f->order; else return 1+$f->order; }) as $f): ?>
         <?php $values = $f->is_multiple ? $item->val($f->name) : [$item->val($f->name)]; ?>
         <tr>
            <td>
@@ -20,6 +20,10 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
              <span style="font-family: monospace; color: #666"><?= op_e($f->name) ?></span>
              <br>
              <span style="font-family: monospace; color: #666"><?= op_e($f->type) ?></span>
+             <br>
+             <?=$f->is_translatable ? 'Localized' : 'Not localized'?>
+             -
+             <?=$f->is_multiple ? 'Multivalue' : 'Single'?>
            </td>
            <td>
              <div style="overflow-y: auto; max-height: 220px;">
