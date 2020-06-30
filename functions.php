@@ -838,8 +838,10 @@ function op_request(string $name = null) {
   return $name ? @$req->$name : $req;
 }
 
-function op_locale() {
-  return substr(get_locale(), 0, 2);
+function op_locale($set = null) {
+  static $locale = null;
+  if (!$locale || $set) $locale = $set ?: substr(get_locale(), 0, 2);
+  return $locale;
 }
 
 function op_category($key, $value) {
