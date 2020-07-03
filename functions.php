@@ -37,10 +37,11 @@ function op_download_json($url) {
 }
 
 function op_initdb() {
-  DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
 
   // Create helper columns
   if (op_settings()->migration < 33) {
+    $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
+    DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
     @DB::statement("ALTER TABLE `".PFX."posts` ADD COLUMN `op_res` bigint unsigned NULL;");
     @DB::statement("ALTER TABLE `".PFX."posts` ADD COLUMN `op_id` bigint unsigned NULL;");
 
@@ -61,6 +62,7 @@ function op_initdb() {
     @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_dirty` BOOL;");
 
     op_setopt('migration', 33);
+    DB::statement("SET sql_mode = '$orig_mode'");
   }
 }
 
@@ -297,6 +299,9 @@ function op_import_snapshot(object $sett = null) {
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
   op_record('created models');
 
+  flush_rewrite_rules();
+  op_record('permalinks flushed');
+
   // DB::commit();
   op_record('transaction committed');
 }
@@ -489,15 +494,13 @@ function op_import_resource(object $db, object $res, array $res_map) {
     if ($res->is_product) {
       wp_set_object_terms($object_id, 'simple', 'product_type');
     } else {
-      if (!isset($current_taxonomies[$object_id])) {
-        DB::table('term_taxonomy')->insert([[
-          'term_id' => $object_id,
-          'taxonomy' => 'product_cat',
-          'description' => '',
-          'parent' => 0,
-          'count' => 1,
-        ]]);
-      }
+      DB::table('term_taxonomy')->insert([[
+        'term_id' => $object_id,
+        'taxonomy' => 'product_cat',
+        'description' => '',
+        'parent' => 0,
+        'count' => 1,
+      ]]);
     }
   } // end $thing->data cycle
 
