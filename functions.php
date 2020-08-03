@@ -560,7 +560,6 @@ function op_link(string $path) {
 function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   $path = op_file_path($file->token);
   if (is_file($path)) {
-
     // Original
     if (!$w && !$h) {
       $target_path = op_file_path('/cache/'.substr($file->token, 0, 4).$file->name);
@@ -574,20 +573,22 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
       if ($contain) {
         $target_path.= '-contain';
       }
-      $target_path.= '.jpg';
+      $target_path.= '.'.$file->ext;
       if (!is_file($target_path)) {
         $opts = [
           'crop' => !$contain,
-          'format' => 'jpeg',
+          'format' => $file->ext,
         ];
         if (is_numeric($w)) $opts['width'] = $w;
         if (is_numeric($h)) $opts['height'] = $h;
         if (!op_resize($path, $target_path, $opts)) {
-          die("Cannot resize image ".basename($path));
+          return op_link($path);
         }
       }
       return op_link($target_path);
     }
+  } else {
+    die('file not imported '.$path);
   }
 
   // Use onpage as a fallback
@@ -608,13 +609,24 @@ function op_list_files() {
   foreach (op_schema()->resources as $res) {
     $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
     $meta_col = $res->is_product ? 'post_id' : 'term_id';
-    $res_files = $class::whereHas('parent', function($q) use ($res) {
+    $res_files_query = $class::whereHas('parent', function($q) use ($res) {
       $q->where('op_res', $res->id);
-    })
-    ->whereIn('meta_key', collect($res->fields)->whereIn('type', ['file', 'image'])->map(function($f) {
-      return "op_{$f->name}";
-    })->all())
-    ->pluck('meta_value', $meta_col)
+    });
+
+    $res_files_query->where(function($q) use ($res) {
+      foreach (collect($res->fields)->whereIn('type', ['file', 'image']) as $field) {
+        if (!$field->is_translatable) {
+          $q->orWhere('meta_key', op_field_to_meta_key($field));
+        } else {
+          foreach (op_schema()->langs as $lang) {
+            $q->orWhere('meta_key', op_field_to_meta_key($field, $lang));
+          }
+        }
+      }
+    });
+
+    $res_files = $res_files_query->get()
+    ->pluck('meta_value')
     ->map(function($el) {
       return json_decode($el);
     })
@@ -667,6 +679,135 @@ function op_endpoint() {
 }
 
 function op_resize($src_path, $dest_path, $params = []) {
+  $image = wp_get_image_editor( $src_path ); // Return an implementation that extends WP_Image_Editor
+  if (is_wp_error( $image )) return false;
+  if (@$params['width'] || @$params['height']) {
+    $image->resize( @$params['width'], @$params['height'], !!@$params['crop'] );
+  }
+  $image->save( $dest_path );
+  if (!is_file($dest_path)) {
+    return op_resize_fallback($src_path, $dest_path, $params);
+  }
+  return true;
+}
+
+function op_upgrade() {
+  $zip_path = __DIR__.'/storage/upgrade.zip';
+  $source = 'https://github.com/gufoe/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
+  $ok = copy($source, $zip_path);
+  if (!$ok) op_err('Cannot download update from github');
+  require_once(ABSPATH .'/wp-admin/includes/file.php');
+  WP_Filesystem();
+  unzip_file($zip_path, __DIR__);
+}
+
+function op_set_post_image($post_id, $path, $filename){
+  $upload_dir = wp_upload_dir();
+  if(wp_mkdir_p($upload_dir['path'])) {
+    $file = $upload_dir['path'] . '/' . $filename;
+  } else {
+    $file = $upload_dir['basedir'] . '/' . $filename;
+  }
+  copy($path, $file);
+
+
+  $wp_filetype = wp_check_filetype($filename, null );
+  $attachment = array(
+    'post_mime_type' => $wp_filetype['type'],
+    'post_title' => sanitize_file_name($filename),
+    'post_content' => '',
+    'post_status' => 'inherit'
+  );
+  $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
+  require_once(ABSPATH . 'wp-admin/includes/image.php');
+  $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
+  $res1 = wp_update_attachment_metadata( $attach_id, $attach_data );
+  $res2 = set_post_thumbnail( $post_id, $attach_id );
+}
+
+function op_request(string $name = null) {
+  static $req = null;
+  if (!$req) {
+    $data = file_get_contents('php://input');
+    $req = (object) json_decode($data);
+  }
+  return $name ? @$req->$name : $req;
+}
+
+function op_locale($set = null) {
+  static $locale = null;
+  if (!$locale || $set) $locale = $set ?: substr(get_locale(), 0, 2);
+  return $locale;
+}
+
+function op_category($key, $value) {
+  $term = OpLib\Term::where($key, $value)->first();
+  if (!$term) return null;
+
+  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
+  $model = new $class($term->getAttributes());
+  $model->setRelation('meta', $term->meta);
+  return $model;
+}
+
+function op_product($key, $value) {
+  $term = OpLib\Post::where($key, $value)->first();
+  if (!$term) return null;
+
+  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
+  $model = new $class($term->getAttributes());
+  $model->setRelation('meta', $term->meta);
+  return $model;
+}
+
+function op_prod_res(WC_Product $product) {
+  $id = $product->get_meta('op_res*');
+  if (!$id) return;
+  return @op_schema()->id_to_res[$id];
+}
+
+function op_field_to_meta_key($field, $lang = null) {
+  if (!$lang) $lang = op_locale();
+  $key = "op_{$field->name}";
+  if ($field->is_translatable) $key.= "_$lang";
+  return $key;
+}
+
+function op_prod_value(WC_Product $product, $field_name, $lang = null) {
+
+  $res = op_prod_res($product);
+  if (!$res) return;
+
+  $field = $res->fields->$field_name;
+  if (!$field) return;
+
+  $key = op_field_to_meta_key($field, $lang);
+
+  $metas = array_values($product->get_meta($key, false));
+
+  $values = array_map(function(WC_Meta_Data $meta) {
+    return $meta->get_data()['value'];
+  }, $metas);
+  return $field->is_multiple ? $values : @$values[0];
+}
+
+function op_prod_file(WC_Product $product, $field, $lang = null) {
+  $value = op_prod_value($product, $field, $lang);
+  if (is_null($value)) return;
+
+  $_m = is_array($value);
+  if (!$_m) $value = [$value];
+  $value = array_map(function($json) {
+    $v = @json_decode($json);
+    if (!$v) throw new \Exception("cannot parse $json");
+    return new OpLib\File($v);
+  }, $value);
+  return $_m ? $value : @$value[0];
+}
+
+
+
+function op_resize_fallback($src_path, $dest_path, $params = []) {
   /**
   * Images scaling.
   * @param string  $src_path Path to initial image.
@@ -689,7 +830,7 @@ function op_resize($src_path, $dest_path, $params = []) {
   $height = !empty($params['height']) ? $params['height'] : null;
   $constraint = !empty($params['constraint']) ? $params['constraint'] : false;
   $rgb = !empty($params['rgb']) ?  $params['rgb'] : 0xFFFFFF;
-  $quality = !empty($params['quality']) ?  $params['quality'] : 100;
+  $quality = !empty($params['quality']) ?  $params['quality'] : 80;
   $aspect_ratio = isset($params['aspect_ratio']) ?  $params['aspect_ratio'] : true;
   $crop = isset($params['crop']) ?  $params['crop'] : true;
 
@@ -796,118 +937,4 @@ function op_resize($src_path, $dest_path, $params = []) {
   imagedestroy($idest);
 
   return $res;
-}
-
-function op_upgrade() {
-  $zip_path = __DIR__.'/storage/upgrade.zip';
-  $source = 'https://github.com/gufoe/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
-  $ok = copy($source, $zip_path);
-  if (!$ok) op_err('Cannot download update from github');
-  require_once(ABSPATH .'/wp-admin/includes/file.php');
-  WP_Filesystem();
-  unzip_file($zip_path, __DIR__);
-}
-
-function op_set_post_image($post_id, $path, $filename){
-  $upload_dir = wp_upload_dir();
-  if(wp_mkdir_p($upload_dir['path'])) {
-    $file = $upload_dir['path'] . '/' . $filename;
-  } else {
-    $file = $upload_dir['basedir'] . '/' . $filename;
-  }
-  copy($path, $file);
-
-
-  $wp_filetype = wp_check_filetype($filename, null );
-  $attachment = array(
-    'post_mime_type' => $wp_filetype['type'],
-    'post_title' => sanitize_file_name($filename),
-    'post_content' => '',
-    'post_status' => 'inherit'
-  );
-  $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
-  require_once(ABSPATH . 'wp-admin/includes/image.php');
-  $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
-  $res1 = wp_update_attachment_metadata( $attach_id, $attach_data );
-  $res2 = set_post_thumbnail( $post_id, $attach_id );
-}
-
-function op_request(string $name = null) {
-  static $req = null;
-  if (!$req) {
-    $data = file_get_contents('php://input');
-    $req = (object) json_decode($data);
-  }
-  return $name ? @$req->$name : $req;
-}
-
-function op_locale($set = null) {
-  static $locale = null;
-  if (!$locale || $set) $locale = $set ?: substr(get_locale(), 0, 2);
-  return $locale;
-}
-
-function op_category($key, $value) {
-  $term = OpLib\Term::where($key, $value)->first();
-  if (!$term) return null;
-
-  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
-  $model = new $class($term->getAttributes());
-  $model->setRelation('meta', $term->meta);
-  return $model;
-}
-
-function op_product($key, $value) {
-  $term = OpLib\Post::where($key, $value)->first();
-  if (!$term) return null;
-
-  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
-  $model = new $class($term->getAttributes());
-  $model->setRelation('meta', $term->meta);
-  return $model;
-}
-
-function op_prod_res(WC_Product $product) {
-  $id = $product->get_meta('op_res*');
-  if (!$id) return;
-  return @op_schema()->id_to_res[$id];
-}
-
-function op_field_to_meta_key($field, $lang) {
-  if (!$lang) $lang = op_locale();
-  $key = "op_{$field->name}";
-  if ($field->is_translatable) $key.= "_$lang";
-  return $key;
-}
-
-function op_prod_value(WC_Product $product, $field_name, $lang = null) {
-
-  $res = op_prod_res($product);
-  if (!$res) return;
-
-  $field = $res->fields->$field_name;
-  if (!$field) return;
-
-  $key = op_field_to_meta_key($field, $lang);
-
-  $metas = array_values($product->get_meta($key, false));
-
-  $values = array_map(function(WC_Meta_Data $meta) {
-    return $meta->get_data()['value'];
-  }, $metas);
-  return $field->is_multiple ? $values : @$values[0];
-}
-
-function op_prod_file(WC_Product $product, $field, $lang = null) {
-  $value = op_prod_value($product, $field, $lang);
-  if (is_null($value)) return;
-
-  $_m = is_array($value);
-  if (!$_m) $value = [$value];
-  $value = array_map(function($json) {
-    $v = @json_decode($json);
-    if (!$v) throw new \Exception("cannot parse $json");
-    return new OpLib\File($v);
-  }, $value);
-  return $_m ? $value : @$value[0];
 }
