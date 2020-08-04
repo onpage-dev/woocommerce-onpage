@@ -587,8 +587,6 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
       }
       return op_link($target_path);
     }
-  } else {
-    die('file not imported '.$path);
   }
 
   // Use onpage as a fallback
