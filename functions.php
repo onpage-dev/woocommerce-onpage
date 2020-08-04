@@ -628,7 +628,7 @@ function op_list_files() {
     ->map(function($el) {
       return json_decode($el);
     })
-    ->filter(function($x) { return $x && @$x->token; }))
+    ->filter(function($x) { return $x && @$x->token; })
     ->all();
     foreach ($res_files as $object_id => $file) {
       if (!isset($files[$file->token])) {
