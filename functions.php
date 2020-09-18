@@ -37,6 +37,9 @@ function op_download_json($url) {
 }
 
 function op_initdb() {
+  // print_r(DB::table('options')
+  // ->where('option_name', 'like', 'op\\_ions%')->get());
+  // exit;
 
   if (!@op_settings()->migration) {
     $query = DB::table('options')
