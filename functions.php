@@ -94,14 +94,14 @@ function op_settings($settings = null) {
         'option_value' => json_encode($value),
       ];
     }
-    DB::table('options')->where('option_name', 'like', 'op_%')->delete();
+    DB::table('options')->where('option_name', 'like', 'op\_%')->delete();
     DB::table('options')->insert($opts);
   } elseif ($cached_settings) {
     return $cached_settings;
   }
 
   $ret = (object) [];
-  $opts = DB::table('options')->where('option_name', 'like', 'op_%')->pluck('option_value', 'option_name')->all();
+  $opts = DB::table('options')->where('option_name', 'like', 'op\_%')->pluck('option_value', 'option_name')->all();
   foreach ($opts as $key => $value) {
     $ret->{substr($key, 3)} = json_decode($value);
   }
