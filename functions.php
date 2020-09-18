@@ -38,6 +38,22 @@ function op_download_json($url) {
 
 function op_initdb() {
 
+  if (!@op_settings()->migration) {
+    $query = DB::table('options')
+      ->where('option_name', 'like', 'op\\_%')
+      ->where('option_name', 'not like', 'op\\_ions%');
+    $new_opts = $query->get()->map(function($opt) {
+      return [
+        'option_name' => 'on-page-'.substr($opt->option_name, 3),
+        'option_value' => $opt->option_value,
+        'autoload' => $opt->autoload,
+      ];
+    })->toArray();
+    DB::table('options')->insert($new_opts);
+    op_settings(null, true);
+    $query->delete();
+  }
+
   // Create helper columns
   if (op_settings()->migration < 33) {
     $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
@@ -64,6 +80,7 @@ function op_initdb() {
     op_setopt('migration', 33);
     DB::statement("SET sql_mode = '$orig_mode'");
   }
+
 }
 
 function op_setopt($opt, $value) {
@@ -84,26 +101,27 @@ function op_post($field) {
   return @$req_json[$field];
 }
 
-function op_settings($settings = null) {
+function op_settings($settings = null, $flush_cache = false) {
   static $cached_settings = null;
+  if ($flush_cache) $cached_settings = null;
   if ($settings) {
     $opts = [];
     foreach ((array) $settings as $key => $value) {
       $opts[] = [
-        'option_name' => "op_$key",
+        'option_name' => "on-page-$key",
         'option_value' => json_encode($value),
       ];
     }
-    DB::table('options')->where('option_name', 'like', 'op\_%')->delete();
+    DB::table('options')->where('option_name', 'like', 'on-page-%')->delete();
     DB::table('options')->insert($opts);
   } elseif ($cached_settings) {
     return $cached_settings;
   }
 
   $ret = (object) [];
-  $opts = DB::table('options')->where('option_name', 'like', 'op\_%')->pluck('option_value', 'option_name')->all();
+  $opts = DB::table('options')->where('option_name', 'like', 'on-page-%')->pluck('option_value', 'option_name')->all();
   foreach ($opts as $key => $value) {
-    $ret->{substr($key, 3)} = json_decode($value);
+    $ret->{substr($key, 8)} = json_decode($value);
   }
   $cached_settings = $ret;
   return $ret;
