@@ -323,6 +323,24 @@ function op_import_snapshot(object $sett = null) {
   flush_rewrite_rules();
   op_record('permalinks flushed');
 
+  
+    // Foreach post/term call wpml hooks
+    $wpml_default_lang = apply_filters('wpml_default_language', NULL);
+    if ($wpml_default_lang) {
+      $products = \OpLib\Post::all();
+      $wpml_element_type = apply_filters('wpml_element_type', 'product');
+      foreach ($products as $prod) {
+        do_action('wpml_set_element_language_details', [
+          'element_id' => $prod->id,
+          'element_type' => 'post_product',
+          'language_code' => $wpml_default_lang,
+          'check_duplicates' => false,
+        ]);
+      }
+      op_record("called wpml hooks $wpml_default_lang {$products->count()}");
+    }
+
+
   // DB::commit();
   op_record('transaction committed');
 }
@@ -957,3 +975,4 @@ function op_resize_fallback($src_path, $dest_path, $params = []) {
 
   return $res;
 }
+
