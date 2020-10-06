@@ -338,16 +338,16 @@ function op_import_snapshot(object $sett = null) {
         'check_duplicates' => false,
       ]);
     }
-    $products = \OpLib\Post::all();
-    foreach ($products as $prod) {
+    $products = \OpLib\Post::pluck('ID')->toArray();
+    foreach ($products as $id) {
       do_action('wpml_set_element_language_details', [
-        'element_id' => $prod->id,
+        'element_id' => $id,
         'element_type' => 'post_product',
         'language_code' => $wpml_default_lang,
         'check_duplicates' => false,
       ]);
     }
-    op_record("called wpml hooks $wpml_default_lang {$products->count()}");
+    op_record("called wpml hooks with default lang $wpml_default_lang");
   }
 
 
