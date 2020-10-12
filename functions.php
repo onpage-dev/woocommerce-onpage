@@ -322,7 +322,7 @@ function op_import_snapshot(object $sett = null) {
 
   flush_rewrite_rules();
   op_record('permalinks flushed');
-  
+
   // Foreach post/term call wpml hooks
   $wpml_default_lang = apply_filters('wpml_default_language', NULL);
   if ($wpml_default_lang) {
@@ -407,6 +407,7 @@ function op_import_resource(object $db, object $res, array $res_map) {
       'name' => $thing->fields->$lab_field,
       'slug' => $object ? $object->slug : op_slug($thing->fields->$lab_field, 'terms', 'slug', @$object->slug),
       'term_group' => 0,
+      'term_order' => $thing_i,
     ] : [
       'op_res' => $res->id,
       'op_id' => $thing->id,
@@ -985,5 +986,3 @@ function op_resize_fallback($src_path, $dest_path, $params = []) {
 
   return $res;
 }
-
-

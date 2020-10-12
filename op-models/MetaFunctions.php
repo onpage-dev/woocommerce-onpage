@@ -97,6 +97,10 @@ trait MetaFunctions {
     });
   }
 
+  public function scopeSorted($q) {
+    $q->orderBy($this->is_post ? 'menu_order' : 'term_order');
+  }
+
   public static function getPrimaryKey() {
     $t = new self();
     return $t->primaryKey;
