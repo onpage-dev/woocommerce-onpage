@@ -796,7 +796,6 @@ function op_category($key, $value) {
   $model = $class::first($term->id);
   if (!$model) return null;
   $model = new $class($term->getAttributes());
-  $model->setRelation('meta', $term->meta);
   return $model;
 }
 
@@ -807,7 +806,6 @@ function op_product($key, $value) {
   $class = 'Op\\'.op_snake_to_camel($term->resource->name);
   $model = $class::first($term->id);
   if (!$model) return null;
-  $model->setRelation('meta', $term->meta);
   return $model;
 }
 
