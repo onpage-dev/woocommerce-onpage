@@ -102,7 +102,7 @@ You can easily do so by using the following functions:
 op_category('slug', 'the-category-slug'); // will return an instance to Op\MyCategory
 
 // To retrieve the model from a post
-op_post('ID', 123); // will return an instance to Op\MyProduct
+op_product('ID', 123); // will return an instance to Op\MyProduct
 
 // Notice you can use any column name as the first argument
 $cat = op_category('term_id', 123);
