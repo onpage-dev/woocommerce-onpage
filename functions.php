@@ -800,10 +800,7 @@ function op_category($key, $value) {
   if (!$term) return null;
 
   $class = 'Op\\'.op_snake_to_camel($term->resource->name);
-  $model = $class::first($term->id);
-  if (!$model) return null;
-  $model = new $class($term->getAttributes());
-  return $model;
+  return $class::find($term->id);
 }
 
 function op_product($key, $value) {
@@ -811,9 +808,7 @@ function op_product($key, $value) {
   if (!$term) return null;
 
   $class = 'Op\\'.op_snake_to_camel($term->resource->name);
-  $model = $class::first($term->id);
-  if (!$model) return null;
-  return $model;
+  return $class::find($term->id);
 }
 
 function op_prod_res(WC_Product $product) {
