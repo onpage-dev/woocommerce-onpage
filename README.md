@@ -114,6 +114,9 @@ $cat->products; // A collection of products
 
 # Hooks
 ## Changing the slug generation function
+By default, the slug is generated converting the string to ASCII
+keeping accented letters (es. `à` becomes `a`) and replacing non alphanumeric
+characters with a dash `-`.
 ```php
 add_action('on_page_slug', function($string) {
   return ...;
