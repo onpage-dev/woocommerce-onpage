@@ -17,12 +17,12 @@ define('PFX', $wpdb->prefix);
 
 function op_slug(string $base, string $table, string $field, string $old_slug = null) {
   $base = iconv('UTF-8','ASCII//TRANSLIT', $base); // convert accents to ascii
-  $base = trim($base);
+  $base = strtolower(trim($base));
   $action_res = do_action('on_page_slug', $base);
   if (strlen($action_res)) {
     $base = $action_res;
   } else {
-    $base = strtolower(trim(preg_replace('/[^A-Za-z0-9_]+/', '-', $base)));
+    $base = preg_replace('/[^A-Za-z0-9]+/', '-', $base);
   }
   $suffix = '';
   while ($old_slug != $base.$suffix && DB::table($table)->where($field, $base.$suffix)->exists()) {
