@@ -112,6 +112,13 @@ $cat->products; // A collection of products
 ```
 
 
+# Hooks
+## Changing the slug generation function
+```php
+add_action('on_page_slug', function($string) {
+  return ...;
+});
+```
 
 # Routing
 This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:

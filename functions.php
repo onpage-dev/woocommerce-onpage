@@ -16,13 +16,20 @@ define('PFX', $wpdb->prefix);
 
 
 function op_slug(string $base, string $table, string $field, string $old_slug = null) {
-  $base_slug = strtolower(trim(preg_replace('/[^A-Za-z0-9_]+/', '-', $base)));
+  $base = iconv('UTF-8','ASCII//TRANSLIT', $base); // convert accents to ascii
+  $base = trim($base);
+  $action_res = do_action('on_page_slug', $base);
+  if (strlen($action_res)) {
+    $base = $action_res;
+  } else {
+    $base = strtolower(trim(preg_replace('/[^A-Za-z0-9_]+/', '-', $base)));
+  }
   $suffix = '';
-  while ($old_slug != $base_slug.$suffix && DB::table($table)->where($field, $base_slug.$suffix)->exists()) {
+  while ($old_slug != $base.$suffix && DB::table($table)->where($field, $base.$suffix)->exists()) {
     if (!$suffix) $suffix = 2;
     else $suffix++;
   }
-  return $base_slug.$suffix;
+  return $base.$suffix;
 }
 
 function op_download_json($url) {
