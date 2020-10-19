@@ -15,9 +15,11 @@ define('OP_PLUGIN', true);
 define('PFX', $wpdb->prefix);
 
 
-function op_slug(string $base, string $table, string $field, string $old_slug = null) {
+function op_slug(string $orig_base, string $table, string $field, string $old_slug = null) {
+  $base = $orig_base;
   $base = mb_strtolower($base);
   $base = iconv('UTF-8','ASCII//TRANSLIT', $base); // convert accents to ascii
+  op_err("$orig_base base diventa $base");
   $base = trim($base);
   $action_res = do_action('on_page_slug', $base);
   if (strlen($action_res)) {
