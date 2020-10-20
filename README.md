@@ -118,9 +118,9 @@ By default, the slug is generated converting the string to ASCII
 keeping accented letters (es. `à` becomes `a`) and replacing non alphanumeric
 characters with a dash `-`.
 ```php
-add_filter('on_page_slug', function($base, $table, $field, $old_slug){
+add_filter('on_page_slug', function($slug, $original_string, $table, $field, $old_slug){
   return 'my-custom-slug-'.rand(1000000, 9999999);
-}, 10, 4);
+}, 10, 5);
 ```
 
 # Routing

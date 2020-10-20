@@ -14,27 +14,27 @@ global $wpdb;
 define('OP_PLUGIN', true);
 define('PFX', $wpdb->prefix);
 
+function op_slug(string $title, string $table, string $field, string $old_slug = null) {
+  $slug = $title;
+  $slug = mb_strtolower($slug);
+  $slug_iconv = iconv('auto', 'ASCII//TRANSLIT', $slug); // convert accents to ascii
+  if (strlen($slug_iconv)) {
+      $slug = $slug_iconv;
+  }
+  $slug = trim($slug);
+  $slug = preg_replace('/[^A-Za-z0-9]+/', '-', $slug);
 
-function op_slug(string $orig_base, string $table, string $field, string $old_slug = null) {
-  $base = $orig_base;
-  $base = mb_strtolower($base);
-  $base_iconv = iconv('auto','ASCII//TRANSLIT', $base); // convert accents to ascii
-  if (strlen($base_iconv)) {
-    $base = $base_iconv;
-  }
-  $base = trim($base);
-  $action_res = apply_filters('on_page_slug', $base, $table, $field, $old_slug);
-  if (strlen($action_res)) {
-    $base = $action_res;
-  } else {
-    $base = preg_replace('/[^A-Za-z0-9]+/', '-', $base);
-  }
+  $slug = apply_filters('on_page_slug', $slug, $title, $table, $field, $old_slug);
+
   $suffix = '';
-  while ($old_slug != $base.$suffix && DB::table($table)->where($field, $base.$suffix)->exists()) {
-    if (!$suffix) $suffix = 2;
-    else $suffix++;
+  while ($old_slug != $slug.$suffix && DB::table($table)->where($field, $slug.$suffix)->exists()) {
+    if (!$suffix) {
+      $suffix = 2;
+    } else {
+      $suffix++;
+    }
   }
-  return $base.$suffix;
+  return $slug.$suffix;
 }
 
 function op_download_json($url) {
