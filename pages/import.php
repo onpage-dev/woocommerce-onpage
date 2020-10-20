@@ -66,9 +66,9 @@
 
 
   <div class="op-card">
-    <h1>Data importer</h1>
+    <h1>Import settings</h1>
 
-    <div v-if="next_schema">
+    <form @submit.prevent="saveSettings" v-if="next_schema">
       <div v-for="res in Object.values(next_schema.resources).filter(x => x.is_product)" >
         <br>
         <h2>{{ res.label }}:</h2>
@@ -137,9 +137,29 @@
           </tbody>
         </table>
       </div>
-      <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
-    </div>
+      <p class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">
+          Saving...
+        </div>
+      </p>
+    </form>
+  </div>
+
+
+  <div v-if="next_schema" class="op-card">
+    <h1>Data Importer</h1>
+    <label>
+      <input type="checkbox" v-model="force_slug_regen"/>
+      Force slug field regeneration for existing objects
+      <br>
+      <i>(might slow down the import and is a bad SEO practice - only use in development).</i>
+    </label>
+    <br>
+    <br>
     <!-- Import button and log -->
+    <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
+
     <br>
     <br>
     <i v-if="is_loading_next_schema">Loading...</i>
@@ -161,7 +181,6 @@
       <pre>{{ res.log.join('\n') }}</pre>
     </div>
   </div>
-
 
   <div v-if="schema" class="op-card">
     <h1>File importer</h1>
@@ -245,6 +264,7 @@ new Vue({
     is_updating: false,
     is_caching_file: false,
     file_error: true,
+    force_slug_regen: false,
   },
   computed: {
     form_unsaved () {
@@ -278,6 +298,7 @@ new Vue({
       this.import_result = null
       axios.post('?op-api=import', {
         settings: this.settings_form,
+        force_slug_regen: this.force_slug_regen,
       }).then(res => {
         alert('Import completed!')
         this.import_result = res.data
@@ -376,4 +397,3 @@ new Vue({
   },
 })
 </script>
-

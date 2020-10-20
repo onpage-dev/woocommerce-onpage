@@ -29,7 +29,7 @@ add_filter('init', function() {
 
       case 'import':
         $t1 = microtime(true);
-        op_import_snapshot();
+        op_import_snapshot((bool) op_post('force_slug_regen'));
         $t2 = microtime(true);
         op_ret([
           'log' => op_record('deleted old data'),

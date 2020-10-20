@@ -23,7 +23,7 @@ function op_slug(string $orig_base, string $table, string $field, string $old_sl
     $base = $base_iconv;
   }
   $base = trim($base);
-  $action_res = do_action('on_page_slug', $base);
+  $action_res = apply_filters('on_page_slug', $base, $table, $field, $old_slug);
   if (strlen($action_res)) {
     $base = $action_res;
   } else {
@@ -263,7 +263,7 @@ function op_snake_to_camel($str) {
   return $ret;
 }
 
-function op_import_snapshot(object $sett = null) {
+function op_import_snapshot(bool $force_slug_regen = false) {
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
   }
@@ -314,7 +314,7 @@ function op_import_snapshot(object $sett = null) {
 
 
   while ($res = $next_res()) {
-    op_import_resource($db, $res, $res_map);
+    op_import_resource($db, $res, $res_map, $force_slug_regen);
     op_record("fine $res->label");
   }
   delete_option("product_cat_children");
@@ -367,7 +367,7 @@ function op_import_snapshot(object $sett = null) {
   op_record('transaction committed');
 }
 
-function op_import_resource(object $db, object $res, array $res_map) {
+function op_import_resource(object $db, object $res, array $res_map, bool $force_slug_regen) {
   $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
   $lab_field = $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '');
   $lab_img = collect($res->fields)->where('type', 'image')->first();
@@ -417,7 +417,9 @@ function op_import_resource(object $db, object $res, array $res_map) {
       'op_id' => $thing->id,
       'op_dirty' => false,
       'name' => $thing->fields->$lab_field,
-      'slug' => $object ? $object->slug : op_slug($thing->fields->$lab_field, 'terms', 'slug', @$object->slug),
+      'slug' => !$force_slug_regen && $object
+        ? $object->slug
+        : op_slug($thing->fields->$lab_field, 'terms', 'slug', @$object->slug),
       'term_group' => 0,
       'term_order' => $thing_i,
     ] : [
@@ -434,7 +436,9 @@ function op_import_resource(object $db, object $res, array $res_map) {
       'comment_status' => 'closed',
       'ping_status' => 'closed',
       'post_password' => '',
-      'post_name' => $object ? $object->post_name : op_slug($thing->fields->$lab_field, 'posts', 'post_name', @$object->post_name),
+      'post_name' => !$force_slug_regen && $object
+        ? $object->post_name
+        : op_slug($thing->fields->$lab_field, 'posts', 'post_name', @$object->post_name),
       'to_ping' => '',
       'pinged' => '',
       'post_modified' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
