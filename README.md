@@ -123,7 +123,7 @@ add_filter('on_page_slug', function($slug, $original_string, $table, $field, $ol
 }, 10, 5);
 ```
 
-# Routing
+# Routing (depreceted - do not use)
 This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
 
 ```php
