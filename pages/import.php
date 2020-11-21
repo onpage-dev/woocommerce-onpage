@@ -29,11 +29,11 @@
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
     <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.3</h1>
+    <h1>OnPage&reg; Woocommerce Plugin 1.0.4</h1>
     <table class="form-table">
     	<tbody>
         <tr>
-          <th><label>Company name (e.g. lithos)</label></th>
+          <th><label>Company name (e.g. dinside)</label></th>
           <td>
             <input class="regular-text code" v-model="settings_form.company">
             <br>

@@ -757,7 +757,7 @@ function op_resize($src_path, $dest_path, $params = []) {
 
 function op_upgrade() {
   $zip_path = __DIR__.'/storage/upgrade.zip';
-  $source = 'https://github.com/gufoe/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
+  $source = 'https://github.com/onpage-dev/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
   $ok = copy($source, $zip_path);
   if (!$ok) op_err('Cannot download update from github');
   require_once(ABSPATH .'/wp-admin/includes/file.php');
