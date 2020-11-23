@@ -96,6 +96,22 @@ function op_initdb() {
     DB::statement("SET sql_mode = '$orig_mode'");
   }
 
+  if (op_settings()->migration < 34) {
+    $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
+    DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
+    try {
+      @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_order` FLOAT NULL;");
+    } catch (\Exception $e) { }
+    try {
+      @DB::statement("ALTER TABLE `".PFX."terms` ADD INDEX `op_order` (`op_order`)");
+    } catch (\Exception $e) { }
+
+
+
+    op_setopt('migration', 34);
+    DB::statement("SET sql_mode = '$orig_mode'");
+  }
+
 }
 
 function op_setopt($opt, $value) {
@@ -421,7 +437,7 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
         ? $object->slug
         : op_slug($thing->fields->$lab_field, 'terms', 'slug', @$object->slug),
       'term_group' => 0,
-      'term_order' => $thing_i,
+      'op_order' => $thing_i,
     ] : [
       'op_res' => $res->id,
       'op_id' => $thing->id,

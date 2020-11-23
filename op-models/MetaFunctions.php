@@ -98,7 +98,7 @@ trait MetaFunctions {
   }
 
   public function scopeSorted($q) {
-    $q->orderBy($this->is_post ? 'menu_order' : 'term_order');
+    $q->orderBy($this->is_post ? 'menu_order' : 'op_order');
   }
 
   public static function getPrimaryKey() {
