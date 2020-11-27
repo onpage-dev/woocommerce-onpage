@@ -44,11 +44,18 @@ add_filter('init', function() {
       case 'next-schema':
         op_ret(op_extract_schema());
 
-      case 'list-file':
+      case 'list-files':
         op_ret(op_list_files());
 
       case 'import-files':
         op_ret(op_import_files(op_request('files')));
+
+      case 'list-old-files':
+        op_ret(op_list_old_files());
+
+      case 'drop-old-files':
+				op_drop_old_files();
+        op_ret(op_list_old_files());
 
       case 'upgrade':
         op_ret(op_upgrade());
@@ -120,8 +127,3 @@ add_action('product_cat_edit_form_fields', function($tag) {
   include __DIR__.'/pages/show-meta.php';
   exit;
 });
-
-
-
-
-require_once(__DIR__.'/router.php');

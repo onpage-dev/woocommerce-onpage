@@ -684,7 +684,7 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   return $url;
 }
 
-function op_list_files() {
+function op_list_files(bool $return_map = false) {
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
@@ -726,10 +726,45 @@ function op_list_files() {
   foreach ($files as &$f) {
     $f->is_imported = is_file(op_file_path($f->info->token));
   }
-  return array_values($files);
+  if (!$return_map) {
+    $files = array_values($files);
+  }
+  return $files;
 }
 
-function op_file_path($token) {
+function op_basename($path) {
+  // php basename truncates long file names
+    if (preg_match('@^.*[\\\\/]([^\\\\/]+)$@s', $path, $matches)) {
+        return $matches[1];
+    } else if (preg_match('@^([^\\\\/]+)$@s', $path, $matches)) {
+        return $matches[1];
+    }
+    return '';
+}
+
+function op_list_old_files() {
+  $db_files = op_list_files(true);
+
+  $glob_ls = op_file_path('*');
+  $local_files = array_diff(glob($glob_ls), glob($glob_ls, GLOB_ONLYDIR));
+  $local_files = collect($local_files)->map('op_basename')->toArray();
+  $files_to_drop = array_filter($local_files, function($token) use ($db_files) {
+    return !isset($db_files[$token]);
+  });
+  return array_values($files_to_drop);
+}
+
+function op_drop_old_files() {
+  $old_files = op_list_old_files();
+  foreach ($old_files as $token) {
+    foreach (glob(op_file_path("cache/{$token}*")) as $path) {
+      @unlink($path);
+    }
+    @unlink(op_file_path($token));
+  }
+}
+
+function op_file_path(string $token = '') {
   return __DIR__."/storage/$token";
 }
 

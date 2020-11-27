@@ -29,7 +29,7 @@
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
     <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.4</h1>
+    <h1>OnPage&reg; Woocommerce Plugin 1.0.5</h1>
     <table class="form-table">
     	<tbody>
         <tr>
@@ -44,12 +44,6 @@
           <th><label>API token</label></th>
           <td>
             <input class="regular-text code" v-model="settings_form.token">
-          </td>
-        </tr>
-        <tr>
-          <th><label>Shop url</label></th>
-          <td>
-            <input class="regular-text code" v-model="settings_form.shop_url">
           </td>
         </tr>
       </tbody>
@@ -200,6 +194,14 @@
         All your files have been imported :-)
       </div>
     </div>
+
+    <div v-if="old_files.length">
+      <hr>
+      <h2>There are {{ old_files.length }} old files</h2>
+
+
+      <input type="button" class="button button-primary" value="Drop old files" :disabled="is_loading_old_files || is_dropping_old_files" @click="dropOldFiles">
+    </div>
   </div>
 
   <div v-if="schema" class="op-card" style="line-height: 1.8">
@@ -256,15 +258,18 @@ new Vue({
     is_importing: false,
     is_loading_schema: false,
     is_loading_next_schema: false,
+    is_dropping_old_files: false,
     import_result: null,
     schema: null,
     next_schema: null,
     files: null,
     is_loading_file: false,
+    is_loading_old_files: false,
     is_updating: false,
     is_caching_file: false,
     file_error: true,
     force_slug_regen: false,
+    old_files: [],
   },
   computed: {
     form_unsaved () {
@@ -328,12 +333,30 @@ new Vue({
     },
     refreshFiles() {
       this.is_loading_file = true
-      axios.post('?op-api=list-file').then(res => {
+      axios.post('?op-api=list-files').then(res => {
         this.files = res.data
         this.cacheFiles()
       })
       .finally(res => {
         this.is_loading_file = false
+      })
+    },
+    refreshOldFiles() {
+      this.is_loading_old_files = true
+      axios.post('?op-api=list-old-files').then(res => {
+        this.old_files = res.data
+      })
+      .finally(res => {
+        this.is_loading_old_files = false
+      })
+    },
+    dropOldFiles() {
+      this.is_dropping_old_files = true
+      axios.post('?op-api=drop-old-files').then(res => {
+        this.old_files = res.data
+      })
+      .finally(res => {
+        this.is_dropping_old_files = false
       })
     },
     cacheFiles() {
@@ -393,6 +416,7 @@ new Vue({
     },
     schema () {
       this.refreshFiles()
+      this.refreshOldFiles()
     },
   },
 })
