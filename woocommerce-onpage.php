@@ -32,7 +32,7 @@ add_filter('init', function() {
         op_import_snapshot((bool) op_post('force_slug_regen'));
         $t2 = microtime(true);
         op_ret([
-          'log' => op_record('deleted old data'),
+          'log' => op_record('finish'),
           'c_count' => OpLib\Term::count(),
           'p_count' => OpLib\Post::count(),
           'time' => $t2 - $t1,

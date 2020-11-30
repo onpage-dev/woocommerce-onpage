@@ -20,4 +20,8 @@ class Term extends Model {
   public function scopeSlug($q, $slug) {
     $q->where('slug', $slug);
   }
+
+  function taxonomies() {
+    return $this->hasMany(TermTaxonomy::class, 'term_id', 'term_id');
+  }
 }

@@ -9,7 +9,7 @@ class PostMeta extends Model {
     protected $table = PFX.'postmeta';
     protected $guarded = [];
     public $timestamps = false;
-    protected $primaryKey = 'post_id';
+    protected $primaryKey = 'meta_id';
 
     public function parent() {
       return $this->belongsTo(Post::class, 'post_id');

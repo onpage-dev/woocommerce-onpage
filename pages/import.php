@@ -29,7 +29,7 @@
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
     <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.5</h1>
+    <h1>OnPage&reg; Woocommerce Plugin 1.0.6</h1>
     <table class="form-table">
     	<tbody>
         <tr>
@@ -58,6 +58,43 @@
 
   </form>
 
+
+  <div v-if="next_schema" class="op-card">
+    <h1>Data Importer</h1>
+    <label>
+      <input type="checkbox" v-model="force_slug_regen"/>
+      Force slug field regeneration for existing objects
+      <br>
+      <i>(might slow down the import and is a bad SEO practice - only use in development).</i>
+    </label>
+    <br>
+    <br>
+    <!-- Import button and log -->
+    <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
+    <div v-if="schema.imported_at" style="margin: 1rem 0">
+      Last import: {{ schema.imported_at }}
+    </div>
+    <br>
+    <br>
+    <i v-if="is_loading_next_schema">Loading...</i>
+    <i v-else-if="!next_schema">Configure above</i>
+    <i v-else-if="is_importing">Importing... please wait</i>
+    <div v-if="res = import_result">
+      <b style="margin: 0 0 .5rem">Import result:</b>
+      <br>
+      Import took {{ (res.time).toFixed(2) }} seconds
+      <br>
+      <ul>
+        <li>
+          {{ res.c_count }} categories
+        </li>
+        <li>
+          {{ res.p_count }} products
+        </li>
+      </ul>
+      <pre>{{ res.log.join('\n') }}</pre>
+    </div>
+  </div>
 
   <div class="op-card">
     <h1>Import settings</h1>
@@ -138,42 +175,6 @@
         </div>
       </p>
     </form>
-  </div>
-
-
-  <div v-if="next_schema" class="op-card">
-    <h1>Data Importer</h1>
-    <label>
-      <input type="checkbox" v-model="force_slug_regen"/>
-      Force slug field regeneration for existing objects
-      <br>
-      <i>(might slow down the import and is a bad SEO practice - only use in development).</i>
-    </label>
-    <br>
-    <br>
-    <!-- Import button and log -->
-    <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
-
-    <br>
-    <br>
-    <i v-if="is_loading_next_schema">Loading...</i>
-    <i v-else-if="!next_schema">Configure above</i>
-    <i v-else-if="is_importing">Importing... please wait</i>
-    <div v-if="res = import_result">
-      <b style="margin: 0 0 .5rem">Import result:</b>
-      <br>
-      Import took {{ (res.time).toFixed(2) }} seconds
-      <br>
-      <ul>
-        <li>
-          {{ res.c_count }} categories
-        </li>
-        <li>
-          {{ res.p_count }} products
-        </li>
-      </ul>
-      <pre>{{ res.log.join('\n') }}</pre>
-    </div>
   </div>
 
   <div v-if="schema" class="op-card">

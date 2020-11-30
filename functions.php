@@ -14,6 +14,12 @@ global $wpdb;
 define('OP_PLUGIN', true);
 define('PFX', $wpdb->prefix);
 
+function op_debug() {
+  error_reporting(E_ALL ^ E_NOTICE);
+  ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
+  error_reporting(E_ALL);
+}
+
 function op_slug(string $title, string $table, string $field, string $old_slug = null) {
   $slug = $title;
   $slug = mb_strtolower($slug);
@@ -279,6 +285,10 @@ function op_snake_to_camel($str) {
   return $ret;
 }
 
+function op_wpml_enabled() {
+  return !!apply_filters('wpml_default_language', NULL);
+}
+
 function op_import_snapshot(bool $force_slug_regen = false) {
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
@@ -292,13 +302,16 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
   $db = op_download_snapshot($sett);
   op_record('download completed');
-  $schema = op_schema(op_extract_schema($db));
 
-  // DB::beginTransaction();
+  $schema = op_extract_schema($db);
+  $schema->imported_at = date('Y-m-d H:i:s');
+  $schema = op_schema($schema);
+
 
   // Mark everything as old
-  DB::table("posts")->whereNotNull('op_id')->update(['op_dirty' => true]);
-  DB::table("terms")->whereNotNull('op_id')->update(['op_dirty' => true]);
+  DB::table("posts")->where('post_type', 'product')->update(['op_dirty' => true]);
+  $taxonomies = DB::table("term_taxonomy")->where('taxonomy', 'product_cat')->get();
+  DB::table("terms")->whereIn('term_id', $taxonomies->pluck('term_id'))->orWhereNotNull('op_id')->update(['op_dirty' => true]);
 
   // Order resources
   $res_map = [];
@@ -337,8 +350,9 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   op_record('import ended');
 
   // Delete old data
-  DB::table("posts")->whereNotNull('op_id')->where('op_dirty', true)->delete();
-  DB::table("terms")->whereNotNull('op_id')->where('op_dirty', true)->delete();
+  DB::table("posts")->where('op_dirty', true)->delete();
+  DB::table("terms")->where('op_dirty', true)->delete();
+  DB::table("term_taxonomy")->whereNotIn('term_id', DB::table("terms")->pluck('term_id'))->delete();
 
   op_record('deleted old data');
 
@@ -352,34 +366,191 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   op_record('permalinks flushed');
 
   // Foreach post/term call wpml hooks
-  $wpml_default_lang = apply_filters('wpml_default_language', NULL);
-  if ($wpml_default_lang) {
+  if (op_wpml_enabled()) {
+    $wpml_default_lang = apply_filters('wpml_default_language', NULL);
+    $wpml_langs = [];
+    foreach (apply_filters( 'wpml_active_languages', null) as $lang => $_) {
+      if ($lang != $wpml_default_lang) {
+        $wpml_langs[] = $lang;
+      }
+    }
+
+
+    // Delete existing translations
     DB::table('icl_translations')->whereIn('element_type', ['post_product', 'tax_product_cat'])->delete();
 
-    $categories = \OpLib\Term::pluck('term_id')->toArray();
-    $taxonomies = DB::table('term_taxonomy')->whereIn('term_id', $categories)->pluck('term_taxonomy_id');
+    // Get max translation id
+    $max_trid = DB::table('icl_translations')->max('trid');
+    $insert = [];
+
+    // Prepare taxonomies default translation
+    $taxonomies = DB::table('term_taxonomy')->whereIn('term_id', \OpLib\Term::pluck('term_id'))->pluck('term_taxonomy_id');
     foreach ($taxonomies as $id) {
-      do_action('wpml_set_element_language_details', [
+      $insert[] = [
         'element_id' => $id,
+        'trid' => ++$max_trid,
         'element_type' => 'tax_product_cat',
         'language_code' => $wpml_default_lang,
-        'check_duplicates' => false,
-      ]);
+      ];
     }
-    $products = \OpLib\Post::pluck('ID')->toArray();
-    foreach ($products as $id) {
-      do_action('wpml_set_element_language_details', [
+
+
+    // Prepare posts default translation
+    foreach (\OpLib\Post::pluck('ID') as $id) {
+      $insert[] = [
         'element_id' => $id,
+        'trid' => ++$max_trid,
         'element_type' => 'post_product',
         'language_code' => $wpml_default_lang,
-        'check_duplicates' => false,
-      ]);
+      ];
     }
+
+    // Do insert default translations
+    DB::table('icl_translations')->insert($insert);
     op_record("called wpml hooks with default lang $wpml_default_lang");
+
+
+    // Get icl translations for primary language
+    $translations = DB::table('icl_translations')
+        ->where('element_type', 'post_product')
+        ->where('language_code', $wpml_default_lang)
+        ->orderBy('element_id')
+        ->get();
+
+    // Get original elements in primary language
+    $orig_posts = DB::table('posts')
+        ->whereIn('ID', $translations->pluck('element_id'))
+        ->orderBy('ID')
+        ->get();
+
+    // Foreach secondary languages
+    foreach ($wpml_langs as $lang) {
+
+      // Duplicate original posts
+      $insert = [];
+      foreach ($orig_posts as $el) {
+        $data = (array) $el;
+        unset($data['op_res']);
+        unset($data['op_id']);
+        unset($data['ID']);
+        $insert[] = $data;
+      }
+      $cur_max_id = DB::table('posts')->max('ID');
+      DB::table('posts')->insert($insert);
+      $inserted_ids = DB::table('posts')
+          ->where('post_type', 'product')
+          ->where('id', '>', $cur_max_id)
+          ->pluck('id');
+
+      // Set icl translation for each duplicated post
+      $insert_translations = [];
+      foreach ($inserted_ids as $i => $id) {
+        $insert_translations[] = [
+          'element_id' => $id,
+          'element_type' => 'post_product',
+          'language_code' => $lang,
+          'trid' => $translations[$i]->trid,
+          'source_language_code' => $wpml_default_lang,
+        ];
+      }
+      DB::table('icl_translations')->insert($insert_translations);
+
+      // Duplicate original terms
+      $insert = [];
+      foreach ($orig_posts as $el) {
+        $data = (array) $el;
+        unset($data['op_res']);
+        unset($data['op_id']);
+        unset($data['ID']);
+        $insert[] = $data;
+      }
+      $cur_max_id = DB::table('posts')->max('ID');
+      DB::table('posts')->insert($insert);
+      $inserted_ids = DB::table('posts')
+          ->where('post_type', 'product')
+          ->where('id', '>', $cur_max_id)
+          ->pluck('id');
+
+      // Set icl translation for each duplicated post
+      $insert_translations = [];
+      foreach ($inserted_ids as $i => $id) {
+        $insert_translations[] = [
+          'element_id' => $id,
+          'element_type' => 'post_product',
+          'language_code' => $lang,
+          'check_duplicates' => false,
+          'trid' => $translations[$i]->trid,
+          'source_language_code' => $wpml_default_lang,
+        ];
+      }
+      DB::table('icl_translations')->insert($insert_translations);
+    }
+
+
+    // Get icl translations for primary language
+    $translations = DB::table('icl_translations')
+        ->where('element_type', 'tax_product_cat')
+        ->where('language_code', $wpml_default_lang)
+        ->orderBy('element_id')
+        ->get();
+    $orig_taxonomies = DB::table('term_taxonomy')
+        ->whereIn('term_taxonomy_id', $translations->pluck('element_id'))
+        ->orderBy('term_id')
+        ->get();
+    $orig_terms = DB::table('terms')
+        ->whereIn('term_id', $orig_taxonomies->pluck('term_id'))
+        ->orderBy('term_id')
+        ->get();
+
+    foreach ($wpml_langs as $lang) {
+
+      // Duplicate original posts
+      $insert = [];
+      foreach ($orig_terms as $el) {
+        $data = (array) $el;
+        unset($data['op_res']);
+        unset($data['op_id']);
+        unset($data['term_id']);
+        $insert[] = $data;
+      }
+      $cur_max_id = DB::table('terms')->max('term_id');
+      DB::table('terms')->insert($insert);
+      $inserted_ids = DB::table('terms')
+          ->where('term_id', '>', $cur_max_id)
+          ->pluck('term_id');
+
+      $insert = [];
+      foreach ($inserted_ids as $id) {
+        $insert[] = [
+          'term_id' => $id,
+          'taxonomy' => 'product_cat',
+        ];
+      }
+      $cur_max_id = DB::table('term_taxonomy')->max('term_taxonomy_id');
+      DB::table('term_taxonomy')->insert($insert);
+      $inserted_ids = DB::table('term_taxonomy')
+          ->where('term_taxonomy_id', '>', $cur_max_id)
+          ->pluck('term_taxonomy_id');
+
+
+      // Set icl translation for each duplicated post
+      foreach ($inserted_ids as $i => $id) {
+          do_action('wpml_set_element_language_details', [
+            'element_id' => $id,
+            'element_type' => 'tax_product_cat',
+            'language_code' => $lang,
+            'check_duplicates' => false,
+            'trid' => $translations[$i]->trid,
+            'source_language_code' => $wpml_default_lang,
+          ]);
+      }
+    }
+
+
+    op_record("duplicated data for wpml");
   }
 
 
-  // DB::commit();
   op_record('transaction committed');
 }
 
@@ -856,19 +1027,61 @@ function op_locale($set = null) {
 }
 
 function op_category($key, $value) {
-  $term = OpLib\Term::where($key, $value)->first();
+  $term = OpLib\Term::withoutGlobalScope('op')->where($key, $value)->first();
   if (!$term) return null;
+
+  // If wpml is enabled, we have to return the original element
+  if (op_wpml_enabled() && !$term->op_id) {
+    $translation = DB::table('icl_translations')
+        ->where('element_type', 'tax_product_cat')
+        ->where('element_id', $term->taxonomies()->first()->id)
+        ->first();
+    if (!$translation) {
+      throw new \Exception("Cannot find translation for term [$term->id]");
+    }
+    if ($translation && $translation->source_language_code) {
+      $original = DB::table('icl_translations')
+          ->where('element_type', 'tax_product_cat')
+          ->where('trid', $translation->trid)
+          ->whereNull('source_language_code')
+          ->first();
+      $term = OpLib\Term::whereHas('taxonomies', function($q) use(&$original) {
+        $q->where('term_taxonomy_id', $original->element_id);
+      })->first();
+      if (!$term) return null;
+    }
+  }
 
   $class = 'Op\\'.op_snake_to_camel($term->resource->name);
   return $class::find($term->id);
 }
 
 function op_product($key, $value) {
-  $term = OpLib\Post::where($key, $value)->first();
-  if (!$term) return null;
+  $post = OpLib\Post::withoutGlobalScope('op')->where($key, $value)->first();
+  if (!$post) return null;
 
-  $class = 'Op\\'.op_snake_to_camel($term->resource->name);
-  return $class::find($term->id);
+  // If wpml is enabled, we have to return the original element
+  if (op_wpml_enabled() && !$post->op_id) {
+    $translation = DB::table('icl_translations')
+        ->where('element_type', 'post_product')
+        ->where('element_id', $post->id)
+        ->first();
+
+    if (!$translation) {
+      throw new \Exception("Cannot find translation for post [$term->id]");
+    }
+    if ($translation && $translation->source_language_code) {
+      $original = DB::table('icl_translations')
+          ->where('element_type', 'post_product')
+          ->where('trid', $translation->trid)
+          ->whereNull('source_language_code')
+          ->first();
+      $post = OpLib\Post::find($original->element_id);
+    }
+  }
+
+  $class = 'Op\\'.op_snake_to_camel($post->resource->name);
+  return $class::find($post->id);
 }
 
 function op_prod_res(WC_Product $product) {
