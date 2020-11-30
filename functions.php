@@ -102,7 +102,7 @@ function op_initdb() {
     DB::statement("SET sql_mode = '$orig_mode'");
   }
 
-  if (op_settings()->migration < 34) {
+  if (op_settings()->migration < 50) {
     $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
     DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
     try {
@@ -114,7 +114,7 @@ function op_initdb() {
 
 
 
-    op_setopt('migration', 34);
+    op_setopt('migration', 50);
     DB::statement("SET sql_mode = '$orig_mode'");
   }
 
