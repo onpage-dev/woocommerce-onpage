@@ -116,17 +116,47 @@ trait MetaFunctions {
     return op_field_to_meta_key($f, $lang);
   }
 
-  public function link() {
-    return op_link_to($this);
-  }
-
-  public function permalink() {
+  public function permalink(string $lang = null) {
+    if ($lang) {
+      $id = $this->getTranslationId($lang);
+    } else {
+      $id = $this->id;
+    }
     return $this->is_post
-      ? get_permalink($this->id)
-      : get_category_link($this->id);
+      ? get_permalink($id)
+      : get_category_link($id);
   }
 
   public function getSlug() {
     return $this->attributes[self::$slug_field];
+  }
+
+  public function getTranslationId(string $lang) {
+    $original_tx = DB::table('icl_translations')
+      ->where('element_type', $this->is_post ? 'post_product' : 'tax_product_cat')
+      ->where('element_id', $this->id)
+      ->first();
+    if (!$original_tx) {
+      throw new \Exception("Element $this->id is not translated");
+    }
+    $tx = DB::table('icl_translations')
+      ->where('language_code', $lang)
+      ->where('trid', $original_tx->trid)
+      ->first();
+    if (!$original_tx) {
+      throw new \Exception("Element $this->id is not translated into $lang");
+    }
+
+    if ($this->is_post) {
+      return $tx->element_id;
+    } else {
+      $tax = DB::table('term_taxonomy')
+        ->where('term_taxonomy_id', $tx->element_id)
+        ->first();
+      if (!$tax) {
+        throw new \Exception("Cannot find taxonomy {$tx->element_id}");
+      }
+      return $tax->term_id;
+    }
   }
 }

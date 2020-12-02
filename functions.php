@@ -500,6 +500,9 @@ function op_import_snapshot(bool $force_slug_regen = false) {
         $insert[] = [
           'term_id' => $id,
           'taxonomy' => 'product_cat',
+          'description' => '',
+          'parent' => 0,
+          'count' => 1,
         ];
       }
       $cur_max_id = DB::table('term_taxonomy')->max('term_taxonomy_id');
