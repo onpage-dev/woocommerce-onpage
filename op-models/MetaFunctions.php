@@ -132,9 +132,19 @@ trait MetaFunctions {
   }
 
   public function getTranslationId(string $lang) {
+    $id = $this->id;
+    if (!$this->is_post) {
+      $tax = $this->taxonomies()->first();
+      if (!$tax) {
+        throw new \Exception("Element $this->id has no taxonomy");
+      }
+      $id = $tax->term_taxonomy_id;
+    }
+
+
     $original_tx = DB::table('icl_translations')
       ->where('element_type', $this->is_post ? 'post_product' : 'tax_product_cat')
-      ->where('element_id', $this->id)
+      ->where('element_id', $id)
       ->first();
     if (!$original_tx) {
       throw new \Exception("Element $this->id is not translated");
