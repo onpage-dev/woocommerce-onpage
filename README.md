@@ -122,3 +122,17 @@ add_filter('on_page_slug', function($slug, $original_string, $table, $field, $ol
   return 'my-custom-slug-'.rand(1000000, 9999999);
 }, 10, 5);
 ```
+
+
+## Configure whether each resource is a product or a category
+By default resources will reflect the way they are set up in On Page,
+but you can force resources to be imported in a custom way.
+
+The following hook will import only the resource 'shoes' and 't_shirts' as product,
+and any other resource will be imported as a category.
+
+```php
+add_filter('on_page_product_resources', function() {
+  return ['shoes', 't_shirts']; // list of resource names (not labels)
+});
+```

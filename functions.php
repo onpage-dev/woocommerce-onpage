@@ -300,11 +300,24 @@ function op_import_snapshot(bool $force_slug_regen = false) {
     mkdir(__DIR__.'/db-models');
   }
 
-  $db = op_download_snapshot($sett);
+  $schema = op_download_snapshot();
   op_record('download completed');
 
-  $schema = op_extract_schema($db);
+  // Download new schema
+  // $schema = op_extract_schema($schema);
+
+  // Create imported_at field
   $schema->imported_at = date('Y-m-d H:i:s');
+
+  // Overwrite which resource must be imported as a product
+  $overwrite_products = apply_filters('on_page_product_resources', null);
+  if (is_array($overwrite_products)) {
+    foreach ($schema->resources as $res) {
+      $res->is_product = in_array($res->name, $overwrite_products);
+    }
+  }
+
+  // Store the new schema
   $schema = op_schema($schema);
 
 
@@ -315,7 +328,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
   // Order resources
   $res_map = [];
-  foreach ($db->resources as $res) $res_map[$res->id] = $res;
+  foreach ($schema->resources as $res) $res_map[$res->id] = $res;
   $res_deps = [];
   foreach ($res_map as $res) {
     $res_deps[$res->id] = collect($res->fields)
@@ -343,8 +356,8 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
 
   while ($res = $next_res()) {
-    op_import_resource($db, $res, $res_map, $force_slug_regen);
-    op_record("fine $res->label");
+    op_import_resource($schema, $res, $res_map, $force_slug_regen);
+    op_record("completed $res->label");
   }
   delete_option("product_cat_children");
   op_record('import ended');
@@ -554,7 +567,7 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
   // Create map of resource fields [id => field]
   $field_map = [];
   foreach ($res->fields as $f) $field_map[$f->id] = $f;
-  op_record('mapped $field_map');
+  // op_record('mapped $field_map');
 
   // Start inserting
   $object_ids = [];
@@ -567,7 +580,7 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
   foreach (DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->get() as $x) {
     $current_taxonomies[$x->term_id] = $x;
   }
-  op_record('mapped $current_objects');
+  // op_record('mapped $current_objects');
 
   foreach ($res->data as $thing_i => $thing) {
     if (!@$thing->fields->$lab_field) continue;
@@ -742,7 +755,7 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
     }
   } // end $thing->data cycle
 
-  op_record('cycle ended');
+  // op_record('cycle ended');
   DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)
     ->where(function($q) {
       $q->where('meta_key', 'like', 'op\_%')
@@ -752,9 +765,9 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
           '_thumbnail_id',
         ]);
     })->delete();
-  op_record('deleted meta');
+  // op_record('deleted meta');
   DB::table($base_tablemeta)->insert($all_meta);
-  op_record('created meta');
+  // op_record('created meta');
 
   return true;
 }
