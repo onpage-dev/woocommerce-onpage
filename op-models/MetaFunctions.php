@@ -14,7 +14,7 @@ trait MetaFunctions {
   }
 
   public function val($name, $lang = null) {
-    $field = @$this->resource->fields->$name;
+    $field = @$this->resource->name_to_field[$name];
     if (!$field) return;
     $meta_key = op_field_to_meta_key($field, $lang);
     if (!$meta_key) return null;
@@ -56,8 +56,8 @@ trait MetaFunctions {
   }
 
   public static function scopeRes($q, $res_id) {
-    if (!is_int($res_id)) {
-      $res_id = op_schema()->resources->$res_id->id;
+    if (!preg_match('/^\d+$/', $res_id)) {
+      $res_id = op_schema()->name_to_res[$res_id]->id;
     }
     $q->where('op_res', $res_id);
   }
@@ -87,7 +87,7 @@ trait MetaFunctions {
 
   public static function scopeSearch($q, $string, array $fields = []) {
     if (empty($fields)) {
-      $fields = array_keys((array)self::getResource()->fields);
+      $fields = array_keys(self::getResource()->name_to_field);
     }
     $string = str_replace('%', '\\%', $string);
     $string = str_replace('_', '\\_', $string);
@@ -109,7 +109,7 @@ trait MetaFunctions {
 
   public static function fieldToMetaKey(string $name, string $lang = null) {
     $res = self::getResource();
-    $f = @$res->fields->$name;
+    $f = @$res->name_to_field[$name];
     if (!$f) {
       return null;
       // throw new \Exception("Cannot find field $name");

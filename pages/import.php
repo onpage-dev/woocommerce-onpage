@@ -29,7 +29,7 @@
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
     <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.8</h1>
+    <h1>OnPage&reg; Woocommerce Plugin 1.0.9</h1>
     <table class="form-table">
     	<tbody>
         <tr>
@@ -44,6 +44,12 @@
           <th><label>API token</label></th>
           <td>
             <input class="regular-text code" v-model="settings_form.token">
+          </td>
+        </tr>
+        <tr>
+          <th><label>Custom routing</label></th>
+          <td>
+            <input class="regular-text code" v-model="settings_form.shop_url">
           </td>
         </tr>
       </tbody>

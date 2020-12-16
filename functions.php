@@ -177,22 +177,6 @@ function op_download_snapshot(object $sett = null) {
   return $db;
 }
 
-function op_extract_schema(object $db = null) {
-  if (!$db) $db = op_download_snapshot();
-  else $db = clone $db;
-  $res_map = [];
-  foreach ($db->resources as &$res) {
-    $res = clone ($res);
-    unset($res->data);
-    $field_map = [];
-    foreach ($res->fields as $f) $field_map[$f->name] = $f;
-    $res->fields = $field_map;
-    $res_map[$res->name] = $res;
-  }
-  $db->resources = $res_map;
-  return $db;
-}
-
 function op_schema(object $set = null) {
   static $schema = null;
   if ($set) {
@@ -201,14 +185,22 @@ function op_schema(object $set = null) {
   }
   if (!$schema) {
     $schema = op_getopt('schema');
-    foreach ($schema->resources as $res) {
+    $schema->id_to_res = [];
+    $schema->name_to_res = [];
+    foreach ($schema->resources as &$res) {
       $schema->id_to_res[$res->id] = $res;
+      $schema->name_to_res[$res->name] = $res;
       foreach ($res->fields as &$field) {
         $schema->id_to_field[$field->id] = $field;
       }
     }
-    foreach ($schema->resources as $res) {
+    foreach ($schema->resources as $res_i => &$res) {
+      $res->id_to_field = [];
+      $res->name_to_field = [];
       foreach ($res->fields as &$field) {
+        $res->id_to_field[$field->id] = $field;
+        $res->name_to_field[$field->name] = $field;
+
         $field->res = $res;
         if ($field->type == 'relation') {
           $field->rel_res = $schema->id_to_res[$field->rel_res_id];
@@ -302,9 +294,6 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
   $schema = op_download_snapshot();
   op_record('download completed');
-
-  // Download new schema
-  // $schema = op_extract_schema($schema);
 
   // Create imported_at field
   $schema->imported_at = date('Y-m-d H:i:s');
@@ -786,7 +775,7 @@ function op_gen_model(object $schema, object $res) {
     });
   }\n";
   $code.= "  public static function getResource() {
-    return op_schema()->resources->{$res->name};
+    return op_schema()->name_to_res['{$res->name}'];
   }\n";
 
   foreach ($res->fields as $f) {
@@ -1100,7 +1089,7 @@ function op_prod_value(WC_Product $product, $field_name, $lang = null) {
   $res = op_prod_res($product);
   if (!$res) return;
 
-  $field = $res->fields->$field_name;
+  $field = @$res->name_to_field[$field_name];
   if (!$field) return;
 
   $key = op_field_to_meta_key($field, $lang);
