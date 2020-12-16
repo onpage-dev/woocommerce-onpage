@@ -42,7 +42,7 @@ add_filter('init', function() {
         op_ret(op_getopt('schema'));
 
       case 'next-schema':
-        op_ret(op_extract_schema());
+        op_ret(op_download_snapshot());
 
       case 'list-files':
         op_ret(op_list_files());
