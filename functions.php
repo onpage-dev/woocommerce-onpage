@@ -878,7 +878,7 @@ function op_list_files(bool $return_map = false) {
           'post_id' => [],
         ];
       }
-      $files->$meta_col[] = $object_id;
+      $files[$file->token]->$meta_col[] = $object_id;
     }
   }
   foreach ($files as &$f) {
