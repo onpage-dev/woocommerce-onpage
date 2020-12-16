@@ -13,7 +13,6 @@
  */
 defined( 'ABSPATH' ) || exit;
 require_once __DIR__.'/functions.php';
-op_debug();
 require_once __DIR__.'/router.php';
 
 op_initdb();
