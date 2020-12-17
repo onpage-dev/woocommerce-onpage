@@ -136,3 +136,95 @@ add_filter('on_page_product_resources', function() {
   return ['shoes', 't_shirts']; // list of resource names (not labels)
 });
 ```
+
+
+
+# Routing
+This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
+
+```php
+// This will handle the shop home (e.g. /shop/)
+op_page('/', function() {
+  include __DIR__.'/shop-home.php';
+});
+op_page('/Category/', function($category) {
+  include __DIR__.'/shop-category.php';
+});
+op_page('/Category/products', function($product) {
+  include __DIR__.'/shop-product.php';
+});
+```
+
+Then create the related files as follows:
+## Shop Page
+```php
+<?php
+defined( 'ABSPATH' ) || exit;
+get_header();
+
+foreach (Op\Category::all() as $cat): ?>
+  <a href="<?= $cat->link() ?>">
+    <?= $cat->val('name') ?>
+  </a>
+<?php endforeach; ?>
+
+<?php get_footer(); ?>
+```
+
+## Category Page
+```php
+<?php
+defined( 'ABSPATH' ) || exit;
+get_header();
+?>
+<h1><?= $category->val('name') ?></h1>
+<?php
+foreach ($category->products as $prod): ?>
+  <a href="<?= $prod->link() ?>">
+    <?= $prod->val('name') ?>
+  </a>
+<?php endforeach; ?>
+
+<?php get_footer(); ?>
+```
+
+## Product Page
+You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
+
+__NOTE:__ the `->link()` method will fail with an error if no route is present for the intended resource.
+
+## Advanced routing
+Sometimes you want to reduce the number of levels required to access the product page.
+Suppose you have the following structure:
+- Chapter
+- Section
+- Product
+- Article
+
+
+And we want the following 3 pages:
+- Home url: `/shop/`
+- Section url: `/shop/section-slug/`
+- Article url: `/shop/section-slug/article-slug/`
+
+```php
+op_page('/', function() {
+  include __DIR__.'/home.php';
+});
+op_page('/Section/', function(Op\Section $section) {
+  include __DIR__.'/section.php';
+});
+
+// we can shortcircuit the products using the . to separate the relations names
+op_page('/Section/products.articles', function(Op\Article $article) {
+  include __DIR__.'/article.php';
+});
+```
+
+
+__NOTE:__ let's breakdown that `/Section/products.articles`:
+- `Section` is the name of the Eloquent Model (Op\Section must exist)
+- `products` is the relation starting from Section (e.g. the one you use when you do `$section->products`)
+- `articles` is the relation starting from the Product resource (e.g. $product->articles)
+
+__NOTE:__ In this last example, calling `$product->link()` will throw an exception because there is no route to handle a `Op\Product`
