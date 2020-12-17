@@ -85,16 +85,24 @@ trait MetaFunctions {
       ->all();
   }
 
-  public static function scopeSearch($q, $string, array $fields = []) {
+  public static function scopeSearch($q, $string, array $fields = [], string $lang = null) {
     if (empty($fields)) {
       $fields = array_keys(self::getResource()->name_to_field);
     }
     $string = str_replace('%', '\\%', $string);
     $string = str_replace('_', '\\_', $string);
-    $q->where(function($q) use ($fields, $string) {
-      foreach ($fields as $field_name) {
-        $q->orWhereField($field_name, 'like', "%$string%");
-      }
+    if (!$lang) {
+      $lang = op_locale();
+    }
+    $q->whereHas('meta', function($q) use ($fields, $string, $lang) {
+      $q->where(function($q) use ($fields, $string, $lang) {
+        foreach ($fields as $field_name) {
+          $q->orWhere(function($q) use ($field_name, $string, $lang) {
+            $q->where('meta_key', self::fieldToMetaKey($field_name, $lang));
+            $q->where('meta_value', 'like', "%$string%");
+          });
+        }
+      });
     });
   }
 
