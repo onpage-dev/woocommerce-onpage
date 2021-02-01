@@ -278,7 +278,21 @@ function op_snake_to_camel($str) {
 }
 
 function op_wpml_enabled() {
-  return !!apply_filters('wpml_default_language', NULL);
+  return !!op_wpml_default();
+}
+
+function op_wpml_default() {
+  return apply_filters('wpml_default_language', NULL);
+}
+function op_wpml_langs() {
+  $wpml_default_lang = op_wpml_default();
+  $wpml_langs = [];
+  foreach (apply_filters( 'wpml_active_languages', null) as $lang => $_) {
+    if ($lang != $wpml_default_lang) {
+      $wpml_langs[] = $lang;
+    }
+  }
+  return $wpml_langs;
 }
 
 function op_import_snapshot(bool $force_slug_regen = false) {
@@ -316,40 +330,13 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   DB::table("terms")->whereIn('term_id', $taxonomies->pluck('term_id'))->orWhereNotNull('op_id')->update(['op_dirty' => true]);
 
   // Order resources
-  $res_map = [];
-  foreach ($schema->resources as $res) $res_map[$res->id] = $res;
-  $res_deps = [];
-  foreach ($res_map as $res) {
-    $res_deps[$res->id] = collect($res->fields)
-      ->where('rel_type', 'dst')
-      ->pluck('rel_res_id')
-      ->diff([$res->id]);
-  }
-
-  $imported_map = [];
-  $next_res = function() use ($res_map, $res_deps, &$imported_map) {
-    foreach ($res_deps as $id => $deps) {
-      if (isset($imported_map[$id])) continue;
-      $deps_satisfied = true;
-      foreach ($deps as $dep_id) {
-        if (!isset($imported_map[$dep_id])) {
-          $deps_satisfied = false;
-          break;
-        }
-      }
-      if (!$deps_satisfied) continue;
-      $imported_map[$id] = true;
-      return $res_map[$id];
-    }
-  };
-
-
-  while ($res = $next_res()) {
-    op_import_resource($schema, $res, $res_map, $force_slug_regen);
+  foreach ($schema->resources as $res) {
+    op_import_resource($schema, $res, $force_slug_regen);
     op_record("completed $res->label");
   }
+
+
   delete_option("product_cat_children");
-  op_record('import ended');
 
   // Delete old data
   DB::table("posts")->where('op_dirty', true)->delete();
@@ -366,19 +353,14 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
   // Foreach post/term call wpml hooks
   if (op_wpml_enabled()) {
-    $wpml_default_lang = apply_filters('wpml_default_language', NULL);
-    $wpml_langs = [];
-    foreach (apply_filters( 'wpml_active_languages', null) as $lang => $_) {
-      if ($lang != $wpml_default_lang) {
-        $wpml_langs[] = $lang;
-      }
-    }
+    $wpml_default_lang = op_wpml_default();
+    $wpml_langs = op_wpml_langs();
 
     // Delete existing translations
     DB::table('icl_translations')->whereIn('element_type', ['post_product', 'tax_product_cat'])->delete();
 
     // Get max translation id
-    $max_trid = DB::table('icl_translations')->max('trid');
+    $max_trid = DB::table('icl_translations')->max('trid') + 1000;
     $insert = [];
 
     // Prepare taxonomies default translation
@@ -386,6 +368,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
         ->whereIn('term_id', \OpLib\Term::pluck('term_id'))
         ->orderBy('term_taxonomy_id')
         ->pluck('term_taxonomy_id');
+
     foreach ($taxonomies as $id) {
       $insert[] = [
         'element_id' => $id,
@@ -425,7 +408,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
         ->get();
 
     if ($original_posts->count() != $translations->count()) {
-      throw new \Exception("Translation coutn != product count");
+      throw new \Exception("Translation count != product count");
     }
 
     // Foreach secondary languages
@@ -445,13 +428,22 @@ function op_import_snapshot(bool $force_slug_regen = false) {
       $inserted_ids = DB::table('posts')
           ->where('post_type', 'product')
           ->where('id', '>', $cur_max_id)
-          ->pluck('id');
+          ->orderBy('ID')
+          ->select('ID', 'post_name')
+          ->get();
 
       // Set icl translation for each duplicated post
       $insert = [];
-      foreach ($inserted_ids as $i => $id) {
+      foreach ($inserted_ids as $i => $post) {
+        $orig = $original_posts[$i];
+        if ($translations[$i]->element_id != $orig->ID) {
+          throw new \Exception("Translation $i does not match product $orig->post_name");
+        }
+        if ($post->post_name != $orig->post_name) {
+          throw new \Exception("Post in position $i slug does not match {$post->post_name} != {$orig->post_name}");
+        }
         $insert[] = [
-          'element_id' => $id,
+          'element_id' => $post->ID,
           'element_type' => 'post_product',
           'language_code' => $lang,
           'trid' => $translations[$i]->trid,
@@ -466,7 +458,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
     $translations = DB::table('icl_translations')
         ->where('element_type', 'tax_product_cat')
         ->where('language_code', $wpml_default_lang)
-        ->orderBy('translation_id')
+        ->orderBy('element_id')
         ->get();
     $orig_taxonomies = DB::table('term_taxonomy')
         ->whereIn('term_taxonomy_id', $translations->pluck('element_id'))
@@ -491,41 +483,60 @@ function op_import_snapshot(bool $force_slug_regen = false) {
       }
       $cur_max_id = DB::table('terms')->max('term_id');
       DB::table('terms')->insert($insert);
-      $inserted_ids = DB::table('terms')
+      $inserted_terms = DB::table('terms')
           ->where('term_id', '>', $cur_max_id)
           ->orderBy('term_id')
-          ->pluck('term_id');
+          ->get();
 
       // Duplicate taxonomies
       $insert = [];
-      foreach ($inserted_ids as $id) {
+      foreach ($inserted_terms as $i => $term) {
         $insert[] = [
-          'term_id' => $id,
+          'term_id' => $term->term_id,
           'taxonomy' => 'product_cat',
           'description' => '',
           'parent' => 0,
           'count' => 1,
         ];
       }
+
       $cur_max_id = DB::table('term_taxonomy')->max('term_taxonomy_id');
       DB::table('term_taxonomy')->insert($insert);
       $inserted_ids = DB::table('term_taxonomy')
-          ->where('term_taxonomy_id', '>', $cur_max_id)
-          ->orderBy('term_taxonomy_id')
+          ->whereIn('term_id', $inserted_terms->pluck('term_id'))
+          ->orderBy('term_id')
           ->pluck('term_taxonomy_id');
 
 
       // Set icl translation for each duplicated post
       $insert = [];
       foreach ($inserted_ids as $i => $id) {
+        $tx_term = $inserted_terms[$i];
+        $orig_term = $orig_terms->firstWhere('slug', $tx_term->slug);
+        if (!$orig_term) {
+          throw new \Exception("Cannot find original term for term {$term->slug}");
+        }
+        // echo "Inserted term:";
+        // print_r($tx_term);
+        // echo "Orig term:";
+        // print_r($orig_term);
+        $orig_tax = $orig_taxonomies->firstWhere('term_id', $orig_term->term_id);
+        $group = $translations->firstWhere('element_id', $orig_tax->term_taxonomy_id);
+
+        if (!$group) {
+          throw new \Exception("Cannot find translation group for tax {$orig_tax->term_taxonomy_id}");
+        }
+
         $insert[] = [
           'element_id' => $id,
           'element_type' => 'tax_product_cat',
           'language_code' => $lang,
-          'trid' => $translations[$i]->trid,
+          'trid' => $group->trid,
           'source_language_code' => $wpml_default_lang,
         ];
       }
+      // print_r($insert);
+      // exit;
       DB::table('icl_translations')->insert($insert);
     }
 
@@ -541,7 +552,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   op_record('transaction committed');
 }
 
-function op_import_resource(object $db, object $res, array $res_map, bool $force_slug_regen) {
+function op_import_resource(object $db, object $res, bool $force_slug_regen) {
   $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
   $lab_field = $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '');
   $lab_img = collect($res->fields)->where('type', 'image')->first();
@@ -564,10 +575,6 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
   $current_objects = [];
   foreach (DB::table($base_table)->where('op_res', $res->id)->get() as $x) {
     $current_objects[$x->op_id] = $x;
-  }
-  $current_taxonomies = [];
-  foreach (DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->get() as $x) {
-    $current_taxonomies[$x->term_id] = $x;
   }
   // op_record('mapped $current_objects');
 
@@ -635,6 +642,12 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
       $object_id = DB::table($base_table)->insertGetId($data);
     }
     $object_ids[$thing->id] = $object_id;
+
+    // Delete all relations with parents
+    if ($res->is_product) {
+      DB::table('term_relationships')->where('object_id', $object_id)->delete();
+      wp_set_object_terms($object_id, 'simple', 'product_type');
+    }
 
     // Calculate new metadata
     $meta = [];
@@ -717,32 +730,25 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
 
     // Recreate the metadata
     $all_meta = array_merge($all_meta, $meta);
-    // DB::table($base_tablemeta)->where($base_tablemeta_ref, $object_id)->delete();
-    // DB::table($base_tablemeta)->insert($meta);
-    // unset($meta);
 
 
+  } // end $thing->data cycle
 
-    // Delete all relations with parents
-    if ($res->is_product) {
-      DB::table('term_relationships')->where('object_id', $object_id)->delete();
-    } else {
-      DB::table('term_taxonomy')->where('term_id', $object_id)->delete();
-    }
-
-    // If product, set it as simple
-    if ($res->is_product) {
-      wp_set_object_terms($object_id, 'simple', 'product_type');
-    } else {
-      DB::table('term_taxonomy')->insert([[
-        'term_id' => $object_id,
+  // Create taxonomies
+  if (!$res->is_product) {
+    $insert = [];
+    foreach ($object_ids as $opid => $wpid) {
+      $insert[] = [
+        'term_id' => $wpid,
         'taxonomy' => 'product_cat',
         'description' => '',
         'parent' => 0,
         'count' => 1,
-      ]]);
+      ];
     }
-  } // end $thing->data cycle
+    DB::table('term_taxonomy')->whereIn('term_id', $object_ids)->delete();
+    $tax = DB::table('term_taxonomy')->insert($insert);
+  }
 
   // op_record('cycle ended');
   DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)
@@ -754,9 +760,7 @@ function op_import_resource(object $db, object $res, array $res_map, bool $force
           '_thumbnail_id',
         ]);
     })->delete();
-  // op_record('deleted meta');
   DB::table($base_tablemeta)->insert($all_meta);
-  // op_record('created meta');
 
   return true;
 }

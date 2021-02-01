@@ -29,7 +29,7 @@
 <div id="op-app" style="margin-right: 2rem">
   <form @submit.prevent="saveSettings" class="op-card">
     <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.11</h1>
+    <h1>OnPage&reg; Woocommerce Plugin 1.0.12</h1>
     <table class="form-table">
     	<tbody>
         <tr>
@@ -77,7 +77,7 @@
     <br>
     <!-- Import button and log -->
     <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
-    <div v-if="schema.imported_at" style="margin: 1rem 0">
+    <div v-if="schema && schema.imported_at" style="margin: 1rem 0">
       Last import: {{ schema.imported_at }}
     </div>
     <br>
