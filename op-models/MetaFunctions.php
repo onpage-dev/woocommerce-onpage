@@ -81,6 +81,7 @@ trait MetaFunctions {
     $ids = $q->pluck(self::getPrimaryKey());
     return self::$meta_class::whereIn(self::$meta_ref, $ids)
       ->where('meta_key', self::fieldToMetaKey($name, $lang))
+      ->orderByRaw('FIELD ('.self::$meta_ref.', ' . $ids->implode(',') . ') ASC')
       ->pluck('meta_value')
       ->all();
   }
