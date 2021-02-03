@@ -77,7 +77,7 @@ add_filter('admin_menu', function() {
     'OnPage Importer',
     'administrator',
     'onpage-importer',
-    function() { require __DIR__.'/pages/import.php'; },
+    function() { require __DIR__.'/pages/import.php'; }
   );
 });
 

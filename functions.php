@@ -272,7 +272,7 @@ function op_snake_to_camel($str) {
   $str = explode('_', $str);
   $ret = '';
   foreach ($str as $s) {
-    $ret.= strtoupper($s[0]).substr($s, 1);
+    $ret.= strtoupper(@$s[0]).substr($s, 1);
   }
   return $ret;
 }
@@ -554,9 +554,9 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
 function op_import_resource(object $db, object $res, bool $force_slug_regen) {
   $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
-  $lab_field = $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '');
+  $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '') : null;
   $lab_img = collect($res->fields)->where('type', 'image')->first();
-  $lab_img_field = $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '');
+  $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
 
   $base_table = $res->is_product ? 'posts' : 'terms';
   $base_table_key = $res->is_product ? 'ID' : 'term_id';
@@ -579,7 +579,9 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
   // op_record('mapped $current_objects');
 
   foreach ($res->data as $thing_i => $thing) {
-    if (!@$thing->fields->$lab_field) continue;
+    $label = @$thing->fields->$lab_field;
+    if (is_null($label)) $label = 'unnamed';
+
     $log = "$res->name $thing->id ".memory_get_usage();
     // file_put_contents(__DIR__.'/log.txt', "$log\n", FILE_APPEND);
     // Commit every X elements for speed (we like speed)
@@ -597,10 +599,10 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
       'op_res' => $res->id,
       'op_id' => $thing->id,
       'op_dirty' => false,
-      'name' => $thing->fields->$lab_field,
+      'name' => $label,
       'slug' => !$force_slug_regen && $object
         ? $object->slug
-        : op_slug($thing->fields->$lab_field, 'terms', 'slug', @$object->slug),
+        : op_slug($label, 'terms', 'slug', @$object->slug),
       'term_group' => 0,
       'op_order' => $thing_i,
     ] : [
@@ -611,7 +613,7 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
       'post_date' => @$thing->created_at ?: date('Y-m-d H:i:s'),
       'post_date_gmt' => @$thing->created_at ?: date('Y-m-d H:i:s'),
       'post_content' => '',
-      'post_title' => $thing->fields->$lab_field,
+      'post_title' => $label,
       'post_excerpt' => '',
       'post_status' => 'publish',
       'comment_status' => 'closed',
@@ -619,7 +621,7 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
       'post_password' => '',
       'post_name' => !$force_slug_regen && $object
         ? $object->post_name
-        : op_slug($thing->fields->$lab_field, 'posts', 'post_name', @$object->post_name),
+        : op_slug($label, 'posts', 'post_name', @$object->post_name),
       'to_ping' => '',
       'pinged' => '',
       'post_modified' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
@@ -662,12 +664,12 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
       'meta_value' => $thing->id,
     ];
 
-    if ($lab_img_field && $thing->fields->$lab_img_field) {
+    if ($lab_img_field && @$thing->fields->$lab_img_field) {
       $meta[] = [
         $base_tablemeta_ref => $object_id,
         'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
         'meta_value' => json_encode(
-          $thing->fields->$lab_img_field,
+          $thing->fields->$lab_img_field
         ),
       ];
     }
@@ -788,7 +790,8 @@ function op_gen_model(object $schema, object $res) {
       $rel_class = op_snake_to_camel($f->rel_res->name);
       $code.= "  function $f->name() {\n";
       $code.= "    return \$this->belongsToMany($rel_class::class, \\OpLib\\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value', null, 'op_id')\n";
-      $code.= "    ->wherePivot('meta_key', 'op_$f->name');\n";
+      $code.= "    ->wherePivot('meta_key', 'op_$f->name')\n";
+      $code.= "    ->orderBy('meta_id');\n";
       $code.= "  }\n";
     }
   }
