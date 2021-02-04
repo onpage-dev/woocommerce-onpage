@@ -811,7 +811,7 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
     if (!$w && !$h) {
       $target_path = op_file_path('/cache/'.substr($file->token, 0, 4).$file->name);
       if (!file_exists($target_path)) {
-        symlink($path, $target_path);
+        symlink('../'.basename($path), $target_path);
       }
       return op_link($target_path);
     } else {
