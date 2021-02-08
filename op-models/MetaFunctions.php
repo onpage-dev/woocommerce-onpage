@@ -52,7 +52,9 @@ trait MetaFunctions {
   }
 
   public static function scopeLoaded($q) {
-    $q->with('meta');
+    $q->with('meta', function($q) {
+      $q->orderBy('meta_id', 'asc');
+    });
   }
 
   public static function scopeRes($q, $res_id) {
