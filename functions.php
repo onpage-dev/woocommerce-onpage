@@ -347,7 +347,6 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
 
   $old_models = glob(__DIR__.'/db-models/*.php');
-  foreach ($old_models as $path) unlink ($path);
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
   op_record('created models');
 
