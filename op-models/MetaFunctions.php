@@ -25,6 +25,14 @@ trait MetaFunctions {
     return $field->is_multiple ? $values->all() : $values->first();
   }
 
+  public function escval($name, $lang = null) {
+    $ret = $this->val($name, $lang);
+    if (is_string($ret)) {
+      $ret = op_e($ret);
+    }
+    return $ret;
+  }
+
   public function file($name, $lang = null) {
     $value = $this->val($name, $lang);
     if (is_null($value)) return;

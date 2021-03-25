@@ -115,16 +115,25 @@ function op_use_page($action, $page, $pieces) {
         $element = $query->first();
 
         if (!$element) {
-            throw new Exception('Cannot find model 404');
+            header('Location: /404');
+            exit;
+            // throw new Exception('Cannot find model 404');
         }
     } else {
         $element = null;
     }
 
     add_filter('template_include', function ($template) use ($action, $element) {
+        op_page_title('On Page Route', 9998);
         $action($element);
         exit;
     }, 9999999);
+}
+
+function op_page_title($title, $priority = 9999) {
+    add_filter('pre_get_document_title', function () use ($title) {
+        return $title;
+    }, $priority);
 }
 
 function op_link_to($item) {
