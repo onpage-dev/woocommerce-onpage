@@ -29,6 +29,7 @@ add_filter('init', function() {
 
       case 'import':
         $t1 = microtime(true);
+        op_debug();
         op_import_snapshot((bool) op_post('force_slug_regen'));
         $t2 = microtime(true);
         op_ret([
@@ -84,10 +85,10 @@ add_filter('admin_menu', function() {
 
 
 // Set image for posts
-add_filter( 'wp_get_attachment_image_src', 'pn_change_product_image_link', 50, 4 );
-function pn_change_product_image_link( $image, $attachment_id, $size, $icon ){
+add_filter( 'wp_get_attachment_image_src', function ( $image, $attachment_id, $size, $icon ){
   if (@$attachment_id[0] != '{') return $image;
-  $file = json_decode($attachment_id);
+  $file = @json_decode($attachment_id);
+  if (!$file) return $image;
   $sizes = [
     'thumbnail' => [150, 150],
   ];
@@ -97,11 +98,13 @@ function pn_change_product_image_link( $image, $attachment_id, $size, $icon ){
   } else {
     $src = op_file_url($file);
   }
+  if (!$src) return $image;
   $img = [
     $src, '', '',
   ];
   return $img;
-}
+}, 50, 4 );
+
 
 
 // Add tab with product info
@@ -125,5 +128,4 @@ add_action('woocommerce_product_data_panels', function($post) {
 add_action('product_cat_edit_form_fields', function($tag) {
   $item = OpLib\Term::find($tag->term_id);
   include __DIR__.'/pages/show-meta.php';
-  exit;
 });

@@ -13,6 +13,28 @@ trait MetaFunctions {
     });
   }
 
+  static function scopeUnfiltered($q) {
+    $q->withoutGlobalScope('op');
+  }
+  static function scopeWhereMeta($q, string $key, $value) {
+    $q->whereHas('meta', function($q) use ($key, $value) {
+      $q->where('meta_key', $key);
+      $q->where('meta_value', $value);
+    });
+  }
+  static function scopeWhereLang($q, string $param) {
+    $q->whereMeta('op_lang*', $param);
+  }
+  static function scopeWhereId($q, int $param) {
+    $q->whereMeta('op_id*', $param);
+  }
+  static function scopeWhereRes($q, int $param) {
+    $q->whereMeta('op_res*', $param);
+  }
+  function getMeta(string $key) {
+    return @$this->meta->firstWhere('meta_key', $key)->meta_value;
+  }
+
   public function val($name, $lang = null) {
     $field = @$this->resource->name_to_field[$name];
     if (!$field) return;

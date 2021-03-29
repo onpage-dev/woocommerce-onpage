@@ -23,7 +23,7 @@ function op_debug() {
 function op_slug(string $title, string $table, string $field, string $old_slug = null) {
   $slug = $title;
   $slug = mb_strtolower($slug);
-  $slug_iconv = iconv('auto', 'ASCII//TRANSLIT', $slug); // convert accents to ascii
+  $slug_iconv = @iconv('auto', 'ASCII//TRANSLIT', $slug); // convert accents to ascii
   if (strlen($slug_iconv)) {
       $slug = $slug_iconv;
   }
@@ -116,6 +116,51 @@ function op_initdb() {
 
     op_setopt('migration', 50);
     DB::statement("SET sql_mode = '$orig_mode'");
+  }
+
+  if (op_settings()->migration < 51) {
+    op_debug();
+    foreach (\OpLib\Post::all() as $item) {
+      if (!$item->getMeta('op_lang*')) {
+          $item->meta()->create([
+              'meta_key'   => 'op_lang*',
+              'meta_value' => op_wpml_default() ?: op_locale() ?: 'it',
+          ]);
+      }
+      if (!$item->getMeta('op_res*')) {
+        $item->meta()->create([
+          'meta_key' => 'op_res*',
+          'meta_value' => $item->op_res,
+          ]);
+      }
+      if (!$item->getMeta('op_id*')) {
+        $item->meta()->create([
+          'meta_key' => 'op_id*',
+          'meta_value' => $item->op_id,
+        ]);
+      }
+    }
+    foreach (\OpLib\Term::all() as $item) {
+      if (!$item->getMeta('op_lang*')) {
+        $item->meta()->create([
+          'meta_key' => 'op_lang*',
+          'meta_value' => op_wpml_default() ?: op_locale() ?: 'it',
+        ]);
+      }
+      if (!$item->getMeta('op_res*')) {
+        $item->meta()->create([
+          'meta_key' => 'op_res*',
+          'meta_value' => $item->op_res,
+          ]);
+      }
+      if (!$item->getMeta('op_id*')) {
+        $item->meta()->create([
+          'meta_key' => 'op_id*',
+          'meta_value' => $item->op_id,
+        ]);
+      }
+    }
+    op_setopt('migration', 51);
   }
 
 }
@@ -284,15 +329,24 @@ function op_wpml_enabled() {
 function op_wpml_default() {
   return apply_filters('wpml_default_language', NULL);
 }
-function op_wpml_langs() {
-  $wpml_default_lang = op_wpml_default();
+function op_wpml_langs() :? array {
+  if (!op_wpml_enabled()) return null;
+  $icl_deflang = op_wpml_default();
   $wpml_langs = [];
   foreach (apply_filters( 'wpml_active_languages', null) as $lang => $_) {
-    if ($lang != $wpml_default_lang) {
+    if ($lang != $icl_deflang) {
       $wpml_langs[] = $lang;
     }
   }
   return $wpml_langs;
+}
+
+function op_langs() {
+  $langs = [ op_wpml_default() ?: op_locale()?: 'it' ];
+  if ($other_langs = op_wpml_langs()) {
+    $langs = array_merge($langs, $other_langs);
+  }
+  return $langs;
 }
 
 function op_import_snapshot(bool $force_slug_regen = false) {
@@ -329,239 +383,87 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   $taxonomies = DB::table("term_taxonomy")->where('taxonomy', 'product_cat')->get();
   DB::table("terms")->whereIn('term_id', $taxonomies->pluck('term_id'))->orWhereNotNull('op_id')->update(['op_dirty' => true]);
 
-  // Order resources
+  // Import resources
+  $langs = op_langs();
+
   foreach ($schema->resources as $res) {
-    op_import_resource($schema, $res, $force_slug_regen);
+    op_import_resource($schema, $res, $force_slug_regen, $langs);
     op_record("completed $res->label");
   }
-
-
-  delete_option("product_cat_children");
 
   // Delete old data
   DB::table("posts")->where('op_dirty', true)->delete();
   DB::table("terms")->where('op_dirty', true)->delete();
   DB::table("term_taxonomy")->whereNotIn('term_id', DB::table("terms")->pluck('term_id'))->delete();
-
   op_record('deleted old data');
 
 
   $old_models = glob(__DIR__.'/db-models/*.php');
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
-  op_record('created models');
-
-  // Foreach post/term call wpml hooks
-  if (op_wpml_enabled()) {
-    $wpml_default_lang = op_wpml_default();
-    $wpml_langs = op_wpml_langs();
-
-    // Delete existing translations
-    DB::table('icl_translations')->whereIn('element_type', ['post_product', 'tax_product_cat'])->delete();
-
-    // Get max translation id
-    $max_trid = DB::table('icl_translations')->max('trid') + 1000;
-    $insert = [];
-
-    // Prepare taxonomies default translation
-    $taxonomies = DB::table('term_taxonomy')
-        ->whereIn('term_id', \OpLib\Term::pluck('term_id'))
-        ->orderBy('term_taxonomy_id')
-        ->pluck('term_taxonomy_id');
-
-    foreach ($taxonomies as $id) {
-      $insert[] = [
-        'element_id' => $id,
-        'trid' => ++$max_trid,
-        'element_type' => 'tax_product_cat',
-        'language_code' => $wpml_default_lang,
-      ];
-    }
-
-
-    // Prepare posts default translation
-    foreach (\OpLib\Post::pluck('ID') as $id) {
-      $insert[] = [
-        'element_id' => $id,
-        'trid' => ++$max_trid,
-        'element_type' => 'post_product',
-        'language_code' => $wpml_default_lang,
-      ];
-    }
-
-    // Do insert default translations
-    DB::table('icl_translations')->insert($insert);
-    op_record("called wpml hooks with default lang $wpml_default_lang");
-
-
-    // Get icl translations for primary language
-    $translations = DB::table('icl_translations')
-        ->where('element_type', 'post_product')
-        ->where('language_code', $wpml_default_lang)
-        ->orderBy('element_id')
-        ->get();
-
-    // Get original elements in primary language
-    $original_posts = DB::table('posts')
-        ->whereIn('ID', $translations->pluck('element_id'))
-        ->orderBy('ID')
-        ->get();
-
-    if ($original_posts->count() != $translations->count()) {
-      throw new \Exception("Translation count != product count");
-    }
-
-    // Foreach secondary languages
-    foreach ($wpml_langs as $lang) {
-
-      // Duplicate original elements
-      $insert = [];
-      foreach ($original_posts as $el) {
-        $data = (array) $el;
-        unset($data['op_res']);
-        unset($data['op_id']);
-        unset($data['ID']);
-        $insert[] = $data;
-      }
-      $cur_max_id = DB::table('posts')->max('ID');
-      DB::table('posts')->insert($insert);
-      $inserted_ids = DB::table('posts')
-          ->where('post_type', 'product')
-          ->where('id', '>', $cur_max_id)
-          ->orderBy('ID')
-          ->select('ID', 'post_name')
-          ->get();
-
-      // Set icl translation for each duplicated post
-      $insert = [];
-      foreach ($inserted_ids as $i => $post) {
-        $orig = $original_posts[$i];
-        if ($translations[$i]->element_id != $orig->ID) {
-          throw new \Exception("Translation $i does not match product $orig->post_name");
-        }
-        if ($post->post_name != $orig->post_name) {
-          throw new \Exception("Post in position $i slug does not match {$post->post_name} != {$orig->post_name}");
-        }
-        $insert[] = [
-          'element_id' => $post->ID,
-          'element_type' => 'post_product',
-          'language_code' => $lang,
-          'trid' => $translations[$i]->trid,
-          'source_language_code' => $wpml_default_lang,
-        ];
-      }
-      DB::table('icl_translations')->insert($insert);
-    }
-
-
-    // Get icl translations for primary language
-    $translations = DB::table('icl_translations')
-        ->where('element_type', 'tax_product_cat')
-        ->where('language_code', $wpml_default_lang)
-        ->orderBy('element_id')
-        ->get();
-    $orig_taxonomies = DB::table('term_taxonomy')
-        ->whereIn('term_taxonomy_id', $translations->pluck('element_id'))
-        ->orderBy('term_taxonomy_id')
-        ->get();
-    $orig_terms = DB::table('terms')
-        ->whereIn('term_id', $orig_taxonomies->pluck('term_id'))
-        ->orderBy('term_id')
-        ->get();
-
-    foreach ($wpml_langs as $lang) {
-
-      // Duplicate terms
-      $insert = [];
-      foreach ($orig_taxonomies as $tax) {
-        $term = $orig_terms->firstWhere('term_id', $tax->term_id);
-        $data = (array) $term;
-        unset($data['op_res']);
-        unset($data['op_id']);
-        unset($data['term_id']);
-        $insert[] = $data;
-      }
-      $cur_max_id = DB::table('terms')->max('term_id');
-      DB::table('terms')->insert($insert);
-      $inserted_terms = DB::table('terms')
-          ->where('term_id', '>', $cur_max_id)
-          ->orderBy('term_id')
-          ->get();
-
-      // Duplicate taxonomies
-      $insert = [];
-      foreach ($inserted_terms as $i => $term) {
-        $insert[] = [
-          'term_id' => $term->term_id,
-          'taxonomy' => 'product_cat',
-          'description' => '',
-          'parent' => 0,
-          'count' => 1,
-        ];
-      }
-
-      $cur_max_id = DB::table('term_taxonomy')->max('term_taxonomy_id');
-      DB::table('term_taxonomy')->insert($insert);
-      $inserted_ids = DB::table('term_taxonomy')
-          ->whereIn('term_id', $inserted_terms->pluck('term_id'))
-          ->orderBy('term_id')
-          ->pluck('term_taxonomy_id');
-
-
-      // Set icl translation for each duplicated post
-      $insert = [];
-      foreach ($inserted_ids as $i => $id) {
-        $tx_term = $inserted_terms[$i];
-        $orig_term = $orig_terms->firstWhere('slug', $tx_term->slug);
-        if (!$orig_term) {
-          throw new \Exception("Cannot find original term for term {$term->slug}");
-        }
-        // echo "Inserted term:";
-        // print_r($tx_term);
-        // echo "Orig term:";
-        // print_r($orig_term);
-        $orig_tax = $orig_taxonomies->firstWhere('term_id', $orig_term->term_id);
-        $group = $translations->firstWhere('element_id', $orig_tax->term_taxonomy_id);
-
-        if (!$group) {
-          throw new \Exception("Cannot find translation group for tax {$orig_tax->term_taxonomy_id}");
-        }
-
-        $insert[] = [
-          'element_id' => $id,
-          'element_type' => 'tax_product_cat',
-          'language_code' => $lang,
-          'trid' => $group->trid,
-          'source_language_code' => $wpml_default_lang,
-        ];
-      }
-      // print_r($insert);
-      // exit;
-      DB::table('icl_translations')->insert($insert);
-    }
-
-    op_record("duplicated data for wpml");
-  }
-
-
+  op_record('created php models');
+  
+  op_import_relations($schema);
+  op_record('imported relations');
 
   flush_rewrite_rules();
   op_record('permalinks flushed');
-
-
-  op_record('transaction committed');
 }
 
-function op_import_resource(object $db, object $res, bool $force_slug_regen) {
-  $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
-  $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_{$db->langs[0]}" : '') : null;
-  $lab_img = collect($res->fields)->where('type', 'image')->first();
-  $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
+function op_import_relations($schema) {
+  $relations = apply_filters('op_import_relations', null);
+  
 
+  foreach ($relations as $resource_name => $parent_relation) {
+    $res = collect($schema->resources)->firstWhere('name', $resource_name);
+    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations");
+
+    $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
+    if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
+
+    $camel_name = op_snake_to_camel($res->name);
+    $class = "\Op\\$camel_name";
+    $terms = $class::where('op_res', $res->id)->get();
+    
+    foreach ($terms as $child_term) {
+      if (op_wpml_enabled()) {
+          do_action( 'wpml_switch_language', $child_term->getMeta('op_lang*') );
+      }
+      foreach ($child_term->$parent_relation as $parent_term) {
+        $ret = wp_update_term($child_term->id, 'product_cat', [
+          'parent' => $parent_term->id,
+          'slug' => $child_term->slug,
+        ]);
+        if ($ret instanceof \WP_Error) {
+          op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
+        }
+        // op_err(json_encode($ret));
+      }
+    }
+  }
+
+  if (op_wpml_enabled()) {
+    $sync_helper = wpml_get_hierarchy_sync_helper('post');
+    $sync_helper->sync_element_hierarchy( 'product' );
+    $sync_helper = wpml_get_hierarchy_sync_helper('term');
+    $sync_helper->sync_element_hierarchy( 'product_cat' );
+  }
+
+  // Reset category count
+  delete_option("product_cat_children");
+}
+
+
+function op_import_resource(object $db, object $res, bool $force_slug_regen, array $langs) {
+  $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
+  $lab_img = collect($res->fields)->where('type', 'image')->first();
   $base_table = $res->is_product ? 'posts' : 'terms';
   $base_table_key = $res->is_product ? 'ID' : 'term_id';
   $base_table_slug = $res->is_product ? 'post_name' : 'slug';
   $base_tablemeta = $res->is_product ? 'postmeta' : 'termmeta';
   $base_tablemeta_ref = $res->is_product ? 'post_id' : 'term_id';
+  $base_class = $res->is_product ? \OpLib\Post::class : \OpLib\Term::class;
+  $icl_type = $res->is_product ? 'post_product' : 'tax_product_cat';
+  $icl_deflang = op_wpml_default();
 
   // Create map of resource fields [id => field]
   $field_map = [];
@@ -570,185 +472,179 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
 
   // Start inserting
   $object_ids = [];
+  $icl_translations = [];
   $all_meta = [];
   $current_objects = [];
-  foreach (DB::table($base_table)->where('op_res', $res->id)->get() as $x) {
-    $current_objects[$x->op_id] = $x;
+  foreach ($base_class::unfiltered()->whereRes($res->id)->get() as $x) {
+    $current_objects["{$x->getMeta('op_id*')}-{$x->getMeta('op_lang*')}"] = $x;
+  }
+  foreach ($base_class::where('op_res', $res->id)->get() as $x) {
+    $current_objects["{$x->op_id}-{$langs[0]}"] = $x;
   }
   // op_record('mapped $current_objects');
 
+  $icl_trid = DB::table('icl_translations')->max('trid') + 2;
+
   foreach ($res->data as $thing_i => $thing) {
-    $label = @$thing->fields->$lab_field;
-    if (is_null($label)) $label = 'unnamed';
+    $created_posts = [];
+    $created_terms = [];
+    $created_term_tax = [];
+    $icl_primary_id = null;
+    $icl_trid++;
+    
+    // Create the item in each language - first language is the primary one
+    foreach ($langs as $lang) {
+      $is_primary = !$icl_primary_id;
+      $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
+      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_{$lang}" : '') : null;
 
-    $log = "$res->name $thing->id ".memory_get_usage();
-    // file_put_contents(__DIR__.'/log.txt', "$log\n", FILE_APPEND);
-    // Commit every X elements for speed (we like speed)
-    if (($thing_i+1) % 10 == 0) {
-      // DB::commit();
-      // DB::beginTransaction();
-    }
-
-
-    // Look for the object if it exists already
-    $object = @$current_objects[$thing->id];
-
-    // Prepare data
-    $data = !$res->is_product ? [
-      'op_res' => $res->id,
-      'op_id' => $thing->id,
-      'op_dirty' => false,
-      'name' => $label,
-      'slug' => !$force_slug_regen && $object
-        ? $object->slug
-        : op_slug($label, 'terms', 'slug', @$object->slug),
-      'term_group' => 0,
-      'op_order' => $thing_i,
-    ] : [
-      'op_res' => $res->id,
-      'op_id' => $thing->id,
-      'op_dirty' => false,
-      'post_author' => 1,
-      'post_date' => @$thing->created_at ?: date('Y-m-d H:i:s'),
-      'post_date_gmt' => @$thing->created_at ?: date('Y-m-d H:i:s'),
-      'post_content' => '',
-      'post_title' => $label,
-      'post_excerpt' => '',
-      'post_status' => 'publish',
-      'comment_status' => 'closed',
-      'ping_status' => 'closed',
-      'post_password' => '',
-      'post_name' => !$force_slug_regen && $object
-        ? $object->post_name
-        : op_slug($label, 'posts', 'post_name', @$object->post_name),
-      'to_ping' => '',
-      'pinged' => '',
-      'post_modified' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
-      'post_modified_gmt' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
-      'post_content_filtered' => '',
-      'post_parent' => 0,
-      'guid' => '',
-      'menu_order' => $thing_i,
-      'post_type' => 'product',
-      'post_mime_type' => '',
-      'comment_count' => 0,
-    ];
+      $label = @$thing->fields->$lab_field;
+      if (is_null($label)) $label = 'unnamed';
 
 
-    // Create or update the object
-    if ($object) {
-      $object_id = $object->$base_table_key;
-      DB::table($base_table)->where('op_id', $thing->id)->update($data);
-    } else {
-      $object_id = DB::table($base_table)->insertGetId($data);
-    }
-    $object_ids[$thing->id] = $object_id;
+      // Look for the object if it exists already
+      $object = @$current_objects["{$thing->id}-{$lang}"];
 
-    // Delete all relations with parents
-    if ($res->is_product) {
-      DB::table('term_relationships')->where('object_id', $object_id)->delete();
-      wp_set_object_terms($object_id, 'simple', 'product_type');
-    }
-
-    // Calculate new metadata
-    $meta = [];
-    $meta[] = [
-      $base_tablemeta_ref => $object_id,
-      'meta_key' => 'op_res*',
-      'meta_value' => $res->id,
-    ];
-    $meta[] = [
-      $base_tablemeta_ref => $object_id,
-      'meta_key' => 'op_id*',
-      'meta_value' => $thing->id,
-    ];
-
-    if ($lab_img_field && @$thing->fields->$lab_img_field) {
-      $meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-        'meta_value' => json_encode(
-          $thing->fields->$lab_img_field
-        ),
+      
+      // Prepare data
+      $data = !$res->is_product ? [
+        'op_res' => $is_primary ? $res->id : null,
+        'op_id' => $is_primary ? $thing->id : null,
+        'op_dirty' => false,
+        'name' => $label,
+        'slug' => !$force_slug_regen && $object
+          ? $object->slug
+          : op_slug($label, 'terms', 'slug', @$object->slug),
+        'term_group' => 0,
+        'op_order' => $thing_i,
+      ] : [
+        'op_res' => $is_primary ? $res->id : null,
+        'op_id' => $is_primary ? $thing->id : null,
+        'op_dirty' => false,
+        'post_author' => 1,
+        'post_date' => @$thing->created_at ?: date('Y-m-d H:i:s'),
+        'post_date_gmt' => @$thing->created_at ?: date('Y-m-d H:i:s'),
+        'post_content' => '',
+        'post_title' => $label,
+        'post_excerpt' => '',
+        'post_status' => 'publish',
+        'comment_status' => 'closed',
+        'ping_status' => 'closed',
+        'post_password' => '',
+        'post_name' => !$force_slug_regen && $object
+          ? $object->post_name
+          : op_slug($label, 'posts', 'post_name', @$object->post_name),
+        'to_ping' => '',
+        'pinged' => '',
+        'post_modified' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
+        'post_modified_gmt' => @$thing->updated_at ?: date('Y-m-d H:i:s'),
+        'post_content_filtered' => '',
+        'post_parent' => 0,
+        'guid' => '',
+        'menu_order' => $thing_i,
+        'post_type' => 'product',
+        'post_mime_type' => '',
+        'comment_count' => 0,
       ];
-    }
 
-
-    // Fields
-    foreach ($thing->fields as $name => $values) {
-      $e = explode('_', $name);
-      $f = $field_map[$e[0]];
-      $lang = @$e[1];
-      if (!$f->is_multiple) {
-        $values = [ $values ];
-      }
-      foreach ($values as $value) {
-        $meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_'.$f->name.($lang ? "_$lang" : ''),
-          'meta_value' => is_scalar($value) ? $value : json_encode($value),
-        ];
-      }
-    }
-
-    // Relations
-    foreach ($thing->rel_ids as $fid => $ids) {
-      $f = $field_map[$fid];
-      foreach ($ids as $id) {
-        $meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_'.$f->name,
-          'meta_value' => $id,
-        ];
-      }
-    }
-
-
-    // Append the price and other woocommerce metadata
-    if ($res->is_product) {
-      $meta_map = [
-        'price' => ['_sale_price', '_regular_price', '_price'],
-        'sku' => ['_sku'],
-        'weight' => ['_weight'],
-        'width' => ['_width'],
-        'length' => ['_length'],
-        'height' => ['_height'],
-      ];
-      foreach ($meta_map as $meta_name => $meta_keys) {
-        $price_field = @op_settings()->{"res-{$res->id}-{$meta_name}"};
-        if ($price_field && ($f = collect($res->fields)->firstWhere('id', $price_field))) {
-          $fid = $f->id;
-          if ($f->is_translatable) $fid.= "_".$schema->langs[0];
-          $val = @$thing->fields->$fid;
-          if ($val !== null) {
-            foreach ($meta_keys as $key) {
-              $meta[] = [ 'post_id' => $object_id, 'meta_value' => $val, 'meta_key' => $key ];
-            }
-          }
+      // Create or update the object
+      if ($object) {
+        $object_id = $object->$base_table_key;
+        DB::table($base_table)->where($base_table_key, $object_id)->update($data);
+      } else {
+        $object_id = DB::table($base_table)->insertGetId($data);
+        if (!$object_id) {
+          op_err("Insert into $thing->id $lang $is_primary $base_table got id: $object_id");
         }
       }
-    }
+      $object_ids[$thing->id] = $object_id;
 
-    // Recreate the metadata
-    $all_meta = array_merge($all_meta, $meta);
+      $tax_id = null;
+      if (!$res->is_product) {
+        $tax_id = @DB::table('term_taxonomy')->where('term_id', $object_id)->first()->term_taxonomy_id;
+        if (!$tax_id) {
+          $tax_id = DB::table('term_taxonomy')->insertGetId([
+            'term_id' => $object_id,
+            'taxonomy' => 'product_cat',
+            'parent' => 0,
+            'count' => 1,
+          ]);
+        }
+      }
 
+      // Delete all relations with parents
+      if ($res->is_product) {
+        DB::table('term_relationships')->where('object_id', $object_id)->delete();
+        wp_set_object_terms($object_id, 'simple', 'product_type');
+      }
 
+      // Calculate base meta
+      if (true) {
+        $base_meta = [];
+        $base_meta[] = [
+          $base_tablemeta_ref => $object_id,
+          'meta_key' => 'op_id*',
+          'meta_value' => $thing->id,
+        ];
+        $base_meta[] = [
+          $base_tablemeta_ref => $object_id,
+          'meta_key' => 'op_res*',
+          'meta_value' => $res->id,
+        ];
+        $base_meta[] = [
+          $base_tablemeta_ref => $object_id,
+          'meta_key' => 'op_lang*',
+          'meta_value' => $lang,
+        ];
+
+        if ($lab_img_field && @$thing->fields->$lab_img_field) {
+          $base_meta[] = [
+            $base_tablemeta_ref => $object_id,
+            'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
+            'meta_value' => json_encode(
+              $thing->fields->$lab_img_field
+            ),
+          ];
+        }
+        $all_meta = array_merge($all_meta, $base_meta);
+      }
+      
+      // If this is the primary language
+      $icl_object_id = $res->is_product ? $object_id : $tax_id;
+      if (!$icl_object_id) {
+        op_err("cannot get taxonomy id: $object_id-$tax_id");
+      }
+      $all_meta = array_merge($all_meta, op_generate_data_meta($res, $thing, $object_id, $field_map, $base_tablemeta_ref));
+      if ($is_primary) {
+        // Mark item as primary - others are translations
+        $icl_primary_id = $object_id;
+  
+        // Recreate the metadata
+
+        // Create icl translation
+        $icl_translations[] = [
+          'element_id' => $icl_object_id,
+          'element_type' => $icl_type,
+          'language_code' => $lang,
+          'trid' => $icl_trid,
+          'source_language_code' => null,
+        ];
+      } else {
+        // No metadata for the secondary items - only the essentials
+        $icl_translations[] = [
+          'element_id' => $icl_object_id,
+          'element_type' => $icl_type,
+          'language_code' => $lang,
+          'trid' => $icl_trid,
+          'source_language_code' => $icl_deflang,
+        ];
+      }
+    } // end langs cycle
   } // end $thing->data cycle
 
-  // Create taxonomies
-  if (!$res->is_product) {
-    $insert = [];
-    foreach ($object_ids as $opid => $wpid) {
-      $insert[] = [
-        'term_id' => $wpid,
-        'taxonomy' => 'product_cat',
-        'description' => '',
-        'parent' => 0,
-        'count' => 1,
-      ];
-    }
-    DB::table('term_taxonomy')->whereIn('term_id', $object_ids)->delete();
-    $tax = DB::table('term_taxonomy')->insert($insert);
+
+  if (op_wpml_enabled()) {
+    DB::table('icl_translations')->insert($icl_translations);
   }
 
   // op_record('cycle ended');
@@ -761,10 +657,74 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen) {
           '_thumbnail_id',
         ]);
     })->delete();
-  DB::table($base_tablemeta)->insert($all_meta);
+  
+  // Insert new meta
+  foreach (array_chunk($all_meta, 2000) as $chunk) {
+    DB::table($base_tablemeta)->insert($chunk);
+  }
 
   return true;
 }
+
+function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
+  $meta = [];
+  // Fields
+  foreach ($thing->fields as $name => $values) {
+    $e = explode('_', $name);
+    $f = $field_map[$e[0]];
+    $lang = @$e[1];
+    if (!$f->is_multiple) {
+      $values = [ $values ];
+    }
+    foreach ($values as $value) {
+      $meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_'.$f->name.($lang ? "_$lang" : ''),
+        'meta_value' => is_scalar($value) ? $value : json_encode($value),
+      ];
+    }
+  }
+
+  // Relations
+  foreach ($thing->rel_ids as $fid => $ids) {
+    $f = $field_map[$fid];
+    foreach ($ids as $id) {
+      $meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_'.$f->name,
+        'meta_value' => $id,
+      ];
+    }
+  }
+
+
+  // Append the price and other woocommerce metadata
+  if ($res->is_product) {
+    $meta_map = [
+      'price' => ['_sale_price', '_regular_price', '_price'],
+      'sku' => ['_sku'],
+      'weight' => ['_weight'],
+      'width' => ['_width'],
+      'length' => ['_length'],
+      'height' => ['_height'],
+    ];
+    foreach ($meta_map as $meta_name => $meta_keys) {
+      $price_field = @op_settings()->{"res-{$res->id}-{$meta_name}"};
+      if ($price_field && ($f = collect($res->fields)->firstWhere('id', $price_field))) {
+        $fid = $f->id;
+        if ($f->is_translatable) $fid.= "_".$schema->langs[0];
+        $val = @$thing->fields->$fid;
+        if ($val !== null) {
+          foreach ($meta_keys as $key) {
+            $meta[] = [ 'post_id' => $object_id, 'meta_value' => $val, 'meta_key' => $key ];
+          }
+        }
+      }
+    }
+  }
+
+  return $meta;
+} 
 
 function op_gen_model(object $schema, object $res) {
   $camel_name = op_snake_to_camel($res->name);
