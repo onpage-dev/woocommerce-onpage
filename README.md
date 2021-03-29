@@ -138,6 +138,23 @@ add_filter('on_page_product_resources', function() {
 ```
 
 
+## Importing relations
+__NOTE:__ Only works for category-subcategory
+
+Relations will not be imported by default.
+You can specify, for each resource, wich relation to set the term parent.
+
+
+```php
+add_action('op_import_relations', function() {
+    return [
+        // On Page resource name => // On Page parent relation name
+        'prodotti' => 'categorie',
+    ];
+});
+```
+
+
 
 # Routing
 This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
