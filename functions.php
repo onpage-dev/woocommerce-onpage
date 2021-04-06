@@ -186,16 +186,13 @@ function op_post($field) {
 function op_settings($settings = null, $flush_cache = false) {
   static $cached_settings = null;
   if ($flush_cache) $cached_settings = null;
-  if ($settings) {
+  if (!empty($settings)) {
     $opts = [];
     foreach ((array) $settings as $key => $value) {
-      $opts[] = [
-        'option_name' => "on-page-$key",
-        'option_value' => json_encode($value),
-      ];
+      update_option("on-page-$key", json_encode($value));
     }
-    DB::table('options')->where('option_name', 'like', 'on-page-%')->delete();
-    DB::table('options')->insert($opts);
+    
+
   } elseif ($cached_settings) {
     return $cached_settings;
   }
@@ -282,10 +279,13 @@ function op_record($label, $end = false) {
   $tS = microtime(true);
   $tElapsedSecs = $tS - $tRecordStart;
   $tElapsedSecsQ = $tS - $tStartQ;
+  $ram = str_pad(number_format(memory_get_usage(true)/1024/1024, 3), 8, " ", STR_PAD_LEFT);
   $sElapsedSecs = str_pad(number_format($tElapsedSecs, 3), 8, " ", STR_PAD_LEFT);
   $sElapsedSecsQ = str_pad(number_format($tElapsedSecsQ, 3), 8, " ", STR_PAD_LEFT);
   $tStartQ = $tS;
-  $steps[] = "$sElapsedSecs $sElapsedSecsQ  $label";
+  $message = "$sElapsedSecs $sElapsedSecsQ  {$ram}MB $label";
+  $steps[] = $message;
+  file_put_contents(__DIR__."/storage/.log", "$message\n", FILE_APPEND);
   return $steps;
 }
 
@@ -386,9 +386,10 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   // Import resources
   $langs = op_langs();
 
+  $new_items = [];
   foreach ($schema->resources as $res) {
-    op_import_resource($schema, $res, $force_slug_regen, $langs);
-    op_record("completed $res->label");
+    $new_items[$res->id] = op_import_resource($schema, $res, $force_slug_regen, $langs); 
+    op_record("completed resource $res->label");
   }
 
   // Delete old data
@@ -405,6 +406,8 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   op_import_relations($schema);
   op_record('imported relations');
 
+  op_set_new_items_slug($new_items, $force_slug_regen);
+
   flush_rewrite_rules();
   op_record('permalinks flushed');
 }
@@ -415,7 +418,7 @@ function op_import_relations($schema) {
 
   foreach ($relations as $resource_name => $parent_relation) {
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
-    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations");
+    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations; available resources: ".collect($schema->resources)->pluck('name')->implode(', '));
 
     $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
     if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
@@ -467,28 +470,33 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
 
   // Create map of resource fields [id => field]
   $field_map = [];
+  $created_object_ids = [];
   foreach ($res->fields as $f) $field_map[$f->id] = $f;
   // op_record('mapped $field_map');
 
   // Start inserting
   $object_ids = [];
+
   $icl_translations = [];
   $all_meta = [];
   $current_objects = [];
+
+  // $current_object_ids = $base_class::unfiltered()->whereRes($res->id)->pluck($base_table_key);
+  // \DB::table($base_tablemeta)
+  //   ->whereIn($base_tablemeta_ref, $current_object_ids)
+  //   ->whereIn('meta_key', ['op_id*', 'op_lang*'])
+  //   ->get();
+  $base_class::$only_reserverd = true;
   foreach ($base_class::unfiltered()->whereRes($res->id)->get() as $x) {
     $current_objects["{$x->getMeta('op_id*')}-{$x->getMeta('op_lang*')}"] = $x;
   }
-  foreach ($base_class::where('op_res', $res->id)->get() as $x) {
-    $current_objects["{$x->op_id}-{$langs[0]}"] = $x;
-  }
+  $base_class::$only_reserverd = false;
+  $all_icl_object_ids = [];
   // op_record('mapped $current_objects');
 
   $icl_trid = DB::table('icl_translations')->max('trid') + 2;
 
   foreach ($res->data as $thing_i => $thing) {
-    $created_posts = [];
-    $created_terms = [];
-    $created_term_tax = [];
     $icl_primary_id = null;
     $icl_trid++;
     
@@ -512,7 +520,7 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
         'op_id' => $is_primary ? $thing->id : null,
         'op_dirty' => false,
         'name' => $label,
-        'slug' => !$force_slug_regen && $object
+        'slug' => $object
           ? $object->slug
           : op_slug($label, 'terms', 'slug', @$object->slug),
         'term_group' => 0,
@@ -531,7 +539,7 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
         'comment_status' => 'closed',
         'ping_status' => 'closed',
         'post_password' => '',
-        'post_name' => !$force_slug_regen && $object
+        'post_name' => $object
           ? $object->post_name
           : op_slug($label, 'posts', 'post_name', @$object->post_name),
         'to_ping' => '',
@@ -556,8 +564,9 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
         if (!$object_id) {
           op_err("Insert into $thing->id $lang $is_primary $base_table got id: $object_id");
         }
+        $created_object_ids["{$thing->id}-$lang"] = $object_id;
       }
-      $object_ids[$thing->id] = $object_id;
+      $object_ids["{$thing->id}-$lang"] = $object_id;
 
       $tax_id = null;
       if (!$res->is_product) {
@@ -611,6 +620,7 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
       
       // If this is the primary language
       $icl_object_id = $res->is_product ? $object_id : $tax_id;
+      $all_icl_object_ids[] = $icl_object_id;
       if (!$icl_object_id) {
         op_err("cannot get taxonomy id: $object_id-$tax_id");
       }
@@ -644,7 +654,13 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
 
 
   if (op_wpml_enabled()) {
-    DB::table('icl_translations')->insert($icl_translations);
+    DB::table('icl_translations')
+      ->where('element_type', $icl_type)
+      ->whereIn('element_id', $all_icl_object_ids)
+      ->delete();
+    foreach (array_chunk($icl_translations, 2000) as $chunk) {
+      DB::table('icl_translations')->insert($chunk);
+    }
   }
 
   // op_record('cycle ended');
@@ -663,7 +679,30 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
     DB::table($base_tablemeta)->insert($chunk);
   }
 
-  return true;
+  return $created_object_ids;
+}
+
+
+function op_set_new_items_slug(array $new_items, $force_slug_regen) {
+  foreach ($new_items as $res_id => $ids) {
+    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
+    
+    $camel_name = op_snake_to_camel($res->name);
+    $class = "\Op\\$camel_name";
+    $items = $class::where('op_res', $res->id);
+    if (!$force_slug_regen) {
+      $items->whereId($ids);
+    }
+
+    $items = $items->get();
+
+    foreach ($items as $new_item) {
+      $new_slug = apply_filters('op_gen_slug', $new_item);
+      if (mb_strlen($new_slug) || $new_slug == $new_item->getSlug()) {
+        $new_item->setSlug($new_slug);
+      }
+    }
+  }
 }
 
 function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {

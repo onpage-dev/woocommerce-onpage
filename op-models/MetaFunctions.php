@@ -6,10 +6,14 @@ if (!defined('OP_PLUGIN')) die(400);
 
 
 trait MetaFunctions {
+  static $only_reserverd = false;
   public static function boot() {
     parent::boot();
     self::addGlobalScope('op', function($q) {
-      $q->whereNotNull('op_id')->loaded();
+      $q->whereNotNull('op_id');
+    });
+    self::addGlobalScope('opmeta', function($q) {
+      $q->loaded(self::$only_reserverd);
     });
   }
 
@@ -19,20 +23,33 @@ trait MetaFunctions {
   static function scopeWhereMeta($q, string $key, $value) {
     $q->whereHas('meta', function($q) use ($key, $value) {
       $q->where('meta_key', $key);
-      $q->where('meta_value', $value);
+      if (is_array($value)) {
+        $q->whereIn('meta_value', $value);
+      } else {
+        $q->where('meta_value', $value);
+      }
     });
   }
-  static function scopeWhereLang($q, string $param) {
+  static function scopeWhereLang($q, $param) {
     $q->whereMeta('op_lang*', $param);
   }
-  static function scopeWhereId($q, int $param) {
+  static function scopeWhereId($q, $param) {
     $q->whereMeta('op_id*', $param);
   }
-  static function scopeWhereRes($q, int $param) {
+  static function scopeWhereRes($q, $param) {
     $q->whereMeta('op_res*', $param);
   }
   function getMeta(string $key) {
     return @$this->meta->firstWhere('meta_key', $key)->meta_value;
+  }
+
+  function setSlug($new_slug) {
+    if (!$new_slug) return null;
+    $new_slug = op_slug($new_slug, $this->is_product ? 'posts' : 'terms', $this->is_product ? 'post_name' : 'slug', $this->getSlug()); //self::$slug_field,
+    $this->update([
+      self::$slug_field => $new_slug,
+    ]);
+    return $new_slug;
   }
 
   public function val($name, $lang = null) {
@@ -81,9 +98,12 @@ trait MetaFunctions {
     return $this->hasMany(self::$meta_class, self::$meta_ref);
   }
 
-  public static function scopeLoaded($q) {
-    $q->with(['meta' => function($q) {
+  public static function scopeLoaded($q, bool $only_reserverd = false) {
+    $q->with(['meta' => function($q) use($only_reserverd) {
       $q->orderBy('meta_id', 'asc');
+      if ($only_reserverd) {
+        $q->where('meta_key', 'like', 'op\\_%*');
+      }
     }]);
   }
 
