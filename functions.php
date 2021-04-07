@@ -219,6 +219,35 @@ function op_download_snapshot(object $sett = null) {
   return $db;
 }
 
+function op_save_snapshot_file($db){
+  $name = date('Y-m-d H:i:s')."-snapshot.json";
+  file_put_contents(op_dir("snapshots/$name"), json_encode($db));
+}
+
+function op_dir($dir) {
+  return __DIR__."/$dir";
+}
+
+function op_del_old_snapshots() {
+  foreach (array_slice(op_get_snapshots_list(), 3) as $i => $name) {
+    @unlink(op_dir("snapshots/$name"));
+  }
+}
+
+function op_get_snapshots_list(){
+  return array_reverse(array_map('basename', glob(op_dir("/snapshots/*.json")))); 
+}
+
+
+
+function op_get_saved_snapshot($file_name){
+  $path= op_dir("snapshots/$file_name");
+  if(is_file($path)){
+    return json_decode(file_get_contents($path));
+  }
+}
+
+
 function op_schema(object $set = null) {
   static $schema = null;
   if ($set) {
@@ -349,7 +378,7 @@ function op_langs() {
   return $langs;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false) {
+function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null) {
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
   }
@@ -359,9 +388,17 @@ function op_import_snapshot(bool $force_slug_regen = false) {
   if (!is_dir(__DIR__.'/db-models')) {
     mkdir(__DIR__.'/db-models');
   }
-
-  $schema = op_download_snapshot();
-  op_record('download completed');
+  if (!is_dir(__DIR__.'/snapshots')) {
+     mkdir(__DIR__.'/snapshots');
+  }
+  if(!$file_name){
+    $schema = op_download_snapshot();
+    op_save_snapshot_file($schema );
+    op_del_old_snapshots();
+    op_record('download completed');
+  } else {
+    $schema = op_get_saved_snapshot($file_name);
+  }
 
   // Create imported_at field
   $schema->imported_at = date('Y-m-d H:i:s');
@@ -414,6 +451,7 @@ function op_import_snapshot(bool $force_slug_regen = false) {
 
 function op_import_relations($schema) {
   $relations = apply_filters('op_import_relations', null);
+  if (empty($relations)) return;
   
 
   foreach ($relations as $resource_name => $parent_relation) {

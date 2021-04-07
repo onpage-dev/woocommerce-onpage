@@ -6,9 +6,11 @@
 .op-card {
   background: #fff;
   padding: 1rem;
-  border-left: 4px solid #56bd48;
+  border-left: 2px solid #56bd48;
   box-shadow: 0 0 8px -2px rgba(0,0,0,.3);
-  margin: 2rem 0;
+  /* margin: 2rem 0; */
+  margin:1rem;
+  display:inline-block
 }
 .op-card .op-card {
   border-left-width: 2px;
@@ -24,48 +26,108 @@
 #op-app .button:disabled {
   opacity: .5;
 }
+
+#op-app .op-top-header{
+  background-color: white;
+  box-shadow: 0 -3px 8px -2px rgba(0,0,0,.3); 
+}
+
+#op-app .op-top-header .op-navbar{
+  /* background-color:red; */
+  padding:0 20px;
+  overflow:hidden;
+}
+
+#op-app .op-top-header .op-navbar .op-panel-btn{
+  display:inline-block;
+  padding:10px;
+  cursor: pointer;
+}
+#op-app .op-top-header .op-navbar .op-panel-btn[active]{ 
+  background-color:#eaecf1;
+  box-shadow: 0 0 8px -2px rgba(0,0,0,.3);  
+}
+#op-app .op-panel-box{
+  border-top: 2px solid #56bd48;
+  background-color:white;
+ 
+  padding:1rem 3rem;
+ 	transition-duration: 500ms;
+}
+
+
+
+
 </style>
 
 <div id="op-app" style="margin-right: 2rem">
-  <form @submit.prevent="saveSettings" class="op-card">
-    <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 160px;">
-    <h1>OnPage&reg; Woocommerce Plugin 1.0.18</h1>
-    <table class="form-table">
-    	<tbody>
-        <tr>
-          <th><label>Company name (e.g. dinside)</label></th>
-          <td>
-            <input class="regular-text code" v-model="settings_form.company">
-            <br>
-            <i style="margin-top: 4px" v-if="settings_form.company">Your domain is <a :href="`https://${settings_form.company}.onpage.it`" target="_blank">{{ `${settings_form.company}.onpage.it` }}</a></i>
-          </td>
-        </tr>
-        <tr>
-          <th><label>API token</label></th>
-          <td>
-            <input class="regular-text code" v-model="settings_form.token">
-          </td>
-        </tr>
-        <tr>
-          <th><label>Custom routing</label></th>
-          <td>
-            <input class="regular-text code" v-model="settings_form.shop_url">
-          </td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p class="submit">
-      <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-      <div v-if="is_saving">
-        Saving...
+  <div class="op-top-header">
+    <div style="text-align: center;">
+      <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 100px;">
+    </div>
+   
+    <div class="op-navbar">
+      <div class="op-panel-btn" @click="panel_active='settings'" :active="panel_active=='settings'">
+        Settings
       </div>
-    </p>
+      <div class="op-panel-btn" @click="panel_active='data-importer'" if="next_schema" :active="panel_active=='data-importer'">
+        Data Importer
+      </div>
+      <div class="op-panel-btn" @click="panel_active='import-settings'"  v-if="next_schema" :active="panel_active=='import-settings'">
+        Import Settings
+      </div>
+      <div class="op-panel-btn" @click="panel_active='file-importer'" v-if="schema" :active="panel_active=='file-importer'">
+        File Importer
+      </div>
+      <div class="op-panel-btn" @click="panel_active='variable-names'" v-if="schema" :active="panel_active=='variable-names'">
+        Variable Names
+      </div>
+      <div class="op-panel-btn" @click="panel_active='update'" :active="panel_active=='update'">
+        Update
+      </div>
+    </div>
 
-  </form>
+  </div>
 
+  <div class="op-panel-box " v-show="panel_active=='settings'">
+    <form @submit.prevent="saveSettings" >  
+      <h1>OnPage&reg; Woocommerce Plugin 1.0.19</h1>
+      <table class="form-table">
+        <tbody>
+          <tr>
+            <th><label>Company name (e.g. dinside)</label></th>
+            <td>
+              <input class="regular-text code" v-model="settings_form.company">
+              <br>
+              <i style="margin-top: 4px" v-if="settings_form.company">Your domain is <a :href="`https://${settings_form.company}.onpage.it`" target="_blank">{{ `${settings_form.company}.onpage.it` }}</a></i>
+            </td>
+          </tr>
+          <tr>
+            <th><label>API token</label></th>
+            <td>
+              <input class="regular-text code" v-model="settings_form.token">
+            </td>
+          </tr>
+          <tr>
+            <th><label>Custom routing</label></th>
+            <td>
+              <input class="regular-text code" v-model="settings_form.shop_url">
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-  <div v-if="next_schema" class="op-card">
+      <p class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">
+          Saving...
+        </div>
+      </p>
+
+    </form>
+  </div>
+
+  <div class="op-panel-box " if="next_schema" v-show="panel_active=='data-importer'">
     <h1>Data Importer</h1>
     <label>
       <input type="checkbox" v-model="force_slug_regen"/>
@@ -76,10 +138,11 @@
     <br>
     <br>
     <!-- Import button and log -->
-    <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport">
+    <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport()">
     <div v-if="schema && schema.imported_at" style="margin: 1rem 0">
       Last import: {{ schema.imported_at }}
     </div>
+
     <br>
     <br>
     <i v-if="is_loading_next_schema">Loading...</i>
@@ -100,12 +163,21 @@
       </ul>
       <pre>{{ res.log.join('\n') }}</pre>
     </div>
+
+    <div>
+    Restore old version
+      <div v-for="snapshot in snapshots_list"  style="padding: 3px;">
+        <div  class="button" @click="startImport(snapshot)" >
+        {{snapshot}}
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <div class="op-card">
+  <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
-
-    <form @submit.prevent="saveSettings" v-if="next_schema">
+    <form @submit.prevent="saveSettings">
       <div v-for="res in Object.values(next_schema.resources).filter(x => x.is_product)" >
         <br>
         <h2>{{ res.label }}:</h2>
@@ -183,7 +255,7 @@
     </form>
   </div>
 
-  <div v-if="schema" class="op-card">
+  <div class="op-panel-box " v-if="schema" v-show="panel_active=='file-importer'">
     <h1>File importer</h1>
 
     <div v-if="is_loading_file || !files">
@@ -206,35 +278,38 @@
       <hr>
       <h2>There are {{ old_files.length }} old files</h2>
 
-
       <input type="button" class="button button-primary" value="Drop old files" :disabled="is_loading_old_files || is_dropping_old_files" @click="dropOldFiles">
     </div>
   </div>
 
-  <div v-if="schema" class="op-card" style="line-height: 1.8">
+  <div class="op-panel-box " v-if="schema" v-show="panel_active=='variable-names'">
     <h1>Variable names</h1>
-
-    <div v-for="res in schema.resources" class="op-card">
-      <h2 style="margin: 0 0 0"><b>{{ res.label }}</b>: <code>{{ res.name }} | {{ toCamel(res.name) }}</code></h2>
-      <div style="margin: 0.3rem 0"><b>Relations:</b></div>
-      <div v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
-        {{ field.label }}: <code>{{ field.name }}</code>
-      </div>
-      <div style="margin: 0.3rem 0"><b>Fields:</b></div>
-      <div v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
-        {{ field.label }}: <code>{{ field.name }} | {{ field.type }}</code>
+    <div class="op-content-box">
+    
+      <div v-for="res in schema.resources" class="op-card">
+        <h2 style="margin: 0 0 0"><b>{{ res.label }}</b>: <code>{{ res.name }} | {{ toCamel(res.name) }}</code></h2>
+        <div style="margin: 0.3rem 0"><b>Relations:</b></div>
+        <div v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
+          {{ field.label }}: <code>{{ field.name }}</code>
+        </div>
+        <div style="margin: 0.3rem 0"><b>Fields:</b></div>
+        <div v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
+          {{ field.label }}: <code>{{ field.name }} | {{ field.type }}</code>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="op-card">
-    <h1>Update plugin</h1>
+  </div>
+  
+  <div class="op-panel-box " v-show="panel_active=='update'">
+   <h1>Update plugin</h1>
     <i>Just click this button to download an update from github</i>
     <br>
     <br>
     <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
     <i v-else>Upgrading...</i>
   </div>
+    
 </div>
 
 
@@ -259,6 +334,7 @@ axios.interceptors.response.use(function (response) {
 new Vue({
   el: '#op-app',
   data: {
+    panel_active: 'settings',
     settings: <?=json_encode(op_settings())?>,
     settings_form: <?=json_encode(op_settings())?>,
     is_saving: false,
@@ -277,6 +353,7 @@ new Vue({
     file_error: true,
     force_slug_regen: false,
     old_files: [],
+    snapshots_list:null
   },
   computed: {
     form_unsaved () {
@@ -290,7 +367,9 @@ new Vue({
     },
   },
   created () {
-    this.refreshSchema()
+    this.refreshSchema()    
+    this.getSnapshotsList()
+
   },
   methods: {
     saveSettings() {
@@ -305,12 +384,13 @@ new Vue({
         this.is_saving = false
       })
     },
-    startImport() {
+    startImport(file_name) {
       this.is_importing = true
       this.import_result = null
       axios.post('?op-api=import', {
         settings: this.settings_form,
         force_slug_regen: this.force_slug_regen,
+        file_name
       }).then(res => {
         alert('Import completed!')
         this.import_result = res.data
@@ -410,14 +490,19 @@ new Vue({
         return (x[0] || '').toLocaleUpperCase() + x.substring(1)
       }).join('')
     },
+    getSnapshotsList(){
+       axios.post(`?op-api=snapshots-list`).then(res => {
+       this.snapshots_list=res.data
+      })
+    },
   },
 
   watch: {
-    connection_string: {
+    connection_string: {     
       immediate: true,
       handler (s) {
         if (s) {
-          this.refreshNextSchema()
+          this.refreshNextSchema()          
         }
       },
     },
