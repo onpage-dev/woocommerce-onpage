@@ -393,8 +393,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   }
   if(!$file_name){
     $schema = op_download_snapshot();
-    op_save_snapshot_file($schema );
-    op_del_old_snapshots();
+    $snapshot_to_save = $schema;
     op_record('download completed');
   } else {
     $schema = op_get_saved_snapshot($file_name);
@@ -447,6 +446,12 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 
   flush_rewrite_rules();
   op_record('permalinks flushed');
+
+  if (isset($snapshot_to_save)) {
+    op_save_snapshot_file($snapshot_to_save);
+    op_del_old_snapshots();
+  }
+
 }
 
 function op_import_relations($schema) {

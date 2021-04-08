@@ -39,16 +39,13 @@ add_filter('init', function() {
         ]);
 
       case 'schema':
-        $schema_out=op_getopt('schema');
-        $arr_res=$schema_out->resources;
-        usort($arr_res, function($a, $b){
-          if ($a->name == $b->name) {
-              return 0;
-          }
-          return ($a->name < $b->name) ? -1 : 1;
-        });
-        $schema_out->resources=$arr_res;
-        op_ret($schema_out);
+        $schema=op_getopt('schema');
+        foreach ($schema->resources as $res) {
+          $camel_name = op_snake_to_camel($res->name);
+          $class = "\Op\\$camel_name";
+          $res->class_name = $class;
+        }
+        op_ret($schema);
 
 
       case 'next-schema':

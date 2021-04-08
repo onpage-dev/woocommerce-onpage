@@ -181,13 +181,13 @@
             </td>
           </tr>
           <tr>
-            <th><label>API token</label></th>
+            <th><label>Snapshot token</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.token">
             </td>
           </tr>
           <tr>
-            <th><label>Custom routing</label></th>
+            <th><label>Custom routing path</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.shop_url">
             </td>
@@ -242,8 +242,8 @@
       <pre>{{ res.log.join('\n') }}</pre>
     </div>
 
-    <div>
-    Restore old version
+    <div v-if="snapshots_list && snapshots_list.length">
+      Restore old version
       <div v-for="snapshot in snapshots_list"  style="padding: 3px;">
         <div  class="button" @click="startImport(snapshot)" >
         {{snapshot}}
@@ -364,12 +364,12 @@
     <h1>Variable names</h1>
     <div class="op-content-box">
     
-      <div v-for="res in schema.resources " class="op-card">
+      <div v-for="res in _.sortBy(schema.resources, 'label') " class="op-card">
 
       <div class="op-header-card">
         <div class=""> Resource Label: <b>{{ res.label }}</b></div>
         <div class=""> Resource Name: <b>{{ res.name }}</b></div>
-        <div class=""> Resource Model: <b> {{ toCamel(res.name) }}</b></div>
+        <div class=""> Resource Model: <b> {{ res.class_name }}</b></div>
       </div>
 
       <div  class="op-card-buttons">
