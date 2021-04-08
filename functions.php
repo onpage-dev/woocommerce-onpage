@@ -732,7 +732,7 @@ function op_set_new_items_slug(array $new_items, $force_slug_regen) {
     
     $camel_name = op_snake_to_camel($res->name);
     $class = "\Op\\$camel_name";
-    $items = $class::where('op_res', $res->id);
+    $items = $class::withoutGlobalScope('op')->whereRes($res->id);
     if (!$force_slug_regen) {
       $items->whereId($ids);
     }
@@ -821,7 +821,10 @@ function op_gen_model(object $schema, object $res) {
   $code.= "  public static function boot() {
     parent::boot();
     self::addGlobalScope('op', function(\$q) {
-      \$q->where('op_res', $res->id)->loaded();
+      \$q->where('op_res', $res->id);
+    });
+    self::addGlobalScope('opmeta', function(\$q) {
+      \$q->loaded();
     });
   }\n";
   $code.= "  public static function getResource() {
