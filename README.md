@@ -118,9 +118,20 @@ By default, the slug is generated converting the string to ASCII
 keeping accented letters (es. `à` becomes `a`) and replacing non alphanumeric
 characters with a dash `-`.
 ```php
-add_filter('on_page_slug', function($slug, $original_string, $table, $field, $old_slug){
-  return 'my-custom-slug-'.rand(1000000, 9999999);
-}, 10, 5);
+add_action('op_gen_slug', function($item) {
+    
+    if ($item instanceof \Op\Product) {
+        return "{$item->val('name')}-{$item->val('titolo')}";
+    } else if($item instanceof \Op\Category) {
+        return "{$item->val('description')}";
+    } else if($item instanceof \Op\Color) {
+        return "{$item->val('name')}";
+    } else {
+      // Generic handler
+      return "{$item->val('nome')}";
+    }
+});
+
 ```
 
 
