@@ -95,15 +95,14 @@
 }
 
 #op-app .modal-ext-content{
-  margin: 7% auto;
-  border: 1px solid #888;
+  margin: auto auto;
   position: relative;
   max-width: 100%;
 }
 
 #op-app .modal-content {  
    /* 15% from the top and centered */
-  padding: 2rem;
+  padding: 3rem 2rem;
   overflow: auto;
   height: auto;
   background-color: #fefefe;
@@ -120,12 +119,12 @@
 }
 
 #op-app .close {
-  color: #aaa;
+  color: #666;
   font-size: 30px;
   font-weight: bold;
   position:absolute;
-  right: 15px;
-  
+  right: 5px;
+  top: 5px;
 }
 
 #op-app .close:hover,
