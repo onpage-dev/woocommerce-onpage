@@ -42,6 +42,9 @@ trait MetaFunctions {
   function getMeta(string $key) {
     return @$this->meta->firstWhere('meta_key', $key)->meta_value;
   }
+  function getLang() {
+    return @$this->getMeta('op_lang*');
+  }
 
   function setSlug($new_slug) {
     if (!$new_slug) return null;

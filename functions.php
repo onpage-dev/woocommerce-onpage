@@ -739,12 +739,15 @@ function op_set_new_items_slug(array $new_items, $force_slug_regen) {
 
     $items = $items->get();
 
+    $start_locale = op_locale();
     foreach ($items as $new_item) {
+      op_locale($new_item->getLang());
       $new_slug = apply_filters('op_gen_slug', $new_item);
       if (mb_strlen($new_slug) || $new_slug == $new_item->getSlug()) {
         $new_item->setSlug($new_slug);
       }
     }
+    op_locale($start_locale);
   }
 }
 
