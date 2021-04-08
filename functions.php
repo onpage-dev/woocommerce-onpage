@@ -482,6 +482,7 @@ function op_import_relations($schema) {
         if ($ret instanceof \WP_Error) {
           op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
         }
+        break;
         // op_err(json_encode($ret));
       }
     }
@@ -727,12 +728,14 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
 
 
 function op_set_new_items_slug(array $new_items, $force_slug_regen) {
+  
   foreach ($new_items as $res_id => $ids) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     
     $camel_name = op_snake_to_camel($res->name);
     $class = "\Op\\$camel_name";
     $items = $class::withoutGlobalScope('op')->whereRes($res->id);
+   
     if (!$force_slug_regen) {
       $items->whereWordpressId($ids);
     }
@@ -1063,7 +1066,7 @@ function op_request(string $name = null) {
     $data = file_get_contents('php://input');
     $req = (object) json_decode($data);
   }
-  return $name ? @$req->$name : $req;
+  return $name ? @$req->$name ?: @$_REQUEST[$name] : $req;
 }
 
 function op_locale($set = null) {

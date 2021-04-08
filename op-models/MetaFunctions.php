@@ -36,11 +36,11 @@ trait MetaFunctions {
   static function scopeWhereId($q, $param) {
     $q->whereMeta('op_id*', $param);
   }
-  static function scopeWhereWordpressId($q, $param) {
+  function scopeWhereWordpressId($q, $param) {
     if (is_array($param)) {
-      $q->whereIn(self::$primaryKey, $param);
+      $q->whereIn($this->primaryKey, $param);
     } else {
-      $q->where(self::$primaryKey, $param);
+      $q->where($this->primaryKey, $param);
     }
   }
   static function scopeWhereRes($q, $param) {
@@ -51,6 +51,9 @@ trait MetaFunctions {
   }
   function getLang() {
     return @$this->getMeta('op_lang*');
+  }
+  function getResourceId() {
+    return @$this->getMeta('op_res*');
   }
 
   function setSlug($new_slug) {
@@ -63,6 +66,7 @@ trait MetaFunctions {
   }
 
   public function val($name, $lang = null) {
+
     $field = @$this->resource->name_to_field[$name];
     if (!$field) return;
     $meta_key = op_field_to_meta_key($field, $lang);
@@ -101,7 +105,7 @@ trait MetaFunctions {
   }
 
   public function getResourceAttribute() {
-    return op_schema()->id_to_res[$this->op_res];
+    return op_schema()->id_to_res[$this->getResourceId()];
   }
 
   public function meta() {
