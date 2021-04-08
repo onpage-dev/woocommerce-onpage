@@ -1022,7 +1022,12 @@ function op_upgrade() {
   if (!$ok) op_err('Cannot download update from github');
   require_once(ABSPATH .'/wp-admin/includes/file.php');
   WP_Filesystem();
-  unzip_file($zip_path, __DIR__);
+  $ret = unzip_file($zip_path, __DIR__);
+  if ($ret !== true) {
+    op_err("Cannot unzip update", [
+      'error' => $ret,
+    ]);
+  }
 }
 
 function op_set_post_image($post_id, $path, $filename){
