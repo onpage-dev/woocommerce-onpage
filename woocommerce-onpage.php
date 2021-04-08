@@ -39,7 +39,17 @@ add_filter('init', function() {
         ]);
 
       case 'schema':
-        op_ret(op_getopt('schema'));
+        $schema_out=op_getopt('schema');
+        $arr_res=$schema_out->resources;
+        usort($arr_res, function($a, $b){
+          if ($a->name == $b->name) {
+              return 0;
+          }
+          return ($a->name < $b->name) ? -1 : 1;
+        });
+        $schema_out->resources=$arr_res;
+        op_ret($schema_out);
+
 
       case 'next-schema':
         op_ret(op_download_snapshot());

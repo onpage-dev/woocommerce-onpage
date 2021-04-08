@@ -10,7 +10,6 @@
   box-shadow: 0 0 8px -2px rgba(0,0,0,.3);
   /* margin: 2rem 0; */
   margin:1rem;
-  display:inline-block
 }
 .op-card .op-card {
   border-left-width: 2px;
@@ -36,10 +35,11 @@
   /* background-color:red; */
   padding:0 20px;
   overflow:hidden;
+  display:flex;
 }
 
 #op-app .op-top-header .op-navbar .op-panel-btn{
-  display:inline-block;
+  /* display:inline-block; */
   padding:10px;
   cursor: pointer;
 }
@@ -55,7 +55,85 @@
  	transition-duration: 500ms;
 }
 
+#op-app .op-content-box{
+  display:flex;
+  flex-wrap:wrap;
+}
 
+#op-app .op-card .op-header-card{
+  font-size:larger;
+}
+
+#op-app .op-card-table {
+  border-collapse: collapse;
+}
+#op-app .op-card-table, #op-app .op-card-table td , #op-app .op-card-table th {
+  padding: 2px 5px;
+  border: 1px solid #46ad3854!important; 
+}
+#op-app .op-card-table thead tr{
+  background: #46ad3821;
+}
+
+#op-app .op-card-table tbody tr:nth-child(even) {
+  background: #ededed
+  
+}
+#op-app .op-card-table tbody tr:nth-child(odd) {
+  background: #ededed33
+}
+#op-app .op-modal {
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  position: fixed;
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  display: flex;
+  justify-content:center;
+}
+
+#op-app .modal-ext-content{
+  margin: 7% auto;
+  border: 1px solid #888;
+  position: relative;
+  max-width: 100%;
+}
+
+#op-app .modal-content {  
+   /* 15% from the top and centered */
+  padding: 2rem;
+  overflow: auto;
+  height: auto;
+  background-color: #fefefe;
+  max-height: 90%;
+  /* margin-right: 15%;
+  width: 70%; Could be more or less, depending on screen size */
+}
+#op-app .op-card-buttons{
+  display:flex;
+  padding:1rem;
+}
+#op-app .op-card-buttons .button {
+  margin:0.5rem;
+}
+
+#op-app .close {
+  color: #aaa;
+  font-size: 30px;
+  font-weight: bold;
+  position:absolute;
+  right: 15px;
+  
+}
+
+#op-app .close:hover,
+#op-app .close:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
 
 
 </style>
@@ -286,16 +364,60 @@
     <h1>Variable names</h1>
     <div class="op-content-box">
     
-      <div v-for="res in schema.resources" class="op-card">
-        <h2 style="margin: 0 0 0"><b>{{ res.label }}</b>: <code>{{ res.name }} | {{ toCamel(res.name) }}</code></h2>
-        <div style="margin: 0.3rem 0"><b>Relations:</b></div>
-        <div v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
-          {{ field.label }}: <code>{{ field.name }}</code>
+      <div v-for="res in schema.resources " class="op-card">
+
+      <div class="op-header-card">
+        <div class=""> Resource Label: <b>{{ res.label }}</b></div>
+        <div class=""> Resource Name: <b>{{ res.name }}</b></div>
+        <div class=""> Resource Model: <b> {{ toCamel(res.name) }}</b></div>
+      </div>
+
+      <div  class="op-card-buttons">
+        <div class="button"
+        v-if="Object.values(res.fields).filter(x => x.type == 'relation').length"
+        @click="field_modal=Object.values(res.fields).filter(x => x.type == 'relation')">
+          Relations:
+          {{Object.values(res.fields).filter(x => x.type == 'relation').length}}
         </div>
-        <div style="margin: 0.3rem 0"><b>Fields:</b></div>
-        <div v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
-          {{ field.label }}: <code>{{ field.name }} | {{ field.type }}</code>
+        <!-- <table class="op-card-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Alias</th>
+            </tr>
+          </thead>
+          <tbody>
+          <tr v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
+            <td>{{ field.label }}</td>
+            <td>{{ field.name }}</td>        
+          </tr>   
+          </tbody>
+        </table> -->
+      
+        <div class="button" 
+        v-if="Object.values(res.fields).filter(x => x.type != 'relation').length"
+        @click="field_modal=Object.values(res.fields).filter(x => x.type != 'relation')">
+          Fields:
+          {{Object.values(res.fields).filter(x => x.type != 'relation').length}}
         </div>
+
+        <!-- <table class="op-card-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Alias</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
+              <td>{{ field.label }}</td>
+              <td>{{ field.name }}</td>     
+              <td>{{ field.type }}</td> 
+            </tr>   
+          </tbody>
+        </table> -->
+      </div>
       </div>
     </div>
 
@@ -309,7 +431,35 @@
     <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
     <i v-else>Upgrading...</i>
   </div>
-    
+
+  <div class="op-modal" v-if="field_modal">
+    <div class="modal-ext-content"> 
+      <div class="close"
+      @keydown.esc="field_modal=null"
+      @click="field_modal=null">
+        &times;
+      </div>
+      <div class="modal-content"> 
+        <table class="op-card-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Alias</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="field in field_modal">
+              <td>{{ field.label }}</td>
+              <td>{{ field.name }}</td>     
+              <td>{{ field.type }}</td> 
+            </tr>   
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 
@@ -353,7 +503,8 @@ new Vue({
     file_error: true,
     force_slug_regen: false,
     old_files: [],
-    snapshots_list:null
+    snapshots_list:null,
+    field_modal:null
   },
   computed: {
     form_unsaved () {
@@ -365,10 +516,16 @@ new Vue({
     non_imported_files () {
       return (this.files || []).filter(x => !x.is_imported)
     },
+    // ordered_res: function (){
+    //   return this.schema.resources.sort(function(a, b){
+        
+    //     return a.name[0] -b.name[0]}) 
+    // }
   },
   created () {
     this.refreshSchema()    
     this.getSnapshotsList()
+   
 
   },
   methods: {
@@ -395,6 +552,7 @@ new Vue({
         alert('Import completed!')
         this.import_result = res.data
         this.refreshSchema()
+        this.getSnapshotsList()
       })
       .finally(res => {
         this.is_importing = false
