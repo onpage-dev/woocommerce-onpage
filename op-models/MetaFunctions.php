@@ -36,6 +36,13 @@ trait MetaFunctions {
   static function scopeWhereId($q, $param) {
     $q->whereMeta('op_id*', $param);
   }
+  static function scopeWhereWordpressId($q, $param) {
+    if (is_array($param)) {
+      $q->whereIn(self::$primaryKey, $param);
+    } else {
+      $q->where(self::$primaryKey, $param);
+    }
+  }
   static function scopeWhereRes($q, $param) {
     $q->whereMeta('op_res*', $param);
   }

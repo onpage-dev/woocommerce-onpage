@@ -734,7 +734,7 @@ function op_set_new_items_slug(array $new_items, $force_slug_regen) {
     $class = "\Op\\$camel_name";
     $items = $class::withoutGlobalScope('op')->whereRes($res->id);
     if (!$force_slug_regen) {
-      $items->whereId($ids);
+      $items->whereWordpressId($ids);
     }
 
     $items = $items->get();
