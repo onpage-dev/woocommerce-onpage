@@ -379,6 +379,9 @@ function op_langs() {
 }
 
 function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null) {
+  ini_set('memory_limit','2G');
+  set_time_limit(600);
+
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
   }
@@ -598,7 +601,6 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
         'post_mime_type' => '',
         'comment_count' => 0,
       ];
-
       // Create or update the object
       if ($object) {
         $object_id = $object->$base_table_key;
@@ -606,7 +608,9 @@ function op_import_resource(object $db, object $res, bool $force_slug_regen, arr
       } else {
         $object_id = DB::table($base_table)->insertGetId($data);
         if (!$object_id) {
-          op_err("Insert into $thing->id $lang $is_primary $base_table got id: $object_id");
+          op_err("Cannot insert into $base_table: ".DB::instance()->db->last_error, [
+            'data' => $data,
+          ]);
         }
         $created_object_ids["{$thing->id}-$lang"] = $object_id;
       }
