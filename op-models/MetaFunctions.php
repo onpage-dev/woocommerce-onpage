@@ -10,7 +10,7 @@ trait MetaFunctions {
   public static function boot() {
     parent::boot();
     self::addGlobalScope('op', function($q) {
-      $q->whereNotNull('op_id');
+      $q->owned();
     });
     self::addGlobalScope('opmeta', function($q) {
       $q->loaded(self::$only_reserverd);
@@ -20,21 +20,48 @@ trait MetaFunctions {
   static function scopeUnfiltered($q) {
     $q->withoutGlobalScope('op');
   }
-  static function scopeWhereMeta($q, string $key, $value) {
-    $q->whereHas('meta', function($q) use ($key, $value) {
+  static function scopeWhereMeta($q, string $key, $operator, $value = null) {
+    if (is_null($value)) {
+      $value = $operator;
+      $operator = '=';
+    }
+    if (is_array($value) && $operator != '=') {
+      throw new Exception("Cannot apply operator $operator for array value");
+    }
+    $q->whereHas('meta', function($q) use ($key, $operator, $value) {
       $q->where('meta_key', $key);
       if (is_array($value)) {
         $q->whereIn('meta_value', $value);
       } else {
-        $q->where('meta_value', $value);
+        $q->where('meta_value', $operator, $value);
       }
     });
   }
-  static function scopeWhereLang($q, $param) {
-    $q->whereMeta('op_lang*', $param);
+  static function scopeWhereLang($q, $op, $val = null) {
+    $q->whereMeta('op_lang*', $op, $val);
   }
-  static function scopeWhereId($q, $param) {
-    $q->whereMeta('op_id*', $param);
+  static function scopeWhereId($q, $op, $val = null) {
+    $q->whereMeta('op_id*', $op, $val);
+  }
+  static function scopeWhereRes($q, $op, $val = null) {
+    $q->whereMeta('op_res*', $op, $val);
+  }
+  static function scopeIsOutdated($q, $timestamp) {
+    $q->whereHas('meta', function($q) use ($timestamp) {
+      $q->where('meta_key', 'op_imported_at*');
+      $q->where('meta_value', $timestamp);
+    }, 0);
+  }
+  static function scopeOwned($q) {
+    $q->whereHas('meta', function($q) {
+      $q->where('meta_key', 'op_id*');
+    });
+    $q->whereHas('meta', function($q) {
+      $q->where('meta_key', 'op_res*');
+    });
+    $q->whereHas('meta', function($q) {
+      $q->where('meta_key', 'op_lang*');
+    });
   }
   function scopeWhereWordpressId($q, $param) {
     if (is_array($param)) {
@@ -43,17 +70,29 @@ trait MetaFunctions {
       $q->where($this->primaryKey, $param);
     }
   }
-  static function scopeWhereRes($q, $param) {
-    $q->whereMeta('op_res*', $param);
-  }
   function getMeta(string $key) {
     return @$this->meta->firstWhere('meta_key', $key)->meta_value;
+  }
+  function getId() {
+    return @$this->getMeta('op_id*');
   }
   function getLang() {
     return @$this->getMeta('op_lang*');
   }
   function getResourceId() {
     return @$this->getMeta('op_res*');
+  }
+  function scopeLocalized($q, string $lang = null) {
+    if (!$lang) {
+      $lang = op_locale();
+    }
+    $q->whereLang($lang);
+  }
+  function scopeUnlocalized($q) {
+    $q->withoutGlobalScope('oplang');
+  }
+  function scopeUnowned($q) {
+    $q->withoutGlobalScope('op');
   }
 
   function setSlug($new_slug) {

@@ -3,7 +3,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.0.22
+ * Version: 1.0.23
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage
@@ -33,17 +33,15 @@ add_filter('init', function() {
         $t2 = microtime(true);
         op_ret([
           'log' => op_record('finish'),
-          'c_count' => OpLib\Term::count(),
-          'p_count' => OpLib\Post::count(),
+          'c_count' => OpLib\Term::localized()->count(),
+          'p_count' => OpLib\Post::localized()->count(),
           'time' => $t2 - $t1,
         ]);
 
       case 'schema':
         $schema=op_getopt('schema');
         foreach ($schema->resources as $res) {
-          $camel_name = op_snake_to_camel($res->name);
-          $class = "\Op\\$camel_name";
-          $res->class_name = $class;
+          $res->class_name = op_name_to_class($res->name);
         }
         op_ret($schema);
 
@@ -69,6 +67,9 @@ add_filter('init', function() {
       
       case 'snapshots-list':
         op_ret(op_get_snapshots_list());
+      
+      case 'reset-data':
+        op_ret(op_reset_data());
 
       default: op_err('Not implemented');
     }

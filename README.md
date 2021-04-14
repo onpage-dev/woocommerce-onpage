@@ -256,3 +256,8 @@ __NOTE:__ let's breakdown that `/Section/products.articles`:
 - `articles` is the relation starting from the Product resource (e.g. $product->articles)
 
 __NOTE:__ In this last example, calling `$product->link()` will throw an exception because there is no route to handle a `Op\Product`
+
+
+# Notes
+- Functions and other plugin methods that are not documented here are subject to change and therefore should not be used.
+- The plugin will modify the posts and terms table and add some custom columns

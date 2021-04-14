@@ -22,6 +22,14 @@
   border: 1px solid #46ad38!important;
   color: #fff!important;
 }
+#op-app .button.button-danger {
+  background: #BF616A!important;
+  border: 1px solid #BF616A!important;
+  color: #fff!important;
+}
+#op-app h1.danger {
+  color: #BF616A!important;
+}
 #op-app .button:disabled {
   opacity: .5;
 }
@@ -134,10 +142,11 @@
   cursor: pointer;
 }
 
+[v-cloak] { display:none!important }
 
 </style>
 
-<div id="op-app" style="margin-right: 2rem">
+<div id="op-app" style="margin-right: 2rem" v-cloak>
   <div class="op-top-header">
     <div style="text-align: center;">
       <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 100px;">
@@ -145,19 +154,19 @@
    
     <div class="op-navbar">
       <div class="op-panel-btn" @click="panel_active='settings'" :active="panel_active=='settings'">
-        Settings
+        Setup
       </div>
       <div class="op-panel-btn" @click="panel_active='data-importer'" if="next_schema" :active="panel_active=='data-importer'">
         Data Importer
       </div>
       <div class="op-panel-btn" @click="panel_active='import-settings'"  v-if="next_schema" :active="panel_active=='import-settings'">
-        Import Settings
+        Product options
       </div>
       <div class="op-panel-btn" @click="panel_active='file-importer'" v-if="schema" :active="panel_active=='file-importer'">
         File Importer
       </div>
       <div class="op-panel-btn" @click="panel_active='variable-names'" v-if="schema" :active="panel_active=='variable-names'">
-        Variable Names
+        Variables
       </div>
       <div class="op-panel-btn" @click="panel_active='update'" :active="panel_active=='update'">
         Update
@@ -168,7 +177,7 @@
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
     <form @submit.prevent="saveSettings" >  
-      <h1>OnPage&reg; Woocommerce Plugin 1.0.22</h1>
+      <h1>OnPage&reg; Woocommerce Plugin 1.0.23</h1>
       <table class="form-table">
         <tbody>
           <tr>
@@ -422,13 +431,23 @@
 
   </div>
   
-  <div class="op-panel-box " v-show="panel_active=='update'">
-   <h1>Update plugin</h1>
-    <i>Just click this button to download an update from github</i>
-    <br>
-    <br>
-    <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
-    <i v-else>Upgrading...</i>
+  <div v-show="panel_active=='update'">
+    <div class="op-panel-box ">
+      <h1>Update plugin</h1>
+      <i>Just click this button to download an update from github</i>
+      <br>
+      <br>
+      <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
+      <i v-else>Upgrading...</i>
+    </div>
+    <div class="op-panel-box ">
+      <h1 class="danger">Danger zone</h1>
+      <i>This will delete all the product categories and the products! Use at your own risk!</i>
+      <br>
+      <br>
+      <input v-if="!is_deleting" type="button" class="button button-danger" value="Reset products" @click="deleteData()">
+      <i v-else>Cleaning up...</i>
+    </div>
   </div>
 
   <div class="op-modal" v-if="field_modal">
@@ -497,6 +516,7 @@ new Vue({
     files: null,
     is_loading_file: false,
     is_loading_old_files: false,
+    is_deleting: false,
     is_updating: false,
     is_caching_file: false,
     file_error: true,
@@ -606,7 +626,7 @@ new Vue({
     cacheFiles() {
       this.file_error = false
       let files = this.non_imported_files.slice(0, 4)
-      if (!files.length || this.is_caching_file) return
+      if (!files.length || this.is_caching_file) return null
       clearTimeout(this._file_timeout)
       this.is_caching_file = true
 
@@ -630,15 +650,31 @@ new Vue({
       })
     },
     updatePlugin() {
-      if (this.is_updating) return
+      if (this.is_updating) return null
       this.is_updating = true
 
       axios.post(`?op-api=upgrade`).then(res => {
-        alert('Upgrade completato')
+        alert('Upgrade completed')
         location.reload()
       }, err => console.log(err.message))
       .finally(res => {
         this.is_updating = false
+      })
+    },
+    deleteData() {
+      if (this.is_deleting) return null
+
+      if (!confirm("This will erase all the data you manage with woocommerce, do you want to proceed?")) {
+        return null
+      }
+
+      this.is_deleting = true
+
+      axios.post(`?op-api=reset-data`).then(res => {
+        alert('Data has been deleted')
+      }, err => console.log(err.message))
+      .finally(res => {
+        this.is_deleting = false
       })
     },
 
