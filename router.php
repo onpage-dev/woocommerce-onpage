@@ -5,7 +5,7 @@ if (!defined('OP_PLUGIN')) {
 }
 
 add_filter('init', function () {
-    $uri = explode('?', $_SERVER['REQUEST_URI'])[0];
+    $uri = explode('?', @$_SERVER['REQUEST_URI'])[0];
     $shop_url = @op_settings()->shop_url;
     if (empty(op_page())) {
         return;

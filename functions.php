@@ -251,6 +251,12 @@ function op_get_saved_snapshot($file_name){
 function op_schema(object $set = null) {
   static $schema = null;
   if ($set) {
+    $set = clone $set;
+    foreach ($set->resources as $res_i => $res) {
+      $clean_res = clone $res;
+      unset($clean_res->data);
+      $set->resources[$res_i] = $clean_res;
+    }
     op_setopt('schema', $set);
     $schema = null;
   }
@@ -314,6 +320,9 @@ function op_record($label, $end = false) {
   $tStartQ = $tS;
   $message = "$sElapsedSecs $sElapsedSecsQ  {$ram}MB $label";
   $steps[] = $message;
+  if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    WP_CLI::line($message);
+  }
   file_put_contents(__DIR__."/storage/.log", "$message\n", FILE_APPEND);
   return $steps;
 }
@@ -395,70 +404,74 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
      mkdir(__DIR__.'/snapshots');
   }
   if(!$file_name){
-    $schema = op_download_snapshot();
-    $snapshot_to_save = $schema;
+    $schema_json = op_download_snapshot();
+    $snapshot_to_save = $schema_json;
     op_record('download completed');
   } else {
-    $schema = op_get_saved_snapshot($file_name);
+    $schema_json = op_get_saved_snapshot($file_name);
   }
 
   // Create imported_at field
-  $schema->imported_at = date('Y-m-d H:i:s');
+  $schema_json->imported_at = date('Y-m-d H:i:s');
 
   // Overwrite which resource must be imported as a product
   $overwrite_products = apply_filters('on_page_product_resources', null);
   if (is_array($overwrite_products)) {
-    foreach ($schema->resources as $res) {
+    foreach ($schema_json->resources as $res) {
       $res->is_product = in_array($res->name, $overwrite_products);
     }
   }
 
-  // Store the new schema
-  $schema = op_schema($schema);
+  // Store the new schema (this will remove the data from the schema)
+  $schema = op_schema($schema_json);
 
 
-  // Mark everything as old
-  DB::table("posts")->where('post_type', 'product')->update(['op_dirty' => true]);
-  $taxonomies = DB::table("term_taxonomy")->where('taxonomy', 'product_cat')->get();
-  DB::table("terms")->whereIn('term_id', $taxonomies->pluck('term_id'))->orWhereNotNull('op_id')->update(['op_dirty' => true]);
-
-  // Import resources
-  $langs = op_langs();
-
+  
   $all_items = []; // [res][id][lang] -> wpid
   $new_items = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
-
-  foreach ($schema->resources as $res) {
-    op_import_resource($schema, $res, $langs, $imported_at, $all_items, $new_items); 
-    op_record("completed resource $res->label");
+  
+  $langs = op_langs();
+  foreach ($schema->resources as $res_i => $res) {
+    $data = $schema_json->resources[$res_i]->data;
+    op_record("Importing $res->label (".count($data)." items)...");
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items); 
+    op_record("completed $res->label");
   }
-  op_import_snapshot_relations($schema, $all_items);
+  op_record("Importing relations...");
+  op_import_snapshot_relations($schema, $schema_json, $all_items);
+  op_record("done");
 
   // Delete old data
-  op_record('deleted old data');
-
+  op_record('Deleting outdated products and categories...');
   op_reset_data(function($q) use ($imported_at) {
     $q->isOutdated($imported_at);
   }, function($q) use ($imported_at) {
     $q->isOutdated($imported_at);
   });
+  op_record('done');
 
 
+  op_record('Creating php models');
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
-  op_record('created php models');
+  op_record('done');
   
+  op_record('Importing relations...');
   op_link_imported_data($schema);
-  op_record('imported relations');
-
+  op_record('done');
+  
+  op_record('Generating slugs...');
   op_regenerate_items_slug($force_slug_regen ? $all_items : $new_items);
-
+  op_record('done');
+  
   flush_rewrite_rules();
   op_record('permalinks flushed');
-
+  
   if (isset($snapshot_to_save)) {
+    op_record('Storing snapshot...');
     op_save_snapshot_file($snapshot_to_save);
     op_del_old_snapshots();
+    op_record('done');
   }
 
 }
@@ -507,7 +520,7 @@ function op_link_imported_data($schema) {
 }
 
 
-function op_import_resource(object $db, object $res, array $langs, string $imported_at, array &$all_items, array &$new_items) {
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items) {
   $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
   $lab_img = collect($res->fields)->where('type', 'image')->first();
   $base_table = $res->is_product ? 'posts' : 'terms';
@@ -530,12 +543,7 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
   $icl_translations = [];
   $all_meta = [];
   $all_icl_object_ids = [];
-
-  // $current_object_ids = $base_class::unfiltered()->whereRes($res->id)->pluck($base_table_key);
-  // DB::table($base_tablemeta)
-  //   ->whereIn($base_tablemeta_ref, $current_object_ids)
-  //   ->whereIn('meta_key', ['op_id*', 'op_lang*'])
-  //   ->get();
+  $current_objects = [];
   $base_class::$only_reserverd = true;
   foreach ($base_class::whereRes($res->id)->get() as $x) {
     $current_objects["{$x->getId()}-{$x->getLang()}"] = $x;
@@ -545,12 +553,16 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
 
   $icl_trid = DB::table('icl_translations')->max('trid') + 2;
 
-  foreach ($res->data as $thing_i => $thing) {
+  foreach ($res_data as $thing_i => $thing) {
+    if ($thing_i && $thing_i%100 == 0) {
+      op_record("- $thing_i/".count($res_data));
+    }
     $icl_primary_id = null;
     $icl_trid++;
     
     // Create the item in each language - first language is the primary one
     foreach ($langs as $lang) {
+      // op_record("- lang $lang");
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
       $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_{$lang}" : '') : null;
@@ -568,7 +580,7 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
         'name' => $label,
         'slug' => $object
           ? $object->slug
-          : op_slug($label, 'terms', 'slug', @$object->slug),
+          : sanitize_title("{$thing->id}-$label-$lang"),
         'term_group' => 0,
         'op_order' => $thing_i,
       ] : [
@@ -584,7 +596,7 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
         'post_password' => '',
         'post_name' => $object
           ? $object->post_name
-          : op_slug($label, 'posts', 'post_name', @$object->post_name),
+          : sanitize_title("{$thing->id}-$label-$lang"),
         'to_ping' => '',
         'pinged' => '',
         'post_modified' => $imported_at,
@@ -597,10 +609,12 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
         'post_mime_type' => '',
         'comment_count' => 0,
       ];
+      // op_record("- ready to upsert");
       // Create or update the object
       if ($object) {
         $object_id = $object->$base_table_key;
         DB::table($base_table)->where($base_table_key, $object_id)->update($data);
+        // op_record("- updated");
       } else {
         $object_id = DB::table($base_table)->insertGetId($data);
         if (!$object_id) {
@@ -609,6 +623,7 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
           ]);
         }
         $new_items[$res->id][$thing->id][$lang] = $object_id;
+        // op_record("- created");
       }
       $object_ids["{$thing->id}-$lang"] = $object_id;
       $all_items[$res->id][$thing->id][$lang] = $object_id;
@@ -624,12 +639,14 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
             'count' => 1,
           ]);
         }
+        // op_record("- updated tax");
       }
 
       // Delete all relations with parents
       if ($res->is_product) {
         DB::table('term_relationships')->where('object_id', $object_id)->delete();
         wp_set_object_terms($object_id, 'simple', 'product_type');
+        // op_record("- wp_set_object_terms");
       }
 
       // Calculate base meta
@@ -665,7 +682,9 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
             ),
           ];
         }
+        // op_record("- merging meta");
         $all_meta = array_merge($all_meta, $base_meta);
+        // op_record("- merged: ".count($all_meta));
       }
       
       // If this is the primary language
@@ -699,6 +718,7 @@ function op_import_resource(object $db, object $res, array $langs, string $impor
           'source_language_code' => $icl_deflang,
         ];
       }
+      // op_record("- end lang");
     } // end langs cycle
   } // end $thing->data cycle
 
@@ -764,15 +784,16 @@ function op_regenerate_items_slug(array $items) {
   }
 }
 
-function op_import_snapshot_relations($schema, array $all_items) {
+function op_import_snapshot_relations($schema, $json, array $all_items) {
   $langs = op_langs();
-  foreach ($schema->resources as $res) {
+  foreach ($schema->resources as $res_i => $res) {
+    $data = $json->resources[$res_i]->data;
     $meta = [];
     $updated_wp_ids = [];
     $base_tablemeta = $res->is_product ? 'postmeta' : 'termmeta';
     $base_tablemeta_ref = $res->is_product ? 'post_id' : 'term_id';
 
-    foreach ($res->data as $thing) {
+    foreach ($data as $thing) {
       foreach ($langs as $lang) {
         $wp_id = $all_items[$res->id][$thing->id][$lang];
         $updated_wp_ids[] = $wp_id;
