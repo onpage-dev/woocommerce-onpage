@@ -47,6 +47,8 @@ You can use all the eloquent methods to filter your data, but because the fields
 $prods = Op\Chapter::whereField('name', 'Boats')->first()
 // Get all the elements longer than 10cm
 $prods = Op\Chapter::whereField('length', '>', 10)->get()
+// Get elements using in operator
+$prods = Op\Chapter::whereFieldIn('name', ['Boats', 'Spacecrafts'])->get()
 // Full text search in all the fields (will search for %boa% in all fields)
 $prods = Op\Chapter::search('boa')->get()
 // Full text search only in some attributes

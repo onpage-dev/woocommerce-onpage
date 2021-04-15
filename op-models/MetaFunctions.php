@@ -170,15 +170,29 @@ trait MetaFunctions {
   public static function scopeWhereField($q, string $name, $op, $value = null) {
     $q->whereHas('meta', function($q) use ($name, $op, $value) {
       $lang = op_locale();
-      $q->where('meta_key', self::fieldToMetaKey($name))
+      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
         ->where('meta_value', $op, $value);
+    });
+  }
+  public static function scopeWhereFieldIn($q, string $name, array $value) {
+    $q->whereHas('meta', function($q) use ($name, $value) {
+      $lang = op_locale();
+      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
+        ->whereIn('meta_value', $value);
     });
   }
   public static function scopeOrWhereField($q, string $name, $op, $value = null) {
     $q->orWhereHas('meta', function($q) use ($name, $op, $value) {
       $lang = op_locale();
-      $q->where('meta_key', self::fieldToMetaKey($name))
+      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
         ->where('meta_value', $op, $value);
+    });
+  }
+  public static function scopeOrWhereFieldIn($q, string $name, array $value) {
+    $q->orWhereHas('meta', function ($q) use ($name, $value) {
+        $lang = op_locale();
+        $q->where('meta_key', self::fieldToMetaKey($name, $lang))
+        ->whereIn('meta_value', $value);
     });
   }
 
