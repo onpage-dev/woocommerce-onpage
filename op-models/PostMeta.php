@@ -6,7 +6,7 @@ if (!defined('OP_PLUGIN')) die(400);
 use WeDevs\ORM\Eloquent\Model;
 
 class PostMeta extends Model {
-    protected $table = PFX.'postmeta';
+    protected $table = OP_WP_PREFIX.'postmeta';
     protected $guarded = [];
     public $timestamps = false;
     protected $primaryKey = 'meta_id';

@@ -8,7 +8,7 @@ use WeDevs\ORM\Eloquent\Model;
 class Post extends Model {
   use MetaFunctions;
 
-  protected $table = PFX.'posts';
+  protected $table = OP_WP_PREFIX.'posts';
   protected $guarded = [];
   public $timestamps = false;
   public $is_post = true;

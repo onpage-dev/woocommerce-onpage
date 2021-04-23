@@ -6,7 +6,7 @@ if (!defined('OP_PLUGIN')) die(400);
 use WeDevs\ORM\Eloquent\Model;
 
 class TermMeta extends Model {
-    protected $table = PFX.'termmeta';
+    protected $table = OP_WP_PREFIX.'termmeta';
     protected $guarded = [];
     public $timestamps = false;
     protected $primaryKey = 'meta_id';

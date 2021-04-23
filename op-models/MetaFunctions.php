@@ -95,13 +95,40 @@ trait MetaFunctions {
     $q->withoutGlobalScope('op');
   }
 
-  function setSlug($new_slug) {
-    if (!$new_slug) return null;
-    $new_slug = op_slug($new_slug, $this->is_product ? 'posts' : 'terms', $this->is_product ? 'post_name' : 'slug', $this->getSlug()); //self::$slug_field,
+  function getTableWithoutPrefix() {
+    return substr($this->getTable(), count(OP_WP_PREFIX));
+  }
+
+  function slugExists($slug) {
+    if ($this->is_post) {
+      return Post::unfiltered()->where(self::$slug_field, $slug)->exists();
+    } else {
+      return Term::unfiltered()->where(self::$slug_field, $slug)
+        ->whereHas('taxonomies', function($q) {
+          $q->where('taxonomy', 'product_cat');
+        })
+        ->exists();
+    }
+  }
+
+  function setSlug($slug) {
+    if (!$slug) return null;
+    op_record("generate sdlug for {$this->getTable()}");
+    op_record("a - $slug");
+    $current_slug = $this->getSlug();
+    op_record("a - current: $current_slug");
+    
+    $slug = sanitize_title_with_dashes($slug);
+    op_record("sanitized: $slug");
+    if ($slug === $current_slug) return $slug;
+    $slug = op_slug($slug, $this, $current_slug);
+    op_record("uniqie: $slug");
+    if ($slug === $current_slug) return $slug;
+    op_record("updating: $slug");
     $this->update([
-      self::$slug_field => $new_slug,
+      self::$slug_field => $slug,
     ]);
-    return $new_slug;
+    return $slug;
   }
 
   public function val($name, $lang = null) {

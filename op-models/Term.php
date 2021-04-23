@@ -8,7 +8,7 @@ use WeDevs\ORM\Eloquent\Model;
 class Term extends Model {
   use MetaFunctions;
 
-  protected $table = PFX.'terms';
+  protected $table = OP_WP_PREFIX.'terms';
   protected $guarded = [];
   public $timestamps = false;
   public $is_post = false;

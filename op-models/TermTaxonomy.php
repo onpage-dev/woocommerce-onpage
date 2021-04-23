@@ -6,7 +6,7 @@ if (!defined('OP_PLUGIN')) die(400);
 use WeDevs\ORM\Eloquent\Model;
 
 class TermTaxonomy extends Model {
-    protected $table = PFX.'term_taxonomy';
+    protected $table = OP_WP_PREFIX.'term_taxonomy';
     protected $guarded = [];
     public $timestamps = false;
     protected $primaryKey = 'term_taxonomy_id';

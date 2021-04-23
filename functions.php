@@ -12,35 +12,12 @@ use \WeDevs\ORM\Eloquent\Facades\DB;
 
 global $wpdb;
 define('OP_PLUGIN', true);
-define('PFX', $wpdb->prefix);
+define('OP_WP_PREFIX', $wpdb->prefix);
 
 function op_debug() {
   error_reporting(E_ALL ^ E_NOTICE);
   ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
   error_reporting(E_ALL);
-}
-
-function op_slug(string $title, string $table, string $field, string $old_slug = null) {
-  $slug = $title;
-  $slug = mb_strtolower($slug);
-  $slug_iconv = @iconv('auto', 'ASCII//TRANSLIT', $slug); // convert accents to ascii
-  if (strlen($slug_iconv)) {
-      $slug = $slug_iconv;
-  }
-  $slug = trim($slug);
-  $slug = preg_replace('/[^A-Za-z0-9]+/', '-', $slug);
-
-  $slug = apply_filters('on_page_slug', $slug, $title, $table, $field, $old_slug);
-
-  $suffix = '';
-  while ($old_slug != $slug.$suffix && DB::table($table)->where($field, $slug.$suffix)->exists()) {
-    if (!$suffix) {
-      $suffix = 2;
-    } else {
-      $suffix++;
-    }
-  }
-  return $slug.$suffix;
 }
 
 function op_download_json($url) {
@@ -79,24 +56,24 @@ function op_initdb() {
   if (op_settings()->migration < 33) {
     $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
     DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
-    @DB::statement("ALTER TABLE `".PFX."posts` ADD COLUMN `op_res` bigint unsigned NULL;");
-    @DB::statement("ALTER TABLE `".PFX."posts` ADD COLUMN `op_id` bigint unsigned NULL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_res` bigint unsigned NULL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_id` bigint unsigned NULL;");
 
 
-    @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_res` bigint unsigned NULL;");
-    @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_id` bigint unsigned NULL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_res` bigint unsigned NULL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_id` bigint unsigned NULL;");
 
-    @DB::statement("ALTER TABLE `".PFX."posts`
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts`
                     ADD UNIQUE `op_res_op_id` (`op_res`, `op_id`),
                     ADD INDEX `op_res` (`op_res`),
                     ADD UNIQUE `op_id` (`op_id`)");
-    @DB::statement("ALTER TABLE `".PFX."terms`
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms`
                     ADD UNIQUE `op_res_op_id` (`op_res`, `op_id`),
                     ADD INDEX `op_res` (`op_res`),
                     ADD UNIQUE `op_id` (`op_id`)");
 
-    @DB::statement("ALTER TABLE `".PFX."posts` ADD COLUMN `op_dirty` BOOL;");
-    @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_dirty` BOOL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_dirty` BOOL;");
+    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_dirty` BOOL;");
 
     op_setopt('migration', 33);
     DB::statement("SET sql_mode = '$orig_mode'");
@@ -106,10 +83,10 @@ function op_initdb() {
     $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
     DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
     try {
-      @DB::statement("ALTER TABLE `".PFX."terms` ADD COLUMN `op_order` FLOAT NULL;");
+      @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_order` FLOAT NULL;");
     } catch (\Exception $e) { }
     try {
-      @DB::statement("ALTER TABLE `".PFX."terms` ADD INDEX `op_order` (`op_order`)");
+      @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD INDEX `op_order` (`op_order`)");
     } catch (\Exception $e) { }
 
 
@@ -300,6 +277,11 @@ function op_ret($data) {
   if (@$data['error']) {
     http_response_code(400);
   }
+
+  if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    WP_CLI::line(print_r($data));
+    exit;
+  }
   header("Content-Type: application/json");
   echo json_encode($data);
   exit;
@@ -314,7 +296,7 @@ function op_record($label, $end = false) {
   $tS = microtime(true);
   $tElapsedSecs = $tS - $tRecordStart;
   $tElapsedSecsQ = $tS - $tStartQ;
-  $ram = str_pad(number_format(memory_get_usage(true)/1024/1024, 3), 8, " ", STR_PAD_LEFT);
+  $ram = str_pad(number_format(memory_get_usage(true)/1024/1024, 1), 6, " ", STR_PAD_LEFT);
   $sElapsedSecs = str_pad(number_format($tElapsedSecs, 3), 8, " ", STR_PAD_LEFT);
   $sElapsedSecsQ = str_pad(number_format($tElapsedSecsQ, 3), 8, " ", STR_PAD_LEFT);
   $tStartQ = $tS;
@@ -387,9 +369,24 @@ function op_langs() {
   return $langs;
 }
 
+function op_slug(string $title, $base_class, string $old_slug = null) {
+  $slug = sanitize_title_with_dashes($title);
+
+  $suffix = '';
+  while ($old_slug != $slug.$suffix && $base_class->slugExists($slug.$suffix)) {
+    if (!$suffix) {
+      $suffix = 2;
+    } else {
+      $suffix++;
+    }
+  }
+  return $slug.$suffix;
+}
+
 function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null) {
   ini_set('memory_limit','2G');
   set_time_limit(600);
+  ini_set('max_execution_time', '600');
 
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
@@ -580,7 +577,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'name' => $label,
         'slug' => $object
           ? $object->slug
-          : sanitize_title("{$thing->id}-$label-$lang"),
+          : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
         'term_group' => 0,
         'op_order' => $thing_i,
       ] : [
@@ -596,7 +593,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'post_password' => '',
         'post_name' => $object
           ? $object->post_name
-          : sanitize_title("{$thing->id}-$label-$lang"),
+          : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
         'to_ping' => '',
         'pinged' => '',
         'post_modified' => $imported_at,
@@ -748,7 +745,6 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   foreach (array_chunk($all_meta, 2000) as $chunk) {
     DB::table($base_tablemeta)->insert($chunk);
   }
-
 }
 
 
@@ -776,7 +772,7 @@ function op_regenerate_items_slug(array $items) {
     foreach ($items as $new_item) {
       op_locale($new_item->getLang());
       $new_slug = apply_filters('op_gen_slug', $new_item);
-      if (mb_strlen($new_slug) || $new_slug == $new_item->getSlug()) {
+      if (mb_strlen($new_slug)) {
         $new_item->setSlug($new_slug);
       }
     }
