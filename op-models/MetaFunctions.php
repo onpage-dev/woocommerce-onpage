@@ -113,18 +113,12 @@ trait MetaFunctions {
 
   function setSlug($slug) {
     if (!$slug) return null;
-    op_record("generate sdlug for {$this->getTable()}");
-    op_record("a - $slug");
     $current_slug = $this->getSlug();
-    op_record("a - current: $current_slug");
     
     $slug = sanitize_title_with_dashes($slug);
-    op_record("sanitized: $slug");
     if ($slug === $current_slug) return $slug;
     $slug = op_slug($slug, $this, $current_slug);
-    op_record("uniqie: $slug");
     if ($slug === $current_slug) return $slug;
-    op_record("updating: $slug");
     $this->update([
       self::$slug_field => $slug,
     ]);

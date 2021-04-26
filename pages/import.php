@@ -177,7 +177,7 @@
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
     <form @submit.prevent="saveSettings" >  
-      <h1>OnPage&reg; Woocommerce Plugin 1.0.26</h1>
+      <h1>OnPage&reg; Woocommerce Plugin 1.0.27</h1>
       <table class="form-table">
         <tbody>
           <tr>

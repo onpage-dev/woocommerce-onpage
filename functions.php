@@ -772,9 +772,15 @@ function op_regenerate_items_slug(array $items) {
     foreach ($items as $new_item) {
       op_locale($new_item->getLang());
       $new_slug = apply_filters('op_gen_slug', $new_item);
-      if (mb_strlen($new_slug)) {
-        $new_item->setSlug($new_slug);
+      if ($new_slug === $new_item || is_null($new_slug) || !mb_strlen($new_slug)) {
+        continue;
       }
+      if (!is_scalar($new_slug)) {
+        op_err("Invalid value returned to hook op_gen_slug: non-scalar", [
+          'returned_value' => $new_slug,
+        ]);
+      }
+      $new_item->setSlug($new_slug);
     }
     op_locale($start_locale);
   }
