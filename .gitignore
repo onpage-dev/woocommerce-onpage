@@ -5,3 +5,4 @@ storage/
 db-models/
 sync-*.sh
 twentytwenty_child
+snapshots/
