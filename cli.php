@@ -25,10 +25,13 @@ class ONPAGE_CLI {
     op_reset_data();
     op_record("Deletion completed");
 	}
-
+	public function listmedia($args, $assoc_args) {
+    print_r(op_list_files());
+	}
 }
 
 add_action( 'cli_init', function() {
 	WP_CLI::add_command( 'onpage', 'ONPAGE_CLI' );
 	WP_CLI::add_command( 'reset', 'ONPAGE_CLI' );
+	WP_CLI::add_command( 'listmedia', 'ONPAGE_CLI' );
 });

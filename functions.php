@@ -965,27 +965,27 @@ function op_list_files(bool $return_map = false) {
     $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
     $meta_col = $res->is_product ? 'post_id' : 'term_id';
     $res_files_query = $class::whereHas('parent', function($q) use ($res) {
-      $q->where('op_res', $res->id);
+      $q->whereRes($res->id);
     });
 
-    $res_files_query->where(function($q) use ($res) {
-      foreach (collect($res->fields)->whereIn('type', ['file', 'image']) as $field) {
-        if (!$field->is_translatable) {
-          $q->orWhere('meta_key', op_field_to_meta_key($field));
-        } else {
-          foreach (op_schema()->langs as $lang) {
-            $q->orWhere('meta_key', op_field_to_meta_key($field, $lang));
-          }
-        }
+    $media_fields = [];
+    foreach (collect($res->fields)->whereIn('type', ['file', 'image']) as $field) {
+      $langs = $field->is_translatable ? op_schema()->langs : [ null ];
+      foreach ($langs as $lang) {
+        $media_fields[] = op_field_to_meta_key($field, $lang);
       }
-    });
+    }
+    if (empty($media_fields)) continue;
+    
+    $res_files_query->whereIn('meta_key', $media_fields);
 
     $res_files = $res_files_query->get()
     ->pluck('meta_value')
     ->map(function($el) {
-      return json_decode($el);
+      return @json_decode($el);
     })
     ->filter(function($x) { return $x && @$x->token; })
+    ->values()
     ->all();
     foreach ($res_files as $object_id => $file) {
       if (!isset($files[$file->token])) {
