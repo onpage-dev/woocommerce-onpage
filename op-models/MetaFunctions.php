@@ -65,9 +65,9 @@ trait MetaFunctions {
   }
   function scopeWhereWordpressId($q, $param) {
     if (is_array($param)) {
-      $q->whereIn($this->primaryKey, $param);
+      $q->whereIn("{$this->getTable()}.{$this->primaryKey}", $param);
     } else {
-      $q->where($this->primaryKey, $param);
+      $q->where("{$this->getTable()}.{$this->primaryKey}", $param);
     }
   }
   function getMeta(string $key) {
