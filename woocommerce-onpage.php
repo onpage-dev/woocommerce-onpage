@@ -19,6 +19,20 @@ require_once __DIR__.'/cli.php';
 
 add_filter('init', function() {
   if (!current_user_can('administrator')) return;
+
+  if (!is_dir(op_file_path('/'))) {
+      mkdir(op_file_path('/'));
+  }
+  if (!is_dir(op_file_path('cache'))) {
+      mkdir(op_file_path('cache'));
+  }
+  if (!is_dir(__DIR__.'/db-models')) {
+      mkdir(__DIR__.'/db-models');
+  }
+  if (!is_dir(__DIR__.'/snapshots')) {
+      mkdir(__DIR__.'/snapshots');
+  }
+
   op_initdb();
 
   $api = @$_REQUEST['op-api'];

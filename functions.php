@@ -388,18 +388,6 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   set_time_limit(600);
   ini_set('max_execution_time', '600');
 
-  if (!is_dir(op_file_path('/'))) {
-    mkdir(op_file_path('/'));
-  }
-  if (!is_dir(op_file_path('cache'))) {
-    mkdir(op_file_path('cache'));
-  }
-  if (!is_dir(__DIR__.'/db-models')) {
-    mkdir(__DIR__.'/db-models');
-  }
-  if (!is_dir(__DIR__.'/snapshots')) {
-     mkdir(__DIR__.'/snapshots');
-  }
   if(!$file_name){
     $schema_json = op_download_snapshot();
     $snapshot_to_save = $schema_json;
