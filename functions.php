@@ -918,11 +918,13 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   $path = op_file_path($file->token);
   if (is_file($path)) {
     // Original
-    [$filename, $extension] = pathinfo($file->name);
+    $pi = pathinfo($file->name);
+    $filename = $pi['filename'];
+    $extension = $pi['extension'];
     if ((!$w && !$h) || !in_array($extension, ['jpg', 'jpeg', 'webp', 'png', 'gif', 'tiff'])) {
       $extension = ($extension == 'php' ? 'txt' : $extension);
       $hash_v = substr($file->token, 0, 3);
-      $target_path = op_file_path("/cache/$filename.$ext.$extension");
+      $target_path = op_file_path("/cache/$filename.$hash_v.$extension");
       if (!file_exists($target_path)) {
         symlink('../'.basename($path), $target_path);
       }
