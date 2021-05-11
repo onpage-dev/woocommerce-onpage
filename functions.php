@@ -921,7 +921,7 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
     $pi = pathinfo($file->name);
     $filename = $pi['filename'];
     $extension = $pi['extension'];
-    if ((!$w && !$h) || !in_array($extension, ['jpg', 'jpeg', 'webp', 'png', 'gif', 'tiff'])) {
+    if ((!$w && !$h)) {
       $extension = ($extension == 'php' ? 'txt' : $extension);
       $hash_v = substr($file->token, 0, 3);
       $target_path = op_file_path("/cache/$filename.$hash_v.$extension");
@@ -944,7 +944,7 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
         if (is_numeric($w)) $opts['width'] = $w;
         if (is_numeric($h)) $opts['height'] = $h;
         if (!op_resize($path, $target_path, $opts)) {
-          return op_link($path);
+          return op_file_url($file);
         }
       }
       return op_link($target_path);
@@ -1058,16 +1058,30 @@ function op_import_files(array $files) {
 
 function op_import_file(object $file) {
   $token = $file->info->token;
-  $path = op_file_path($token);
-  $url = $url = op_endpoint()."/storage/$token";
-  $bytes = copy($url, $path);
+  $final_path = op_file_path($token);
+  $tmp_path = sys_get_temp_dir()."/$token";
+  $url = op_endpoint()."/storage/$token";
+  
+  set_time_limit(0);
+  $fp = fopen($tmp_path, 'w+');
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_TIMEOUT, 50);
+  curl_setopt($ch, CURLOPT_FILE, $fp);
+  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+  curl_exec($ch);
+  curl_close($ch);
+  fclose($fp);
+  rename($tmp_path, $final_path);
+  
   $ret = [
     'url' => $url,
-    'path' => $path,
-    'bytes' => $bytes,
+    'path' => $final_path,
+    'bytes' => filesize($final_path),
   ];
-  return $bytes;
+  return $ret['bytes'];
 }
+
+
 
 function op_endpoint() {
   return "https://".op_getopt('company').'.onpage.it/api';
