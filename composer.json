@@ -7,13 +7,20 @@
         }
     ],
     "require": {
-        "tareq1988/wp-eloquent": "dev-master",
-        "tightenco/collect": "^7.0"
+        "tightenco/collect": "^7.0",
+        "tareq1988/wp-eloquent": "^1.0"
     },
     "autoload": {
         "psr-4": {
           "OpLib\\": "op-models/",
           "Op\\": "db-models/"
         }
-    }
+    },
+
+    "repositories": [
+        {
+            "type": "git",
+            "url": "git@github.com:onpage-dev/wp-eloquent.git"
+        }
+    ]
 }
