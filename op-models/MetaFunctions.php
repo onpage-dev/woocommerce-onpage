@@ -101,13 +101,13 @@ trait MetaFunctions {
 
   function slugExists($slug) {
     if ($this->is_post) {
-      return Post::unfiltered()->where(self::$slug_field, $slug)->exists();
+      return Post::query()->unfiltered()->where(self::$slug_field, $slug)->exists();
     } else {
-      return Term::unfiltered()->where(self::$slug_field, $slug)
-        ->whereHas('taxonomies', function($q) {
-          $q->where('taxonomy', 'product_cat');
-        })
-        ->exists();
+      $query = Term::query()->unfiltered()->where(self::$slug_field, $slug)
+      ->whereHas('taxonomies', function($q) {
+         $q->where('taxonomy', 'product_cat');
+      });
+      return $query->exists();
     }
   }
 
