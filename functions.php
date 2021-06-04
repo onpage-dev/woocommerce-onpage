@@ -26,6 +26,10 @@ function op_download_json($url) {
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
   curl_setopt($ch, CURLOPT_HEADER, 0);
   $result = curl_exec($ch);
+  $err = curl_errno($ch);
+  if ($err) {
+      throw new \Exception("Cannot download file, curl error [$err]");
+  }
   $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
   return $status == 200 && $result ? json_decode($result) : null;
@@ -1051,14 +1055,30 @@ function op_import_file(object $file) {
   $url = op_endpoint()."/storage/$token";
   
   set_time_limit(0);
-  $fp = fopen($tmp_path, 'w+');
-  $ch = curl_init($url);
-  curl_setopt($ch, CURLOPT_TIMEOUT, 50);
-  curl_setopt($ch, CURLOPT_FILE, $fp);
-  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-  curl_exec($ch);
-  curl_close($ch);
-  fclose($fp);
+  $max_tries = 5;
+  while (true) {
+    $fp = fopen($tmp_path, 'w');
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60*10);
+    curl_setopt($ch, CURLOPT_FILE, $fp);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_exec($ch);
+    $err = curl_errno($ch);
+    curl_close($ch);
+    fclose($fp);
+    if ($err) {
+      if ($max_tries) {
+        $max_tries--;
+        sleep(3);
+        continue;
+      } else {
+        throw new \Exception("Cannot download file, curl error [$err]");
+      }
+    } else {
+      break;
+    }
+  }
+
   rename($tmp_path, $final_path);
   
   $ret = [
