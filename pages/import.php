@@ -150,13 +150,14 @@
   <div class="op-top-header">
     <div style="text-align: center;">
       <img src="<?=op_link(__DIR__.'/../logo.png')?>" alt="" style="max-width: 80%; max-height: 100px;">
+      <div style="margin: -1rem 0 2rem"><b>v<?=op_version()?></b></div>
     </div>
    
     <div class="op-navbar">
       <div class="op-panel-btn" @click="panel_active='settings'" :active="panel_active=='settings'">
         Setup
       </div>
-      <div class="op-panel-btn" @click="panel_active='data-importer'" if="next_schema" :active="panel_active=='data-importer'">
+      <div class="op-panel-btn" @click="panel_active='data-importer'" v-if="next_schema" :active="panel_active=='data-importer'">
         Data Importer
       </div>
       <div class="op-panel-btn" @click="panel_active='import-settings'"  v-if="next_schema" :active="panel_active=='import-settings'">
@@ -176,8 +177,7 @@
   </div>
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
-    <form @submit.prevent="saveSettings" >  
-      <h1>OnPage&reg; Woocommerce Plugin 1.0.31</h1>
+    <form @submit.prevent="saveSettings" >
       <table class="form-table">
         <tbody>
           <tr>
@@ -581,6 +581,7 @@ new Vue({
       this.is_loading_next_schema = true
       axios.post('?op-api=next-schema').then(res => {
         this.next_schema = res.data
+        this.panel_active = 'data-importer'
       })
       .finally(res => {
         this.is_loading_next_schema = false

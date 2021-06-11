@@ -160,7 +160,7 @@ trait MetaFunctions {
     return $_m ? $value : @$value[0];
   }
 
-  public function getIdAttribute() {
+  public function getIdAttribute() : int {
     return $this->attributes[$this->primaryKey];
   }
 
@@ -267,56 +267,17 @@ trait MetaFunctions {
   }
 
   public function permalink(string $lang = null) {
-    if ($lang) {
-      $id = $this->getTranslationId($lang);
-    } else {
-      $id = $this->id;
+    $permalink = $this->is_post
+      ? get_permalink($this->id)
+      : get_term_link($this->id, 'product_cat');
+
+    if ($lang && op_wpml_enabled()) {
+      $permalink = apply_filters('wpml_permalink', $permalink, $lang);
     }
-    return $this->is_post
-      ? get_permalink($id)
-      : get_category_link($id);
+    return $permalink;
   }
 
   public function getSlug() {
     return $this->attributes[self::$slug_field];
-  }
-
-  public function getTranslationId(string $lang) {
-    $id = $this->id;
-    if (!$this->is_post) {
-      $tax = $this->taxonomies()->first();
-      if (!$tax) {
-        throw new \Exception("Element $this->id has no taxonomy");
-      }
-      $id = $tax->term_taxonomy_id;
-    }
-
-
-    $original_tx = DB::table('icl_translations')
-      ->where('element_type', $this->is_post ? 'post_product' : 'tax_product_cat')
-      ->where('element_id', $id)
-      ->first();
-    if (!$original_tx) {
-      throw new \Exception("Element $this->id is not translated");
-    }
-    $tx = DB::table('icl_translations')
-      ->where('language_code', $lang)
-      ->where('trid', $original_tx->trid)
-      ->first();
-    if (!$original_tx) {
-      throw new \Exception("Element $this->id is not translated into $lang");
-    }
-
-    if ($this->is_post) {
-      return $tx->element_id;
-    } else {
-      $tax = DB::table('term_taxonomy')
-        ->where('term_taxonomy_id', $tx->element_id)
-        ->first();
-      if (!$tax) {
-        throw new \Exception("Cannot find taxonomy {$tx->element_id}");
-      }
-      return $tax->term_id;
-    }
   }
 }

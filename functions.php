@@ -351,7 +351,11 @@ function op_wpml_enabled() {
 }
 
 function op_wpml_default() {
-  return apply_filters('wpml_default_language', NULL);
+  static $ret = -1;
+  if ($ret === -1) {
+    $ret = apply_filters('wpml_default_language', NULL);
+  }
+  return $ret;
 }
 function op_wpml_langs() :? array {
   if (!op_wpml_enabled()) return null;
@@ -463,6 +467,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
     op_record('done');
   }
 
+  do_action('op_import_completed');
 }
 
 function op_link_imported_data($schema) {

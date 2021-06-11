@@ -115,6 +115,16 @@ $cat->products; // A collection of products
 
 
 # Hooks
+
+## Import completed
+A hook called whenever an import has completed, you can use it to regenerate the cache of the website.
+
+```php
+add_action('op_import_completed', function() {
+  throw new Exception("alalalala", 1);
+});
+```
+
 ## Changing the slug generation function
 By default, the slug is generated converting the string to ASCII
 keeping accented letters (es. `à` becomes `a`) and replacing non alphanumeric
@@ -169,44 +179,21 @@ add_action('op_import_relations', function() {
 
 
 
-# Routing
-This plugins also implements an optional router with link generation. To use it set up the shop base url (e.g. `shop/`) in the plugin settings, and add the following to your theme:
-
-```php
-// This will handle the shop home (e.g. /shop/)
-op_page('/', function() {
-  include __DIR__.'/shop-home.php';
-});
-op_page('/Category/', function($category) {
-  include __DIR__.'/shop-category.php';
-});
-op_page('/Category/products', function($product) {
-  include __DIR__.'/shop-product.php';
-});
-```
-
-Then create the related files as follows:
+# Example templates
 ## Shop Page
 ```php
 <?php
-defined( 'ABSPATH' ) || exit;
-get_header();
-
 foreach (Op\Category::all() as $cat): ?>
   <a href="<?= $cat->link() ?>">
     <?= $cat->val('name') ?>
   </a>
 <?php endforeach; ?>
 
-<?php get_footer(); ?>
 ```
 
 ## Category Page
 ```php
-<?php
-defined( 'ABSPATH' ) || exit;
-get_header();
-?>
+$category = op_category('slug', $term->slug);
 <h1><?= $category->val('name') ?></h1>
 <?php
 foreach ($category->products as $prod): ?>
@@ -221,45 +208,6 @@ foreach ($category->products as $prod): ?>
 ## Product Page
 You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
 
-__NOTE:__ the `->link()` method will fail with an error if no route is present for the intended resource.
-
-## Advanced routing
-Sometimes you want to reduce the number of levels required to access the product page.
-Suppose you have the following structure:
-- Chapter
-- Section
-- Product
-- Article
-
-
-And we want the following 3 pages:
-- Home url: `/shop/`
-- Section url: `/shop/section-slug/`
-- Article url: `/shop/section-slug/article-slug/`
-
-```php
-op_page('/', function() {
-  include __DIR__.'/home.php';
-});
-op_page('/Section/', function(Op\Section $section) {
-  include __DIR__.'/section.php';
-});
-
-// we can shortcircuit the products using the . to separate the relations names
-op_page('/Section/products.articles', function(Op\Article $article) {
-  include __DIR__.'/article.php';
-});
-```
-
-
-__NOTE:__ let's breakdown that `/Section/products.articles`:
-- `Section` is the name of the Eloquent Model (Op\Section must exist)
-- `products` is the relation starting from Section (e.g. the one you use when you do `$section->products`)
-- `articles` is the relation starting from the Product resource (e.g. $product->articles)
-
-__NOTE:__ In this last example, calling `$product->link()` will throw an exception because there is no route to handle a `Op\Product`
-
-
-# Notes
+# Important Notes
 - Functions and other plugin methods that are not documented here are subject to change and therefore should not be used.
 - The plugin will modify the posts and terms table and add some custom columns
