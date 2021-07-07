@@ -150,12 +150,12 @@ add_filter( 'woocommerce_product_data_tabs', function ( $tabs ) {
 
 add_action('woocommerce_product_data_panels', function($post) {
 	global $woocommerce, $post;
-  $item = OpLib\Post::find($post->ID);
+  $item = op_product('ID', $post->ID);
   require_once __DIR__.'/pages/show-meta.php';
 });
 
 
 add_action('product_cat_edit_form_fields', function($tag) {
-  $item = OpLib\Term::find($tag->term_id);
+  $item = op_category('term_id', $tag->term_id);
   include __DIR__.'/pages/show-meta.php';
 });

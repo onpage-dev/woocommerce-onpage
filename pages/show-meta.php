@@ -44,7 +44,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
                    <?= $v ?>
                  <?php endforeach ?>
                <?php elseif ($f->type == 'relation'): ?>
-                 --
+                 <?= $item->{$f->name}()->count() ?> items
                <?php else: ?>
                  <?php foreach ($values as $v): ?>
                    <?= op_e($v) ?>
