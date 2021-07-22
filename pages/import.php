@@ -274,7 +274,7 @@
               <td>
                 <select v-model="settings_form[`res-${res.id}-price`]">
                   <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
+                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))"
                     :value="field.id">{{ field.label }}</option>
                 </select>
               </td>
@@ -294,7 +294,7 @@
               <td>
                 <select v-model="settings_form[`res-${res.id}-weight`]">
                   <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
+                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'weight'].includes(x.type))"
                     :value="field.id">{{ field.label }}</option>
                 </select>
               </td>
