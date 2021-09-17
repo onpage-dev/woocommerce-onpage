@@ -187,15 +187,20 @@ function op_settings($settings = null, $flush_cache = false) {
   return $ret;
 }
 
-function op_download_snapshot(object $sett = null) {
+function op_latest_snapshot_token(object $sett = null) {
   if (!$sett) $sett = op_settings();
-
-  // op_record('start import');
   $info = op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
   if (!@$info->token) {
     op_ret(['error' => 'No snapshot present, generate it on OnPage']);
   }
-  $db = op_download_json("https://{$sett->company}.onpage.it/api/storage/{$info->token}") or op_ret(['error' => 'Cannot download snapshot']);
+  return $info->token;
+}
+
+function op_download_snapshot(string $token) {
+  $sett = op_settings();
+
+  // op_record('start import');
+  $db = op_download_json("https://{$sett->company}.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
   // op_record('download completed');
   return $db;
 }
@@ -391,13 +396,21 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
   return $slug.$suffix;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null) {
+function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null, bool $stop_if_same = false) {
   ini_set('memory_limit','2G');
   set_time_limit(600);
   ini_set('max_execution_time', '600');
-
+  $token_to_import = null;
   if(!$file_name){
-    $schema_json = op_download_snapshot();
+    $token_to_import = op_latest_snapshot_token();
+
+    if ($stop_if_same && $token_to_import == op_getopt('last_import_token')) {
+      op_record("Current data is up to date, skipping import");
+      return;
+    }
+
+
+    $schema_json = op_download_snapshot($token_to_import);
     $snapshot_to_save = $schema_json;
     op_record('download completed');
   } else {
@@ -467,6 +480,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
     op_record('done');
   }
 
+  op_setopt('last_import_token', $token_to_import);
   do_action('op_import_completed');
 }
 
@@ -545,7 +559,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   $base_class::$only_reserverd = false;
   // op_record('mapped $current_objects');
 
-  $icl_trid = DB::table('icl_translations')->max('trid') + 2;
+  $icl_trid = op_wpml_enabled() ? DB::table('icl_translations')->max('trid') + 2 : 0;
 
   foreach ($res_data as $thing_i => $thing) {
     if ($thing_i && $thing_i%100 == 0) {

@@ -9,7 +9,7 @@ class ONPAGE_CLI {
     }
     op_record("Beginning import...");
     $t1 = microtime(true);
-    op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name']);
+    op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name'], true);
     $t2 = microtime(true);
     print_r([
       'log' => op_record('finish'),
