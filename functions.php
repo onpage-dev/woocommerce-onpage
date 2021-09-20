@@ -233,6 +233,13 @@ function op_get_saved_snapshot($file_name){
   }
 }
 
+function op_write_json($name, $json) {
+  return file_put_contents(wp_upload_dir()['basedir']."/on-page-$name.json", json_encode($json));
+}
+function op_read_json($name) {
+  return @json_decode(file_get_contents(wp_upload_dir()['basedir']."/on-page-$name.json"));
+}
+
 
 function op_schema(object $set = null) {
   static $schema = null;
@@ -243,11 +250,12 @@ function op_schema(object $set = null) {
       unset($clean_res->data);
       $set->resources[$res_i] = $clean_res;
     }
-    op_setopt('schema', $set);
+    op_write_json('schema', $set);
     $schema = null;
   }
   if (!$schema) {
-    $schema = op_getopt('schema');
+    $schema = op_getopt('schema') ?? op_read_json('schema');
+    if (!$schema) return null;
     $schema->id_to_res = [];
     $schema->name_to_res = [];
     foreach ($schema->resources as &$res) {
@@ -401,6 +409,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   set_time_limit(600);
   ini_set('max_execution_time', '600');
   $token_to_import = null;
+  $schema_json = null;
   if(!$file_name){
     $token_to_import = op_latest_snapshot_token();
 
@@ -411,7 +420,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 
 
     $schema_json = op_download_snapshot($token_to_import);
-    $snapshot_to_save = $schema_json;
+    $snapshot_to_save = clone $schema_json;
     op_record('download completed');
   } else {
     $schema_json = op_get_saved_snapshot($file_name);

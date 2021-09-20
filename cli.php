@@ -4,12 +4,14 @@ class ONPAGE_CLI {
 
 	public function import($args, $assoc_args) {
     if ($assoc_args['halp']) {
-      echo "Use --force-slug-regen to force slug regeneration\n";
+      echo "Use --force to force import\n";
+      echo "Use --force-slug-regen to trigger slug regeneration\n";
       return;
     }
+    $force_import = !!@$assoc_args['force'];
     op_record("Beginning import...");
     $t1 = microtime(true);
-    op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name'], true);
+    op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name'], !$force_import);
     $t2 = microtime(true);
     print_r([
       'log' => op_record('finish'),
