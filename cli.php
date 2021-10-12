@@ -34,6 +34,4 @@ class ONPAGE_CLI {
 
 add_action( 'cli_init', function() {
 	WP_CLI::add_command( 'onpage', 'ONPAGE_CLI' );
-	WP_CLI::add_command( 'reset', 'ONPAGE_CLI' );
-	WP_CLI::add_command( 'listmedia', 'ONPAGE_CLI' );
 });
