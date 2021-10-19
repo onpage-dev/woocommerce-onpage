@@ -209,6 +209,23 @@ foreach ($category->products as $prod): ?>
 ## Product Page
 You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
 
+# Automate imports with wp-cli
+You can easily automate the snapshot through wp-cli using the command `wp onpage import`.
+
+By default, __the import will exit instantly if there is no new data to be imported__.
+
+This is useful because you can run this command in a cron every minute, and it will only actually import your data when a new snapshot is available.
+
+If you want to ovverride this behaviour and import data anyway, you can add use the `wp onpage import --force` command, wich will re-import all your data.
+
+If you are on __development__ and want the existing slugs to be updated as well, you can add the `--force-slug-regen` flag to the command.
+
+## Other wp-cli commands:
+```bash
+wp onpage reset # Delete all the products and categories in WooCommerce
+wp onpage listmedia # List the files imported in WooCommerce
+```
+
 # Important Notes
 - Functions and other plugin methods that are not documented here are subject to change and therefore should not be used.
 - The plugin will modify the posts and terms table and add some custom columns
