@@ -121,7 +121,8 @@ A hook called whenever an import has completed, you can use it to regenerate the
 
 ```php
 add_action('op_import_completed', function() {
-  throw new Exception("alalalala", 1);
+  clear_my_caches();
+  notify_admin();
 });
 ```
 

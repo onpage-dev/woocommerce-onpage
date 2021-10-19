@@ -586,6 +586,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
+      if (is_array($label)) $label = implode(' - ', $label);
+      if (!is_scalar($label)) $label = json_encode($label);
 
 
       // Look for the object if it exists already
