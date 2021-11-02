@@ -8,7 +8,7 @@ if (!defined('OP_PLUGIN')) die(400);
 if (!$item->resource->is_product) echo '<tr><td colspan="2">';
 ?>
 <div id="onpage_meta" class="panel woocommerce_options_panel">
-  <h1 style="margin: 10px 20px 0">OnPage Fields - <?= op_e($item->resource->label) ?></h1>
+  <h1 style="margin: 10px 20px 0">OnPage Fields - <?= op_label($item->resource) ?></h1>
   <table>
     <tbody>
       <?php foreach (collect($item->resource->fields)->sortBy(function($f) { if ($f->type == 'relation') return 9999+$f->order; else return 1+$f->order; }) as $f): ?>

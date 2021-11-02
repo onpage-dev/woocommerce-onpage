@@ -267,12 +267,12 @@ function op_schema(object $set = null) {
     if (!$schema) return null;
     $schema->id_to_res = [];
     $schema->name_to_res = [];
-    foreach ($schema->resources as &$res) {
+    foreach ($schema->resources as $res) {
       $schema->id_to_res[$res->id] = $res;
       $schema->name_to_res[$res->name] = $res;
       $res->id_to_field = [];
       $res->name_to_field = [];
-      foreach ($res->fields as &$field) {
+      foreach ($res->fields as $field) {
         $schema->id_to_field[$field->id] = $field;
         $res->id_to_field[$field->id] = $field;
         $res->name_to_field[$field->name] = $field;

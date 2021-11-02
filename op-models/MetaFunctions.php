@@ -84,7 +84,7 @@ trait MetaFunctions {
   }
   function scopeLocalized($q, string $lang = null) {
     if (!$lang) {
-      $lang = op_locale();
+      $lang = defined('ICL_LANGUAGE_CODE') ? ICL_LANGUAGE_CODE : op_locale();
     }
     $q->whereLang($lang);
   }
@@ -182,10 +182,10 @@ trait MetaFunctions {
     return $this->resource->name_to_field($field_name);
   }
   public function getFieldLabel(string $field_name, string $lang = null) {
-    return op_label($this->getField(), $lang);
+    return op_label($this->getField($field_name), $lang);
   }
   public function getFieldUnit(string $field_name, string $lang = null) {
-    return $this->getField()->unit;
+    return $this->getField($field_name)->unit;
   }
   public function getResourceLabel(string $field_name, string $lang = null) {
     return op_label($this->getLabel(), $lang);
