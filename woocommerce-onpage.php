@@ -3,7 +3,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.0.38
+ * Version: 1.0.39
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage
@@ -40,7 +40,7 @@ add_filter('init', function() {
 
   op_initdb();
 
-  $api = @$_REQUEST['op-api'];
+  $api = $_REQUEST['op-api'] ?? null;
   if (!$api) return;
   try {
     switch ($api) {
@@ -59,11 +59,16 @@ add_filter('init', function() {
         ]);
 
       case 'schema':
-        $schema=op_getopt('schema');
+        $schema=op_stored_schema();
+        if (!$schema) op_ret(null);
         foreach ($schema->resources as $res) {
           $res->class_name = op_name_to_class($res->name);
         }
         op_ret($schema);
+      case 'server-config':
+        op_ret([
+          'product_resources' => apply_filters('on_page_product_resources', null),
+        ]);
 
 
       case 'next-schema':

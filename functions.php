@@ -240,7 +240,16 @@ function op_read_json($name) {
   return @json_decode(file_get_contents(wp_upload_dir()['basedir']."/on-page-$name.json"));
 }
 
-
+function op_label($res, string $lang = null) {
+  if (!is_object($res) || !isset($res->labels)) {
+    throw new Exception('First parameter for op_label must be resource or field');
+  }
+  if (!$lang) $lang = op_locale();
+  return $res->labels->$lang ?? $res->labels->{op_schema()->default_lang} ?? '?';
+}
+function op_stored_schema() {
+  return op_getopt('schema') ?? op_read_json('schema');
+}
 function op_schema(object $set = null) {
   static $schema = null;
   if ($set) {
@@ -254,29 +263,28 @@ function op_schema(object $set = null) {
     $schema = null;
   }
   if (!$schema) {
-    $schema = op_getopt('schema') ?? op_read_json('schema');
+    $schema = op_stored_schema();
     if (!$schema) return null;
     $schema->id_to_res = [];
     $schema->name_to_res = [];
     foreach ($schema->resources as &$res) {
       $schema->id_to_res[$res->id] = $res;
       $schema->name_to_res[$res->name] = $res;
-      foreach ($res->fields as &$field) {
-        $schema->id_to_field[$field->id] = $field;
-      }
-    }
-    foreach ($schema->resources as $res_i => &$res) {
       $res->id_to_field = [];
       $res->name_to_field = [];
       foreach ($res->fields as &$field) {
+        $schema->id_to_field[$field->id] = $field;
         $res->id_to_field[$field->id] = $field;
         $res->name_to_field[$field->name] = $field;
+      }
+    }
 
-        $field->res = $res;
-        if ($field->type == 'relation') {
-          $field->rel_res = $schema->id_to_res[$field->rel_res_id];
-          $field->rel_field = $schema->id_to_field[$field->rel_field_id];
-        }
+    // Fields: res, rel_res, rel_field
+    foreach ($schema->id_to_field as $field) {
+      $field->res = $schema->id_to_res[$field->resource_id];
+      if ($field->type == 'relation') {
+        $field->rel_res = $schema->id_to_res[$field->rel_res_id];
+        $field->rel_field = $schema->id_to_field[$field->rel_field_id];
       }
     }
   }
@@ -538,7 +546,9 @@ function op_link_imported_data($schema) {
 
 
 function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items) {
-  $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
+  $lab_id = op_getopt("res-{$res->id}-name");
+  $lab = collect($res->fields)->firstWhere('id', $lab_id)
+     ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
   $lab_img = collect($res->fields)->where('type', 'image')->first();
   $base_table = $res->is_product ? 'posts' : 'terms';
   $base_table_key = $res->is_product ? 'ID' : 'term_id';
@@ -875,7 +885,7 @@ function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_t
       'height' => ['_height'],
     ];
     foreach ($meta_map as $meta_name => $meta_keys) {
-      $price_field = @op_settings()->{"res-{$res->id}-{$meta_name}"};
+      $price_field = op_getopt("res-{$res->id}-{$meta_name}");
       if ($price_field && ($f = collect($res->fields)->firstWhere('id', $price_field))) {
         $fid = $f->id;
         if ($f->is_translatable) $fid.= "_".$schema->langs[0];

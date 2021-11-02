@@ -18,6 +18,8 @@ foreach ($prods as $prod) {
   echo $prod->val('name')."<br>\n";
   // get the name in a custom language
   echo $prod->val('name', 'zh')."<br>\n";
+  // access relation values (will return the value from the first relation)
+  echo $prod->val('category.name')."<br>\n";
   // Gets a file name
   echo $p->file('info_file')->name; // e.g. MK100.pdf
   // Gets the original image/file url
@@ -53,6 +55,10 @@ $prods = Op\Chapter::whereFieldIn('name', ['Boats', 'Spacecrafts'])->get()
 $prods = Op\Chapter::search('boa')->get()
 // Full text search only in some attributes
 $prods = Op\Chapter::search('boa', ['name', 'description'])->get()
+// Filter by related items (get products that have a color in the category "Dark colors")
+$prods = Op\Product::deepWhere('colors.category', function($q) {
+  $q->whereField('name', 'Dark colors');
+})->get();
 ```
 
 ## Relations
@@ -92,6 +98,33 @@ foreach ($prods as $p) {
     echo $p->val('name')."<br>";
   }
 }
+```
+
+### Schema - Resources & Fields
+The schema is the structure of the data, it is composed by an array of resources, which in turn contain an array of fields.
+
+```php
+// Iterate all available resources and fields
+foreach (op_schema()->resources as $res)
+  echo $res->name;
+  echo op_label($res); // resource label in current language
+  echo op_label($res, 'it'); // resource label in custom language
+
+  // Iterate resource fields
+  foreach ($res->fields as $field) {
+    echo $field->name;
+    echo $field->type; // string | text | int | real | file | image | ...
+    echo $field->unit; // cm | kg | W | ...
+    echo op_label($field); // field label in current language
+    echo op_label($field, 'it'); // field label in custom language
+  }
+}
+
+// Find resource by name
+$res = op_schema()->name_to_res['colors'];
+
+// Find field by name
+$field = $res->name_to_field['description'];
 ```
 
 

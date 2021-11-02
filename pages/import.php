@@ -161,7 +161,7 @@
         Data Importer
       </div>
       <div class="op-panel-btn" @click="panel_active='import-settings'"  v-if="next_schema" :active="panel_active=='import-settings'">
-        Product options
+        Import settings
       </div>
       <div class="op-panel-btn" @click="panel_active='file-importer'" v-if="schema" :active="panel_active=='file-importer'">
         File Importer
@@ -194,12 +194,12 @@
               <input class="regular-text code" v-model="settings_form.token">
             </td>
           </tr>
-          <tr>
+          <!-- <tr>
             <th><label>Custom routing path</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.shop_url">
             </td>
-          </tr>
+          </tr> -->
         </tbody>
       </table>
 
@@ -264,71 +264,83 @@
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
-      <div v-for="res in Object.values(next_schema.resources).filter(x => x.is_product)" >
+      <div v-for="res in Object.values(next_schema.resources)" >
         <br>
-        <h2>{{ res.label }}:</h2>
+        <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
           <tbody>
             <tr>
-              <th><label>Price field</label></th>
+              <td>Name field</td>
               <td>
-                <select v-model="settings_form[`res-${res.id}-price`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))"
+                <select style="width: 20rem" v-model="settings_form[`res-${res.id}-name`]">
+                  <option :value="undefined">-- auto --</option>
+                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'text', 'int', 'real'].includes(x.type))"
                     :value="field.id">{{ field.label }}</option>
                 </select>
               </td>
             </tr>
-            <tr>
-              <th><label>SKU field</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-sku`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'int'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <th><label>Weight</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-weight`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'weight'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <th><label>Length</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-length`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <th><label>Width</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-width`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <th><label>Height</label></th>
-              <td>
-                <select v-model="settings_form[`res-${res.id}-height`]">
-                  <option :value="undefined">-- not set --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
-                    :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
+            <template v-if="product_resources.includes(res)">
+              <tr>
+                <td>Price field</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>SKU field</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-sku`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['string', 'int'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Weight</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-weight`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'weight'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Length</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-length`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Width</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-width`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Height</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-height`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -523,9 +535,16 @@ new Vue({
     force_slug_regen: false,
     old_files: [],
     snapshots_list:null,
-    field_modal:null
+    field_modal:null,
+    server_config:null,
   },
   computed: {
+    product_resources () {
+      if (!this.next_schema) return []
+      if (!this.server_config) return []
+      return Object.values(this.next_schema.resources)
+        .filter(x => this.server_config.product_resources ? this.server_config.product_resources.includes(x.name) : x.is_product)
+    },
     form_unsaved () {
       return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)
     },
@@ -544,8 +563,7 @@ new Vue({
   created () {
     this.refreshSchema()    
     this.getSnapshotsList()
-   
-
+    this.getServerConfig()
   },
   methods: {
     saveSettings() {
@@ -687,6 +705,11 @@ new Vue({
     getSnapshotsList(){
        axios.post(`?op-api=snapshots-list`).then(res => {
        this.snapshots_list=res.data
+      })
+    },
+    getServerConfig(){
+       axios.post(`?op-api=server-config`).then(res => {
+       this.server_config=res.data
       })
     },
   },

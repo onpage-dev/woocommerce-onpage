@@ -126,6 +126,17 @@ trait MetaFunctions {
   }
 
   public function val($name, $lang = null) {
+	  $path = explode('.', $name);
+	  $name = array_pop($path);
+	  if (count($path)) {
+		  $relation = array_shift($path);
+		  $items = $this->$relation;
+		  if (is_null($items)) throw new \Exception("Relation not found: {$this->resource->label}.$relation");
+		  $item = $items->first();
+		  if (!$item) return null;
+		  $path[] = $name;
+		  return $item->val(implode('.', $path));
+	  }
 
     $field = @$this->resource->name_to_field[$name];
     if (!$field) return;
@@ -166,6 +177,29 @@ trait MetaFunctions {
 
   public function getResourceAttribute() {
     return op_schema()->id_to_res[$this->getResourceId()];
+  }
+  public function getField(string $field_name) : object {
+    return $this->resource->name_to_field($field_name);
+  }
+  public function getFieldLabel(string $field_name, string $lang = null) {
+    return op_label($this->getField(), $lang);
+  }
+  public function getFieldUnit(string $field_name, string $lang = null) {
+    return $this->getField()->unit;
+  }
+  public function getResourceLabel(string $field_name, string $lang = null) {
+    return op_label($this->getLabel(), $lang);
+  }
+
+  public function scopeDeepWhere($q, $path, callable $fn) {
+    if (is_string($path)) $path = explode('.', $path);
+    $field = array_shift($path);
+    if (empty($path)) {
+        return $fn($q);
+    }
+    return $q->whereHas($field, function($q) use ($path, $fn) {
+        $q->deepWhere($path, $fn);
+    });
   }
 
   public function meta() {
