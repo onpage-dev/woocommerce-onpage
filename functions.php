@@ -172,7 +172,7 @@ function op_settings($settings = null, $flush_cache = false) {
     foreach ((array) $settings as $key => $value) {
       update_option("on-page-$key", json_encode($value));
     }
-    
+
 
   } elseif ($cached_settings) {
     return $cached_settings;
@@ -221,7 +221,7 @@ function op_del_old_snapshots() {
 }
 
 function op_get_snapshots_list(){
-  return array_reverse(array_map('basename', glob(op_dir("/snapshots/*.json")))); 
+  return array_reverse(array_map('basename', glob(op_dir("/snapshots/*.json"))));
 }
 
 
@@ -329,6 +329,9 @@ function op_record($label, $end = false) {
   $steps[] = $message;
   if ( defined( 'WP_CLI' ) && WP_CLI ) {
     WP_CLI::line($message);
+  }
+  if (count($steps) == 1) {
+    @unlink(__DIR__."/storage/.log");
   }
   file_put_contents(__DIR__."/storage/.log", "$message\n", FILE_APPEND);
   return $steps;
@@ -449,16 +452,16 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   $schema = op_schema($schema_json);
 
 
-  
+
   $all_items = []; // [res][id][lang] -> wpid
   $new_items = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
-  
+
   $langs = op_langs();
   foreach ($schema->resources as $res_i => $res) {
     $data = $schema_json->resources[$res_i]->data;
     op_record("Importing $res->label (".count($data)." items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items); 
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items);
     op_record("completed $res->label");
   }
   op_record("Importing relations...");
@@ -478,18 +481,18 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   op_record('Creating php models');
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
   op_record('done');
-  
+
   op_record('Importing relations...');
   op_link_imported_data($schema);
   op_record('done');
-  
+
   op_record('Generating slugs...');
-  op_regenerate_items_slug($force_slug_regen ? $all_items : $new_items);
+  op_regenerate_import_slug($force_slug_regen ? $all_items : $new_items);
   op_record('done');
-  
+
   flush_rewrite_rules();
   op_record('permalinks flushed');
-  
+
   if (isset($snapshot_to_save)) {
     op_record('Storing snapshot...');
     op_save_snapshot_file($snapshot_to_save);
@@ -504,7 +507,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 function op_link_imported_data($schema) {
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
-  
+
 
   foreach ($relations as $resource_name => $parent_relation) {
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
@@ -519,7 +522,7 @@ function op_link_imported_data($schema) {
       do_action( 'wpml_switch_language', op_wpml_default() );
     }
     $terms = $class::with($parent_relation)->get();
-  
+
     foreach ($terms as $child_term) {
       foreach ($child_term->$parent_relation as $parent_term) {
         $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -542,6 +545,12 @@ function op_link_imported_data($schema) {
 
   // Reset category count
   delete_option("product_cat_children");
+}
+
+function op_locale_to_lang(string $locale) {
+  $locale = explode('-', $locale)[0];
+  $locale = explode('_', $locale)[0];
+  return $locale;
 }
 
 
@@ -586,13 +595,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     }
     $icl_primary_id = null;
     $icl_trid++;
-    
+
     // Create the item in each language - first language is the primary one
     foreach ($langs as $lang) {
       // op_record("- lang $lang");
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
-      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_{$lang}" : '') : null;
+      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang) : '') : null;
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
@@ -603,7 +612,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Look for the object if it exists already
       $object = @$current_objects["{$thing->id}-{$lang}"];
 
-      
+
       // Prepare data
       $data = !$res->is_product ? [
         'name' => $label,
@@ -715,7 +724,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         $all_meta = array_merge($all_meta, $base_meta);
         // op_record("- merged: ".count($all_meta));
       }
-      
+
       // If this is the primary language
       $icl_object_id = $res->is_product ? $object_id : $tax_id;
       $all_icl_object_ids[] = $icl_object_id;
@@ -726,7 +735,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       if ($is_primary) {
         // Mark item as primary - others are translations
         $icl_primary_id = $object_id;
-  
+
         // Recreate the metadata
 
         // Create icl translation
@@ -772,7 +781,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           '_thumbnail_id',
         ]);
     })->delete();
-  
+
   // Insert new meta
   foreach (array_chunk($all_meta, 2000) as $chunk) {
     DB::table($base_tablemeta)->insert($chunk);
@@ -786,7 +795,7 @@ function op_name_to_class(string $res_name) {
   return "\\Op\\$camel_name";
 }
 
-function op_regenerate_items_slug(array $items) {
+function op_regenerate_import_slug(array $items) {
   foreach ($items as $res_id => $new_res_items) {
     $wp_ids = [];
     foreach ($new_res_items as $op_id => $new_item_langs) {
@@ -795,27 +804,44 @@ function op_regenerate_items_slug(array $items) {
       }
     }
 
-
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     $class = op_name_to_class($res->name);
-    $items = $class::unlocalized()->get();
-
-    $start_locale = op_locale();
-    foreach ($items as $new_item) {
-      op_locale($new_item->getLang());
-      $new_slug = apply_filters('op_gen_slug', $new_item);
-      if ($new_slug === $new_item || is_null($new_slug) || !mb_strlen($new_slug)) {
-        continue;
-      }
-      if (!is_scalar($new_slug)) {
-        op_err("Invalid value returned to hook op_gen_slug: non-scalar", [
-          'returned_value' => $new_slug,
-        ]);
-      }
-      $new_item->setSlug($new_slug);
+    foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
+        $items = $class::unlocalized()->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
+        op_regenerate_items_slug($items);
     }
-    op_locale($start_locale);
   }
+}
+
+function op_regenerate_all_slugs() {
+  op_debug();
+  foreach (op_schema()->resources as $res) {
+    // if ($res->name != 'categorie') continue;
+    $class = op_name_to_class($res->name);
+    op_record("regenerating slugs for $class");
+    $class::unlocalized()->chunk(200, function($items) {
+      op_regenerate_items_slug($items);
+    });
+  }
+}
+
+function op_regenerate_items_slug($items) {
+
+  $start_locale = op_locale();
+  foreach ($items as $new_item) {
+    op_locale($new_item->getLang());
+    $new_slug = apply_filters('op_gen_slug', $new_item);
+    if ($new_slug === $new_item || is_null($new_slug) || !mb_strlen($new_slug)) {
+      continue;
+    }
+    if (!is_scalar($new_slug)) {
+      op_err("Invalid value returned to hook op_gen_slug: non-scalar", [
+        'returned_value' => $new_slug,
+      ]);
+    }
+    $new_item->setSlug($new_slug);
+  }
+  op_locale($start_locale);
 }
 
 function op_import_snapshot_relations($schema, $json, array $all_items) {
@@ -900,7 +926,7 @@ function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_t
   }
 
   return $meta;
-} 
+}
 
 function op_gen_model(object $schema, object $res) {
   $camel_name = op_snake_to_camel($res->name);
@@ -1013,7 +1039,7 @@ function op_list_files(bool $return_map = false) {
       }
     }
     if (empty($media_fields)) continue;
-    
+
     $res_files_query->whereIn('meta_key', $media_fields);
 
     $res_files = $res_files_query->get()
@@ -1093,7 +1119,7 @@ function op_import_file(object $file) {
   $final_path = op_file_path($token);
   $tmp_path = sys_get_temp_dir()."/$token";
   $url = op_endpoint()."/storage/$token";
-  
+
   set_time_limit(0);
   $max_tries = 5;
   while (true) {
@@ -1120,7 +1146,7 @@ function op_import_file(object $file) {
   }
 
   rename($tmp_path, $final_path);
-  
+
   $ret = [
     'url' => $url,
     'path' => $final_path,
@@ -1198,7 +1224,12 @@ function op_request(string $name = null) {
 
 function op_locale($set = null) {
   static $locale = null;
-  if (!$locale || $set) $locale = $set ?: substr(get_locale(), 0, 2);
+  if ($set) {
+    $locale = $set;
+  }
+  if (!$locale) {
+    $locale = defined('ICL_LANGUAGE_CODE') ? ICL_LANGUAGE_CODE : get_locale();
+  }
   return $locale;
 }
 
@@ -1225,9 +1256,12 @@ function op_prod_res(WC_Product $product) {
 }
 
 function op_field_to_meta_key($field, $lang = null) {
-  if (!$lang) $lang = op_locale();
   $key = "op_{$field->name}";
-  if ($field->is_translatable) $key.= "_$lang";
+  if ($field->is_translatable) {
+    if (!$lang) $lang = op_locale();
+    $lang = op_locale_to_lang($lang);
+    $key.= "_$lang";
+  }
   return $key;
 }
 
@@ -1420,7 +1454,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
           ->whereIn('element_id', $post_ids)
           ->delete();
       }
-      
+
       DB::table('postmeta')
         ->whereIn('post_id', $post_ids)
         ->delete();
@@ -1437,7 +1471,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
         ->where('taxonomy', 'product_cat')
         ->select(['term_taxonomy_id', 'term_id'])
         ->limit(2000);
-      
+
       if ($term_scope) {
         $query->whereHas('term', function($query) use ($term_scope) {
           $query->unfiltered();

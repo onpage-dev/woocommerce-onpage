@@ -3,7 +3,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.0.40
+ * Version: 1.0.41
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage
@@ -90,10 +90,13 @@ add_filter('init', function() {
 
       case 'upgrade':
         op_ret(op_upgrade());
-      
+
+      case 'regen-slugs':
+        op_ret(op_regenerate_all_slugs());
+
       case 'snapshots-list':
         op_ret(op_get_snapshots_list());
-      
+
       case 'reset-data':
         op_ret(op_reset_data());
 

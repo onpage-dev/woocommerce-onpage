@@ -21,4 +21,7 @@ class Post extends Model {
     $q->where('post_name', $slug);
   }
 
+  public function icl_translation() {
+    return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', 'post_product');
+  }
 }

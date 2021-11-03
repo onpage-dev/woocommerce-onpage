@@ -101,11 +101,22 @@ trait MetaFunctions {
 
   function slugExists($slug) {
     if ($this->is_post) {
-      return Post::query()->unfiltered()->where(self::$slug_field, $slug)->exists();
+      $query = Post::query()->unfiltered()->where(self::$slug_field, $slug);
+      if (op_wpml_enabled()) {
+        $query->whereHas('icl_translation', function($q) {
+          $q->where('language_code', op_locale());
+        });
+      }
+      return $query->exists();
     } else {
       $query = Term::query()->unfiltered()->where(self::$slug_field, $slug)
       ->whereHas('taxonomies', function($q) {
          $q->where('taxonomy', 'product_cat');
+         if (op_wpml_enabled()) {
+           $q->whereHas('icl_translation', function($q) {
+             $q->where('language_code', op_locale());
+           });
+         }
       });
       return $query->exists();
     }
@@ -114,7 +125,7 @@ trait MetaFunctions {
   function setSlug($slug) {
     if (!$slug) return null;
     $current_slug = $this->getSlug();
-    
+
     $slug = sanitize_title_with_dashes($slug);
     if ($slug === $current_slug) return $slug;
     $slug = op_slug($slug, $this, $current_slug);
