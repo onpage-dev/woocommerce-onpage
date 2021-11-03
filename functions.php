@@ -1113,13 +1113,8 @@ function op_import_files(array $files) {
   }
   return $ret;
 }
-
-function op_import_file(object $file) {
-  $token = $file->info->token;
-  $final_path = op_file_path($token);
-  $tmp_path = sys_get_temp_dir()."/$token";
-  $url = op_endpoint()."/storage/$token";
-
+function op_download_file(string $url, string $final_path) {
+  $tmp_path = sys_get_temp_dir()."/".rand(1000000, 9999999);
   set_time_limit(0);
   $max_tries = 5;
   while (true) {
@@ -1154,6 +1149,12 @@ function op_import_file(object $file) {
   ];
   return $ret['bytes'];
 }
+function op_import_file(object $file) {
+  $token = $file->info->token;
+  $final_path = op_file_path($token);
+  $url = op_endpoint()."/storage/$token";
+  op_download_file($url, $final_path);
+}
 
 
 
@@ -1177,7 +1178,7 @@ function op_resize($src_path, $dest_path, $params = []) {
 function op_upgrade() {
   $zip_path = __DIR__.'/storage/upgrade.zip';
   $source = 'https://github.com/onpage-dev/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
-  $ok = copy($source, $zip_path);
+  $ok = op_download_file($source, $zip_path);
   if (!$ok) op_err('Cannot download update from github');
   require_once(ABSPATH .'/wp-admin/includes/file.php');
   WP_Filesystem();
@@ -1196,7 +1197,7 @@ function op_set_post_image($post_id, $path, $filename){
   } else {
     $file = $upload_dir['basedir'] . '/' . $filename;
   }
-  copy($path, $file);
+  op_download_file($path, $file);
 
 
   $wp_filetype = wp_check_filetype($filename, null );
