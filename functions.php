@@ -993,15 +993,21 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
       if ($contain) {
         $target_path.= '-contain';
       }
-      $target_path.= '.'.$file->ext;
+
+      $extension = defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
+      $target_path.= '.'.$extension;
       if (!is_file($target_path)) {
         $opts = [
           'crop' => !$contain,
-          'format' => $file->ext,
+          'format' => $extension,
         ];
         if (is_numeric($w)) $opts['width'] = $w;
         if (is_numeric($h)) $opts['height'] = $h;
-        if (!op_resize($path, $target_path, $opts)) {
+        try {
+          if (!op_resize($path, $target_path, $opts)) {
+            return op_file_url($file);
+          }
+        } catch (\Exception $e) {
           return op_file_url($file);
         }
       }
