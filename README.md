@@ -56,6 +56,9 @@ $prods = Op\Chapter::search('boa')->get()
 // Full text search only in some attributes
 $prods = Op\Chapter::search('boa', ['name', 'description'])->get()
 // Filter by related items (get products that have a color in the category "Dark colors")
+$prods = Op\Product::whereField('colors.category.name', 'Dark colors')->get();
+
+// Use deep where to customize the final query
 $prods = Op\Product::deepWhere('colors.category', function($q) {
   $q->whereField('name', 'Dark colors');
 })->get();

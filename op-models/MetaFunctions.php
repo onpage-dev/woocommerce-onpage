@@ -202,13 +202,13 @@ trait MetaFunctions {
     return op_label($this->getLabel(), $lang);
   }
 
-  public function scopeDeepWhere($q, $path, callable $fn) {
+  public function scopeDeepWhere($q, $path, callable $fn, bool $is_or = false) {
     if (is_string($path)) $path = explode('.', $path);
-    $field = array_shift($path);
     if (empty($path)) {
         return $fn($q);
     }
-    return $q->whereHas($field, function($q) use ($path, $fn) {
+    $field = array_shift($path);
+    return $q->{$is_or ? 'orWhereHas' : 'whereHas'}($field, function($q) use ($path, $fn) {
         $q->deepWhere($path, $fn);
     });
   }
@@ -233,33 +233,59 @@ trait MetaFunctions {
     $q->where('op_res', $res_id);
   }
 
-  public static function scopeWhereField($q, string $name, $op, $value = null) {
-    $q->whereHas('meta', function($q) use ($name, $op, $value) {
-      $lang = op_locale();
-      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
-        ->where('meta_value', $op, $value);
-    });
+  public static function scopeWhereField($q, string $name, $op, $value = null, bool $is_or = false) {
+    if (is_null($value) && !in_array("$op", ['=', '<>'])) {
+      $value = $op;
+      $op = '=';
+    }
+    $path = explode('.', $name);
+    if (count($path) > 1) {
+      $field_name = array_pop($path); // remove last piece from path (eg. we get "name" from "categories.products.name")
+      $q->{$is_or ? 'orDeepWhere' : 'deepWhere'}($path, function($q) use ($field_name, $op, $value) {
+        $q->whereField($field_name, $op, $value);
+      });
+    } else {
+      $field_name = $path[0];
+      $field_type = 'int';
+      if ($field_name != '_id') {
+        $field = self::fieldByName($field_name);
+        if (!$field) {
+          return;
+        }
+        $field_type = $field->type;
+      }
+
+      // Correct clause
+      $must_exist = true;
+      if ($field_type == 'bool' && $op == '=' && !$value) {
+        $must_exist = false;
+        $value = true;
+      }
+
+      $method = $must_exist
+        ? ($is_or ? 'orWhereHas' : 'whereHas')
+        : ($is_or ? 'orWhereDoesntHave' : 'whereDoesntHave');
+      $q->$method('meta', function($q) use ($field_name, $op, $value) {
+        $lang = op_locale();
+        $q->where('meta_key', self::fieldToMetaKey($field_name, $lang));
+        if ($op == 'in') {
+          $q->whereIn('meta_value', $value);
+        } elseif ($op == 'not in') {
+          $q->whereNotIn('meta_value', $value);
+        } else {
+          $q->where('meta_value', $op, $value);
+        }
+      });
+    }
   }
   public static function scopeWhereFieldIn($q, string $name, array $value) {
-    $q->whereHas('meta', function($q) use ($name, $value) {
-      $lang = op_locale();
-      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
-        ->whereIn('meta_value', $value);
-    });
+    $q->whereField($name, 'in', $value);
   }
   public static function scopeOrWhereField($q, string $name, $op, $value = null) {
-    $q->orWhereHas('meta', function($q) use ($name, $op, $value) {
-      $lang = op_locale();
-      $q->where('meta_key', self::fieldToMetaKey($name, $lang))
-        ->where('meta_value', $op, $value);
-    });
+    $q->whereField($name, $op, $value, true);
   }
   public static function scopeOrWhereFieldIn($q, string $name, array $value) {
-    $q->orWhereHas('meta', function ($q) use ($name, $value) {
-        $lang = op_locale();
-        $q->where('meta_key', self::fieldToMetaKey($name, $lang))
-        ->whereIn('meta_value', $value);
-    });
+    $q->whereField($name, 'in', $value, true);
   }
 
   public static function scopePluckField($q, $name, $lang = null) {
@@ -301,12 +327,23 @@ trait MetaFunctions {
     return $t->primaryKey;
   }
 
-  public static function fieldToMetaKey(string $name, string $lang = null) {
+  public static function fieldByName(string $name) :? object {
     $res = self::getResource();
-    $f = @$res->name_to_field[$name];
+    return $res->name_to_field[$name] ?? null;
+  }
+
+  public static function fieldToMetaKey(string $name, string $lang = null) {
+    if ($name === '_id') {
+      return 'op_id*';
+    }
+    if ($name === '_res') {
+      return 'op_res*';
+    }
+    $f = self::fieldByName($name);
     if (!$f) {
+      $res = self::getResource();
+      trigger_error("Cannot find field $name in $res->name", E_USER_WARNING);
       return null;
-      // throw new \Exception("Cannot find field $name");
     }
     return op_field_to_meta_key($f, $lang);
   }
