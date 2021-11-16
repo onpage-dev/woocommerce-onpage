@@ -731,7 +731,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       if (!$icl_object_id) {
         op_err("cannot get taxonomy id: $object_id-$tax_id");
       }
-      $all_meta = array_merge($all_meta, op_generate_data_meta($res, $thing, $object_id, $field_map, $base_tablemeta_ref));
+      $all_meta = array_merge($all_meta, op_generate_data_meta($db, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
       if ($is_primary) {
         // Mark item as primary - others are translations
         $icl_primary_id = $object_id;
@@ -776,9 +776,17 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     ->where(function($q) {
       $q->where('meta_key', 'like', 'op\\_%')
         ->orWhereIn('meta_key', [
-          '_sale_price', '_regular_price', '_price',
-          '_sku', '_weight', '_width', '_length', '_height',
-          '_thumbnail_id',
+            '_price', // do not remove this line
+            '_regular_price',
+            '_sale_price',
+            '_sale_price_dates_from',
+            '_sale_price_dates_to',
+            '_sku',
+            '_weight',
+            '_width',
+            '_length',
+            '_height',
+            '_thumbnail_id',
         ]);
     })->delete();
 
@@ -881,11 +889,11 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
   }
 }
 
-function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
+function op_generate_data_meta($schema, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
   $meta = [];
   // Fields
-  foreach ($thing->fields as $fid_lang => $values) {
-    $e = explode('_', $fid_lang);
+  foreach ($thing->fields as $field_hc_name => $values) {
+    $e = explode('_', $field_hc_name);
     $f = $field_map[$e[0]];
     $lang = @$e[1];
     if (!$f->is_multiple) {
@@ -903,25 +911,47 @@ function op_generate_data_meta($res, $thing, int $object_id, $field_map, $base_t
   // Append the price and other woocommerce metadata
   if ($res->is_product) {
     $meta_map = [
-      'price' => ['_sale_price', '_regular_price', '_price'],
-      'sku' => ['_sku'],
-      'weight' => ['_weight'],
-      'width' => ['_width'],
-      'length' => ['_length'],
-      'height' => ['_height'],
+      'price' => '_regular_price',
+      'discounted-price' => '_sale_price',
+      'discounted-start-date' => '_sale_price_dates_from',
+      'discounted-end-date' => '_sale_price_dates_to',
+      'sku' => '_sku',
+      'weight' => '_weight',
+      'width' => '_width',
+      'length' => '_length',
+      'height' => '_height',
     ];
-    foreach ($meta_map as $meta_name => $meta_keys) {
-      $price_field = op_getopt("res-{$res->id}-{$meta_name}");
-      if ($price_field && ($f = collect($res->fields)->firstWhere('id', $price_field))) {
+
+    // Fill values using the mapping above
+    $values = [];
+    foreach ($meta_map as $meta_name => $meta_key) {
+      $values[$meta_key] = null;
+      $op_fid = op_getopt("res-{$res->id}-{$meta_name}");
+      if ($op_fid && ($f = collect($res->fields)->firstWhere('id', $op_fid))) {
         $fid = $f->id;
         if ($f->is_translatable) $fid.= "_".$schema->langs[0];
         $val = @$thing->fields->$fid;
-        if ($val !== null) {
-          foreach ($meta_keys as $key) {
-            $meta[] = [ 'post_id' => $object_id, 'meta_value' => $val, 'meta_key' => $key ];
-          }
+        if (!is_null($val)) {
+          $values[$meta_key] = $val;
         }
       }
+    }
+
+    $sale_period_active = true;
+    if ($values['_sale_price_dates_from']) {
+      $values['_sale_price_dates_from'] = strtotime($values['_sale_price_dates_from']);
+      if (time() < $values['_sale_price_dates_from']) $sale_period_active = false;
+    }
+    if ($values['_sale_price_dates_to']) {
+      $values['_sale_price_dates_to'] = strtotime($values['_sale_price_dates_to']);
+      if (time() > $values['_sale_price_dates_to']) $sale_period_active = false;
+    }
+    // Calculate final (real) price
+    $values['_price'] = $values['_sale_price'] && $sale_period_active ? $values['_sale_price'] : $values['_regular_price'];
+
+    foreach ($values as $meta_key => $value) {
+      if (is_null($value)) continue;
+      $meta[] = [ 'post_id' => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key ];
     }
   }
 

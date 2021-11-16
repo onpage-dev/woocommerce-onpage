@@ -281,11 +281,41 @@
             </tr>
             <template v-if="product_resources.includes(res)">
               <tr>
-                <td>Price field</td>
+                <td>Price</td>
                 <td>
                   <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
                     <option :value="undefined">-- not set --</option>
                     <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Discounted price (optional)</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-price`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Discount start date</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-start-date`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['date'].includes(x.type))"
+                      :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>Discount end date</td>
+                <td>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-end-date`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['date'].includes(x.type))"
                       :value="field.id">{{ field.label }}</option>
                   </select>
                 </td>
