@@ -12,7 +12,12 @@ You can view the models generated for your project in the plugin import page. Fo
 ## Selecting data
 For instance, assuming you want to select all your products (codenamed `Product`), you can run:
 ```php
-$prods = Op\Product::all();
+$prods = Op\Product::all(); // a collection of products
+```
+
+### Getting record values
+You can get each record values through the `->val(field_name, language)` function:
+```php
 foreach ($prods as $prod) {
   // get the name in the current language
   echo $prod->val('name')."<br>\n";
@@ -30,8 +35,16 @@ foreach ($prods as $prod) {
   echo '<img src="'. $p->file('cover')->thumb(200, 100) .'">'
   // Generate thumbnail containing (out-zooming) the image
   echo '<img src="'. $p->file('cover')->thumb(200, 100, true) .'">'
-}
 ```
+
+### Thumbnails
+Thumbnails will by default use the original file format,
+but you can force png, jpg, or webp using the `OP_THUMBNAIL_FORMAT` constant, like so:
+```php
+define('OP_THUMBNAIL_FORMAT', 'webp');
+```
+
+### 
 You can use the `pluckField` method to get the field from the query.
 ```php
 $prods = Op\Product::pluckField('name'); // ['Product A', 'Product B', 'Product C']
