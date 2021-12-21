@@ -247,6 +247,13 @@ function op_label($res, string $lang = null) {
   if (!$lang) $lang = op_locale();
   return $res->labels->$lang ?? $res->labels->{op_schema()->default_lang} ?? '?';
 }
+function op_ignore_user_scopes(bool $set = null) {
+  static $safe = false;
+  if (!is_null($set)) {
+    $safe = $set;
+  }
+  return $safe;
+}
 function op_stored_schema() {
   return op_getopt('schema') ?? op_read_json('schema');
 }
@@ -651,7 +658,15 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Create or update the object
       if ($object) {
         $object_id = $object->$base_table_key;
-        DB::table($base_table)->where($base_table_key, $object_id)->update($data);
+        $data_to_update = [];
+        foreach ($data as $column => $new_value) {
+          if ($object->$column != $new_value) {
+            $data_to_update[$column] = $new_value;
+          }
+        }
+        if (count($data_to_update)) {
+          DB::table($base_table)->where($base_table_key, $object_id)->update($data_to_update);
+        }
         // op_record("- updated");
       } else {
         $object_id = DB::table($base_table)->insertGetId($data);
@@ -967,14 +982,8 @@ function op_gen_model(object $schema, object $res) {
   $code.= "class $camel_name extends \\OpLib\\$extends {\n";
   $code.= "  public static function boot() {
     parent::boot();
-    self::addGlobalScope('opres', function(\$q) {
-      \$q->whereRes($res->id);
-    });
-    self::addGlobalScope('oplang', function(\$q) {
+    self::addGlobalScope('_op-lang', function(\$q) {
       \$q->localized();
-    });
-    self::addGlobalScope('opmeta', function(\$q) {
-      \$q->loaded();
     });
   }\n";
   $code.= "  public static function getResource() {

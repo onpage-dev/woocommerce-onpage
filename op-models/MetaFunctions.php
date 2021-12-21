@@ -9,16 +9,35 @@ trait MetaFunctions {
   static $only_reserverd = false;
   public static function boot() {
     parent::boot();
-    self::addGlobalScope('op', function($q) {
+
+    // Only get terms and products which have On Page metadata
+    self::addGlobalScope('_op-owned', function($q) {
       $q->owned();
     });
-    self::addGlobalScope('opmeta', function($q) {
+
+    // Load metadata (field values)
+    self::addGlobalScope('_op-loadmeta', function($q) {
       $q->loaded(self::$only_reserverd);
     });
   }
 
+  static function addGlobalScope($name,  $filter = NULL) {
+    if (!is_string($name)) {
+      throw new \Exception("Invalid scope name, must be string");
+    }
+    if (!is_callable($filter)) {
+      throw new \Exception("Invalid scope filter for $name, must be callable");
+    }
+    $is_reserved = strpos($name, '_op-')===0;
+    parent::addGlobalScope($name, function($query) use ($is_reserved, $filter) {
+      if ($is_reserved || !op_ignore_user_scopes()) {
+        $filter($query);
+      }
+    });
+  }
+
   static function scopeUnfiltered($q) {
-    $q->withoutGlobalScope('op');
+    $q->withoutGlobalScope('_op-owned');
   }
   static function scopeWhereMeta($q, string $key, $operator, $value = null) {
     if (is_null($value)) {
@@ -26,7 +45,7 @@ trait MetaFunctions {
       $operator = '=';
     }
     if (is_array($value) && $operator != '=') {
-      throw new Exception("Cannot apply operator $operator for array value");
+      throw new \Exception("Cannot apply operator $operator for array value");
     }
     $q->whereHas('meta', function($q) use ($key, $operator, $value) {
       $q->where('meta_key', $key);
@@ -58,6 +77,9 @@ trait MetaFunctions {
     });
     $q->whereHas('meta', function($q) {
       $q->where('meta_key', 'op_res*');
+      if (method_exists(static::class, 'getResource')) {
+        $q->where('meta_value', self::getResource()->id);
+      }
     });
     $q->whereHas('meta', function($q) {
       $q->where('meta_key', 'op_lang*');
@@ -89,10 +111,10 @@ trait MetaFunctions {
     $q->whereLang($lang);
   }
   function scopeUnlocalized($q) {
-    $q->withoutGlobalScope('oplang');
+    $q->withoutGlobalScope('_op-lang');
   }
   function scopeUnowned($q) {
-    $q->withoutGlobalScope('op');
+    $q->withoutGlobalScope('_op-owned');
   }
 
   function getTableWithoutPrefix() {

@@ -2,6 +2,10 @@
 
 class ONPAGE_CLI
 {
+  function __construct()
+  {
+    op_ignore_user_scopes(true);
+  }
 
   public function import($args, $assoc_args)
   {
