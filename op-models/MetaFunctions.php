@@ -148,8 +148,6 @@ trait MetaFunctions {
     if (!$slug) return null;
     $current_slug = $this->getSlug();
 
-    $slug = sanitize_title_with_dashes($slug);
-    if ($slug === $current_slug) return $slug;
     $slug = op_slug($slug, $this, $current_slug);
     if ($slug === $current_slug) return $slug;
     $this->update([

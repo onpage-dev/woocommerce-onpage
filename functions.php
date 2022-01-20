@@ -409,7 +409,7 @@ function op_langs() {
 }
 
 function op_slug(string $title, $base_class, string $old_slug = null) {
-  $slug = sanitize_title_with_dashes($title);
+  $slug = sanitize_title($title);
 
   $suffix = '';
   while ($old_slug != $slug.$suffix && $base_class->slugExists($slug.$suffix)) {
