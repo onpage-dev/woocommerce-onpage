@@ -7,6 +7,8 @@ if (!defined( 'ABSPATH' )) exit;
 
 require_once __DIR__.'/vendor/autoload.php';
 // use Illuminate\Database\Capsule\Manager as DB;
+
+use OpLib\Post;
 use \WeDevs\ORM\Eloquent\Facades\DB;
 
 
@@ -475,14 +477,13 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   op_import_snapshot_relations($schema, $schema_json, $all_items);
   op_record("done");
 
-  // Delete old data
-  op_record('Deleting outdated products and categories...');
-  op_reset_data(function($q) use ($imported_at) {
-    $q->isOutdated($imported_at);
-  }, function($q) use ($imported_at) {
-    $q->isOutdated($imported_at);
-  });
-  op_record('done');
+  op_record('Deleting old categories...');
+  $disabled_count = op_disable_old_categories($all_items);
+  op_record("deleted $disabled_count categories");
+
+  op_record('Disabling old products...');
+  $disabled_count = op_disable_old_products($all_items);
+  op_record("disabled $disabled_count products");
 
 
   op_record('Creating php models');
@@ -509,6 +510,43 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 
   op_setopt('last_import_token', $token_to_import);
   do_action('op_import_completed');
+}
+
+function op_disable_old_products(array $imported_items) :int {
+  $posts_to_remove = OpLib\Post::pluck('ID')->flip();
+  foreach ($imported_items as $res_id => $res_items) {
+    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
+    if (!$res->is_product) continue;
+    foreach ($res_items as $op_id => $new_item_langs) {
+      foreach ($new_item_langs as $lang => $wp_id) {
+        $posts_to_remove->forget($wp_id);
+      }
+    }
+  }
+
+  // Set posts as drafts
+  foreach ($posts_to_remove->keys()->chunk(1000) as $chunk) {
+    OpLib\Post::whereIn('ID', $chunk)->update([
+      'post_status' => 'draft',
+    ]);
+  }
+  return $posts_to_remove->count();
+}
+function op_disable_old_categories(array $imported_items) :int {
+  $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
+  foreach ($imported_items as $res_id => $res_items) {
+    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
+    if ($res->is_product) continue;
+    foreach ($res_items as $op_id => $new_item_langs) {
+      foreach ($new_item_langs as $lang => $wp_id) {
+        $tax_to_remove->forget($wp_id);
+      }
+    }
+  }
+
+  // Set posts as drafts
+  op_delete_taxonomies_and_terms($tax_to_remove);
+  return $tax_to_remove->count();
 }
 
 function op_link_imported_data($schema) {
@@ -1487,7 +1525,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
     while (true) {
       $query = \OpLib\Post::query()
         ->unfiltered()
-        ->where('post_type', 'product')
+        ->withAnyStatus()
         ->limit(2000);
       if ($post_scope) {
         $post_scope($query);
@@ -1514,7 +1552,6 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
     // Delete terms and taxonomies
     while (true) {
       $query = OpLib\TermTaxonomy::query()
-        ->where('taxonomy', 'product_cat')
         ->select(['term_taxonomy_id', 'term_id'])
         ->limit(2000);
 
@@ -1528,28 +1565,32 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
 
       if ($taxonomies->isEmpty()) break;
       op_record("Terms to delete: ".$taxonomies->pluck('term_id')->implode('-'));
-      if ($wpml_enabled) {
-        DB::table('icl_translations')
-          ->where('element_type', 'tax_product_cat')
-          ->whereIn('element_id', $taxonomies->pluck('term_taxonomy_id'))
-          ->delete();
-      }
-
-      DB::table('term_taxonomy')
-        ->whereIn('term_taxonomy_id', $taxonomies->pluck('term_taxonomy_id'))
-        ->delete();
-
-      DB::table('termmeta')
-        ->whereIn('term_id', $taxonomies->pluck('term_id'))
-        ->delete();
-
-      DB::table('terms')
-        ->whereIn('term_id', $taxonomies->pluck('term_id'))
-        ->delete();
+      op_delete_taxonomies_and_terms($taxonomies);
     }
   } catch (\Throwable $e) {
     op_err("Something went wrong: {$e->getMessage()}", [
       'exception' => $e,
     ]);
   }
+}
+
+function op_delete_taxonomies_and_terms($taxonomies) {
+  if (op_wpml_enabled()) {
+    DB::table('icl_translations')
+      ->where('element_type', 'tax_product_cat')
+      ->whereIn('element_id', $taxonomies->pluck('term_taxonomy_id'))
+      ->delete();
+  }
+
+  DB::table('term_taxonomy')
+    ->whereIn('term_taxonomy_id', $taxonomies->pluck('term_taxonomy_id'))
+    ->delete();
+
+  DB::table('termmeta')
+    ->whereIn('term_id', $taxonomies->pluck('term_id'))
+    ->delete();
+
+  DB::table('terms')
+    ->whereIn('term_id', $taxonomies->pluck('term_id'))
+    ->delete();
 }

@@ -17,6 +17,27 @@ class Post extends Model {
   protected static $meta_class = PostMeta::class;
   protected static $slug_field = 'post_name';
 
+  public static function boot() {
+    parent::boot();
+
+    self::addGlobalScope('_op-post-type-product', function($q) {
+      $q->where('post_type', 'product');
+    });
+    self::addGlobalScope('_op-post-status-publish', function($q) {
+      $q->where('post_status', 'publish');
+    });
+
+    self::metaBoot();
+  }
+
+  public function scopeWithStatus($q, string $status = null) {
+    $this->withoutGlobalScope('_op-post-status-publish');
+    $q->where('post_status', $status);
+  }
+  public function scopeWithAnyStatus($q) {
+    $this->withoutGlobalScope('_op-post-status-publish');
+  }
+
   public function scopeSlug($q, $slug) {
     $q->where('post_name', $slug);
   }

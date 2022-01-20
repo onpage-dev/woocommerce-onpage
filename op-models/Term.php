@@ -17,6 +17,12 @@ class Term extends Model {
   protected static $meta_class = TermMeta::class;
   protected static $slug_field = 'slug';
 
+  public static function boot() {
+    parent::boot();
+
+    self::metaBoot();
+  }
+
   public function scopeSlug($q, $slug) {
     $q->where('slug', $slug);
   }

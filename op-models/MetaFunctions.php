@@ -7,9 +7,7 @@ if (!defined('OP_PLUGIN')) die(400);
 
 trait MetaFunctions {
   static $only_reserverd = false;
-  public static function boot() {
-    parent::boot();
-
+  public static function metaBoot() {
     // Only get terms and products which have On Page metadata
     self::addGlobalScope('_op-owned', function($q) {
       $q->owned();
@@ -133,7 +131,6 @@ trait MetaFunctions {
     } else {
       $query = Term::query()->unfiltered()->where(self::$slug_field, $slug)
       ->whereHas('taxonomies', function($q) {
-         $q->where('taxonomy', 'product_cat');
          if (op_wpml_enabled()) {
            $q->whereHas('icl_translation', function($q) {
              $q->where('language_code', op_locale());
