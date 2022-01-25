@@ -267,6 +267,8 @@ This is useful because you can run this command in a cron every minute, and it w
 
 If you want to ovverride this behaviour and import data anyway, you can add use the `wp onpage import --force` command, wich will re-import all your data.
 
+You can also force the regeneration of a new snapshot before importing, which would be `wp onpage import --regen-snapshot`.
+
 If you are on __development__ and want the existing slugs to be updated as well, you can add the `--force-slug-regen` flag to the command.
 
 ## Other wp-cli commands:
