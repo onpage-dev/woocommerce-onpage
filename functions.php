@@ -668,8 +668,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'op_order' => $thing_i,
       ] : [
         'post_author' => 1,
-        'post_date' => @$thing->created_at ?: date('Y-m-d H:i:s'),
-        'post_date_gmt' => @$thing->created_at ?: date('Y-m-d H:i:s'),
+        'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
+        'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
         'post_content' => '',
         'post_title' => $label,
         'post_excerpt' => '',
@@ -682,8 +682,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
         'to_ping' => '',
         'pinged' => '',
-        'post_modified' => $imported_at,
-        'post_modified_gmt' => $imported_at,
+        'post_modified' => $object ? $object->post_modified : $imported_at,
+        'post_modified_gmt' => $object ? $object->post_modified_gmt : $imported_at,
         'post_content_filtered' => '',
         'post_parent' => 0,
         'guid' => '',
@@ -703,6 +703,10 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           }
         }
         if (count($data_to_update)) {
+          if ($res->is_product) {
+            $data_to_update['post_modified'] = $imported_at;
+            $data_to_update['post_modified_gmt'] = $imported_at;
+          }
           DB::table($base_table)->where($base_table_key, $object_id)->update($data_to_update);
         }
         // op_record("- updated");
