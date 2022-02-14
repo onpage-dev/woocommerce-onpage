@@ -121,7 +121,7 @@ trait MetaFunctions {
 
   function slugExists($slug) {
     if ($this->is_post) {
-      $query = Post::query()->unfiltered()->where(self::$slug_field, $slug);
+      $query = Post::query()->withoutGlobalScopes()->where(self::$slug_field, $slug);
       if (op_wpml_enabled()) {
         $query->whereHas('icl_translation', function($q) {
           $q->where('language_code', op_locale());
