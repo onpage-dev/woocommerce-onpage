@@ -43,6 +43,6 @@ class Post extends Model {
   }
 
   public function icl_translation() {
-    return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', 'post_product');
+    return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', \DB::raw('CONCAT("post_", post_type)'));
   }
 }
