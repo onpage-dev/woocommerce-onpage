@@ -379,4 +379,16 @@ trait MetaFunctions {
   public function getSlug() {
     return $this->attributes[self::$slug_field];
   }
+
+
+  function getRelatedItems(string $path) {
+    $path = explode('.', $path);
+    $ret = collect([$this]);
+    foreach ($path as $field) {
+      $ret = $ret->flatMap(function($thing) use ($field) {
+        return $thing->$field;
+      });
+    }
+    return $ret;
+  }
 }
