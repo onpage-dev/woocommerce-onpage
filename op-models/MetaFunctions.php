@@ -177,6 +177,18 @@ trait MetaFunctions {
     return $field->is_multiple ? $values->all() : $values->first();
   }
 
+  function getValues(string $lang = null) {
+    $ret = [];
+    foreach ($this->resource->fields as $field) {
+      if ($field->type == 'relation') {
+        $ret[$field->name] = $this->{$field->name}->pluck('id')->all();
+      } else {
+        $ret[$field->name] = $this->val($field->name, $lang);
+      }
+    }
+    return $ret;
+  }
+
   public function escval($name, $lang = null) {
     $ret = $this->val($name, $lang);
     if (is_string($ret)) {
