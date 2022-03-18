@@ -3,7 +3,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.0.51
+ * Version: 1.0.52
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage

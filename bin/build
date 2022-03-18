@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 rm -f woocommerce-onpage.zip
-php7.4 $(which composer) install
+#php7.4 $(which composer) install
 zip -9 \
 --exclude '*.git*' \
 --exclude './woocommerce-onpage.zip' \
