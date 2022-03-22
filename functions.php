@@ -1200,7 +1200,7 @@ function op_import_files(array $files) {
   }
   return $ret;
 }
-function op_download_file(string $url, string $final_path) {
+function op_download_file(string $url, string $final_path) : int {
   $tmp_path = sys_get_temp_dir()."/".rand(1000000, 9999999);
   set_time_limit(0);
   $max_tries = 5;
@@ -1240,7 +1240,7 @@ function op_import_file(object $file) {
   $token = $file->info->token;
   $final_path = op_file_path($token);
   $url = op_endpoint()."/storage/$token";
-  op_download_file($url, $final_path);
+  return op_download_file($url, $final_path);
 }
 
 
