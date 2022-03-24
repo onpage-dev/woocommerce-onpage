@@ -37,7 +37,19 @@ foreach ($prods as $prod) {
   echo '<img src="'. $p->file('cover')->thumb(200, 100, true) .'">'
 ```
 
-### Thumbnails
+### File import settings
+By default, all files are imported in a local folder and the thumbnail generation will happen when calling `$file->thumb(...)`. The generated thumbnails are stored in a cache folder.
+
+You can decide wether to import or not the original files defining the following:
+```php
+define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
+```
+
+If you decide to not import the original files, On Page will be used as a CDN when using the `$file->link()` function.
+In this scenario, `$file->thumb(...)` will ask On Page to generate the thumbnail, and the thumbnail will be saved in the local cache.
+
+
+### Thumbnail settings
 Thumbnails will by default use the original file format,
 but you can force png, jpg, or webp using the `OP_THUMBNAIL_FORMAT` constant, like so:
 ```php

@@ -1086,10 +1086,11 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
         if (is_numeric($h)) $opts['height'] = $h;
         try {
           if (!op_resize($path, $target_path, $opts)) {
-            return op_file_url($file);
+            throw new \Exception('Cannot resize file');
           }
         } catch (\Exception $e) {
-          return op_file_url($file);
+          $op_url = op_file_url($file, $w, $h, $contain);
+          op_download_file($op_url, $target_path);
         }
       }
       return op_link($target_path);
@@ -1109,7 +1110,8 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   return $url;
 }
 
-function op_list_files(bool $return_map = false) {
+function op_list_files(bool $return_map = false) : array {
+  if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
