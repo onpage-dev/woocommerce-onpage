@@ -425,6 +425,8 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
 }
 
 function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null, bool $stop_if_same = false) {
+  op_remove_corrupted();
+
   ini_set('memory_limit','2G');
   set_time_limit(600);
   ini_set('max_execution_time', '600');
@@ -745,8 +747,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       }
 
       // Calculate base meta
-      if (true) {
-        $base_meta = [];
+      $base_meta = [];
+      // These fields are immutable and only created during the first import
+      if (!$object) {
         $base_meta[] = [
           $base_tablemeta_ref => $object_id,
           'meta_key' => 'op_id*',
@@ -762,25 +765,26 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'meta_key' => 'op_lang*',
           'meta_value' => $lang,
         ];
+      }
+
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_imported_at*',
+        'meta_value' => $imported_at,
+      ];
+
+      if ($lab_img_field && @$thing->fields->$lab_img_field) {
         $base_meta[] = [
           $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_imported_at*',
-          'meta_value' => $imported_at,
+          'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
+          'meta_value' => json_encode(
+            $thing->fields->$lab_img_field
+          ),
         ];
-
-        if ($lab_img_field && @$thing->fields->$lab_img_field) {
-          $base_meta[] = [
-            $base_tablemeta_ref => $object_id,
-            'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-            'meta_value' => json_encode(
-              $thing->fields->$lab_img_field
-            ),
-          ];
-        }
-        // op_record("- merging meta");
-        $all_meta = array_merge($all_meta, $base_meta);
-        // op_record("- merged: ".count($all_meta));
       }
+      // op_record("- merging meta");
+      $all_meta = array_merge($all_meta, $base_meta);
+      // op_record("- merged: ".count($all_meta));
 
       // If this is the primary language
       $icl_object_id = $res->is_product ? $object_id : $tax_id;
@@ -830,6 +834,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
   // op_record('cycle ended');
   DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)
+    ->whereNotIn('meta_key', ['op_lang*', 'op_id*', 'op_res*'])
     ->where(function($q) {
       $q->where('meta_key', 'like', 'op\\_%')
         ->orWhereIn('meta_key', [
@@ -853,6 +858,27 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   }
 }
 
+function op_remove_corrupted() {
+  $deleted_posts = OpLib\Post::withoutGlobalScopes()
+    ->where('post_type', 'product')
+    ->where(function($q) {
+      $q->whereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_id*'); });
+      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
+      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
+    })
+    ->count();
+  op_record("Deleted corrupted posts: $deleted_posts");
+  
+  $deleted_terms = OpLib\Term::withoutGlobalScopes()
+    ->whereHas('taxonomies', function($tax_query) { $tax_query->where('taxonomy', 'product_cat'); })
+    ->where(function($q) {
+      $q->whereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_id*'); });
+      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
+      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
+    })
+    ->count();
+  op_record("Deleted corrupted terms: $deleted_terms");
+}
 
 
 function op_name_to_class(string $res_name) {
@@ -1053,62 +1079,49 @@ function op_link(string $path) {
   return plugins_url('', $path).'/'.basename($path);
 }
 
+
 function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   $path = op_file_path($file->token);
-  if (is_file($path)) {
-    // Original
-    $pi = pathinfo($file->name);
-    $filename = $pi['filename'];
-    $extension = $pi['extension'];
-    if ((!$w && !$h)) {
-      $extension = ($extension == 'php' ? 'txt' : $extension);
-      $hash_v = substr($file->token, 0, 3);
-      $target_path = op_file_path("/cache/$filename.$hash_v.$extension");
-      if (!file_exists($target_path)) {
-        symlink('../'.basename($path), $target_path);
-      }
-      return op_link($target_path);
-    } else {
-      $target_path = op_file_path('/cache/'.$file->token);
-      $target_path.= '.'.implode('x', [$w ?: '', $h ?: '']);
-      if ($contain) {
-        $target_path.= '-contain';
-      }
 
-      $extension = defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
-      $target_path.= '.'.$extension;
-      if (!is_file($target_path)) {
-        $opts = [
-          'crop' => !$contain,
-          'format' => $extension,
-        ];
-        if (is_numeric($w)) $opts['width'] = $w;
-        if (is_numeric($h)) $opts['height'] = $h;
-        try {
-          if (!op_resize($path, $target_path, $opts)) {
-            throw new \Exception('Cannot resize file');
-          }
-        } catch (\Exception $e) {
-          $op_url = op_file_url($file, $w, $h, $contain);
-          op_download_file($op_url, $target_path);
-        }
-      }
-      return op_link($target_path);
-    }
-  }
+  $pi = pathinfo($file->name);
+  $filename = $pi['filename'];
 
-  // Use onpage as a fallback
-  $url = 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$file->token;
-  if ($w || $h) {
-    $url.= '.'.implode('x', [$w ?: '', $h ?: '']);
+  // Build On Page filename
+  $op_name = "$file->token";
+  $is_thumb = $w || $h;
+  if (!$is_thumb) {
+    $ext = $pi['extension'] == 'php' ? 'txt' : $pi['extension'];
+    $op_name.= '.' . $ext;
+    $filename.= '.'. $ext;
+  } else {
+    $op_name.= '.'.implode('x', [$w ?: '', $h ?: '']);
     if ($contain) {
-      $url.= '-contain';
+      $op_name.= '-contain';
     }
-    $url.= '.png';
+
+    $ext = defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
+    $op_name.= ".$ext";
+    $filename.= ".$ext";
   }
-  $url.= '?name='.urlencode($file->name);
-  return $url;
+
+  $op_url = 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$op_name.'?name='.urlencode($filename);
+
+  // Serve original files directly from On Page servers
+  if (!$is_thumb) {
+    return $op_url;
+  }
+
+  // Save thumbnails to the local storage
+  $target_folder = op_file_path("/cache/$op_name");
+  $target_path = "$target_folder/$filename";
+  if (!is_file($target_path)) {
+    if (!is_dir($target_folder)) mkdir($target_folder, 0775, true);
+    op_download_file($op_url, $target_path);
+  }
+
+  return op_link($target_path);
 }
+
 
 function op_list_files(bool $return_map = false) : array {
   if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) return [];
