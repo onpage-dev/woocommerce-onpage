@@ -10,7 +10,7 @@ class TermMeta extends Model {
     protected $guarded = [];
     public $timestamps = false;
     protected $primaryKey = 'meta_id';
-    public static $relation_field = 'post_id';
+    public static $relation_field = 'term_id';
 
     public function parent() {
       return $this->belongsTo(Term::class, 'term_id');
