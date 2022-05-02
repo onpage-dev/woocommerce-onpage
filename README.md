@@ -12,7 +12,15 @@ You can view the models generated for your project in the plugin import page. Fo
 ## Selecting data
 For instance, assuming you want to select all your products (codenamed `Product`), you can run:
 ```php
-$prods = Op\Product::all(); // a collection of products
+$prods = Op\Product::get(); // a collection of products
+```
+
+You can also sort results by field value:
+```php
+$prods = Op\Product::orderByField('price')->get();
+
+// Sort in descending order:
+$prods = Op\Product::orderByField('price', 'desc')->get();
 ```
 
 ### Getting record values
@@ -82,6 +90,12 @@ $prods = Op\Chapter::search('boa')->get()
 $prods = Op\Chapter::search('boa', ['name', 'description'])->get()
 // Filter by related items (get products that have a color in the category "Dark colors")
 $prods = Op\Product::whereField('colors.category.name', 'Dark colors')->get();
+
+// Filter by On Page ID
+$prods = Op\Product::whereField('_id', 1872378)->get();
+
+// Filter by Wordpress ID
+$prods = Op\Product::whereField('_wp_id', 6123)->get();
 
 // Use deep where to customize the final query
 $prods = Op\Product::deepWhere('colors.category', function($q) {

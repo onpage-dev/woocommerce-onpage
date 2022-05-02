@@ -276,6 +276,9 @@ trait MetaFunctions {
     } else {
       $field_name = $path[0];
       $field_type = 'int';
+      if ($field_name == '_wp_id') {
+        return $q->where($q->qualifyColumn(self::getPrimaryKey()), $op, $value);
+      }
       if ($field_name != '_id') {
         $field = self::fieldByName($field_name);
         if (!$field) {
@@ -402,5 +405,17 @@ trait MetaFunctions {
       });
     }
     return $ret;
+  }
+  function scopeOrderByField($q, string $field_name, string $mode = 'asc') {
+    $meta_class = static::$meta_class;
+    $meta_table = (new $meta_class)->getTable();
+    $q->leftJoin($meta_table, $q->qualifyColumn(self::getPrimaryKey()), '=', "$meta_table.".($meta_class::$relation_field));
+    $field = @static::getResource()->name_to_field[$field_name];
+    if (!$field) throw new \Exception("Cannot find field $field_name");
+    $q->where(function($q) use ($field) {
+      $q->whereNull('meta_key');
+      $q->orWhere('meta_key', op_field_to_meta_key($field));
+    });
+    $q->orderBy("$meta_table.meta_value", $mode);
   }
 }
