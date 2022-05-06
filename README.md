@@ -43,6 +43,12 @@ foreach ($prods as $prod) {
   echo '<img src="'. $p->file('cover')->thumb(200, 100) .'">'
   // Generate thumbnail containing (out-zooming) the image
   echo '<img src="'. $p->file('cover')->thumb(200, 100, true) .'">'
+
+  // You can get information about the files:
+  $file = $p->file('cover');
+  $file->getWidth();
+  $file->getHeight();
+  $file->getAverageColor();
 ```
 
 ### File import settings
