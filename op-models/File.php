@@ -43,8 +43,8 @@ class File {
     if (!isset($this->json->height)) return null;
     return $this->json->height;
   }
-  function getColor() {
+  function getAverageColor() {
     if (!isset($this->json->color_r)) return null;
-    return "rgba({$this->json->color_r},{$this->json->color_g},{$this->json->color_b})";
+    return "rgb({$this->json->color_r},{$this->json->color_g},{$this->json->color_b})";
   }
 }
