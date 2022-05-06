@@ -6,7 +6,7 @@ if (!defined('OP_PLUGIN')) die(400);
 class File {
   private $json;
   public function __construct(object $file) {
-    $this->
+    $this->json = $file;
     $this->name = $file->name;
     $this->ext = $file->ext;
     $this->token = $file->token;
