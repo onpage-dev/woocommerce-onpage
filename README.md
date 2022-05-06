@@ -56,6 +56,10 @@ define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
 If you decide to not import the original files, On Page will be used as a CDN when using the `$file->link()` function.
 In this scenario, `$file->thumb(...)` will ask On Page to generate the thumbnail, and the thumbnail will be saved in the local cache.
 
+### CDN support
+On Page supports uploading files to external CDNs.
+You can get the image url from the CDN simply calling `$p->file('info_file')->cdn()`.
+If you use multiple CDN, you can specify the CDN name like so: `$p->file('info_file')->link('my_custom_cdn')`.
 
 ### Thumbnail settings
 Thumbnails will by default use the original file format,
