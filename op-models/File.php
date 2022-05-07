@@ -21,14 +21,18 @@ class File {
   public function cdn(string $cdn_name = null) {
     if (!isset($this->json->cdn)) return null;
 
+    $cdn = (array) $this->json->cdn;
+
+    if (empty($cdn)) return null;
+
     // Get first cdn available
-    if (!$cdn_name) $cdn_name = array_keys($this->json->cdn)[0];
+    if (!$cdn_name) $cdn_name = array_keys($cdn)[0];
 
     // Verify image is present
-    if (!isset($this->json->cdn[$cdn_name])) return null;
+    if (!isset($cdn[$cdn_name])) return null;
 
     // Return the cdn url
-    return $this->json->cdn[$cdn_name];
+    return $cdn[$cdn_name];
   }
   
   public function thumb($w = null, $h = null, $contain = false) {
