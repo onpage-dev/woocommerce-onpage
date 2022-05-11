@@ -38,6 +38,7 @@ function op_download_json($url) {
 }
 
 function op_initdb() {
+  global $table_prefix;
   // print_r(DB::table('options')
   // ->where('option_name', 'like', 'op\\_ions%')->get());
   // exit;
@@ -56,33 +57,6 @@ function op_initdb() {
     DB::table('options')->insert($new_opts);
     op_settings(null, true);
     $query->delete();
-  }
-
-  // Create helper columns
-  if (op_settings()->migration < 33) {
-    $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
-    DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_res` bigint unsigned NULL;");
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_id` bigint unsigned NULL;");
-
-
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_res` bigint unsigned NULL;");
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_id` bigint unsigned NULL;");
-
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts`
-                    ADD UNIQUE `op_res_op_id` (`op_res`, `op_id`),
-                    ADD INDEX `op_res` (`op_res`),
-                    ADD UNIQUE `op_id` (`op_id`)");
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms`
-                    ADD UNIQUE `op_res_op_id` (`op_res`, `op_id`),
-                    ADD INDEX `op_res` (`op_res`),
-                    ADD UNIQUE `op_id` (`op_id`)");
-
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."posts` ADD COLUMN `op_dirty` BOOL;");
-    @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_dirty` BOOL;");
-
-    op_setopt('migration', 33);
-    DB::statement("SET sql_mode = '$orig_mode'");
   }
 
   if (op_settings()->migration < 50) {
@@ -145,7 +119,40 @@ function op_initdb() {
     }
     op_setopt('migration', 51);
   }
+  if (op_settings()->migration < 60) {
+    $statements = [];
+      $statements[] = "SET NAMES utf8";
+      $statements[] = "SET time_zone = '+00:00'";
+      $statements[] = "SET foreign_key_checks = 0";
+      $statements[] = "SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO'";
 
+
+      $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_things` (
+        `id` int(11) NOT NULL,
+        `resource_id` int(11) NOT NULL,
+        `op_order` float NOT NULL,
+        PRIMARY KEY (`id`),
+        KEY `resource_id_op_order` (`resource_id`,`op_order`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+
+      $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_thingmeta` (
+        `meta_id` int(11) NOT NULL AUTO_INCREMENT,
+        `thing_id` int(11) NOT NULL,
+        `meta_key` varchar(50) NOT NULL,
+        `meta_value` text NOT NULL,
+        PRIMARY KEY (`meta_id`),
+        KEY `meta_key_meta_value` (`meta_key`,`meta_value`(255)),
+        KEY `thing_id_meta_key_meta_value` (`thing_id`,`meta_key`,`meta_value`(255)),
+        CONSTRAINT `{$table_prefix}op_thingmeta_ibfk_1` FOREIGN KEY (`thing_id`) REFERENCES `{$table_prefix}op_things` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+
+
+      foreach ($statements as $st) {
+        DB::statement($st);
+      }
+      op_setopt('migration', 60);
+      
+  }
 }
 
 function op_setopt($opt, $value) {
@@ -425,6 +432,16 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
 }
 
 function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null, bool $stop_if_same = false) {
+  $semaphore = sem_get(333666333, 1, 0666, true);
+	if(!$semaphore) {
+    op_err('Could not create semaphore, please verify sem_get() is enabled or contact support');
+	}
+  $semaphore_acquired = sem_acquire($semaphore, true);
+  if (!$semaphore_acquired) {
+    op_err('Another import is already in progress, please try later');
+  }
+
+  
   op_remove_corrupted();
 
   ini_set('memory_limit','2G');
@@ -452,10 +469,42 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   $schema_json->imported_at = date('Y-m-d H:i:s');
 
   // Overwrite which resource must be imported as a product
+  // This is a legacy hook
   $overwrite_products = apply_filters('on_page_product_resources', null);
   if (is_array($overwrite_products)) {
     foreach ($schema_json->resources as $res) {
       $res->is_product = in_array($res->name, $overwrite_products);
+    }
+  }
+
+  // This is the newer hook which defines how to import resources
+  $overwrite_things = apply_filters('op_resource_types', null);
+  if (is_array($overwrite_things)) {
+    foreach ($schema_json->resources as $res) {
+      $type = 'thing';
+      if (isset($overwrite_things[$res->name])) {
+        $type = $overwrite_things[$res->name];
+        if (!in_array($type, ['thing', 'term', 'post'])) {
+          throw new \Exception("Invalid type for resource $res->name: $type");
+        }
+      }
+
+      $res->is_thing = $type == 'thing';
+      $res->is_product = $type == 'post';
+    }
+  }
+  foreach ($schema_json->resources as $res) {
+    $res->php_class = \OpLib\Term::class;
+    $res->php_metaclass = \OpLib\TermMeta::class;
+    $res->op_type = 'term';
+    if ($res->is_product) {
+      $res->op_type = 'post';
+      $res->php_class = \OpLib\Post::class;
+      $res->php_metaclass = \OpLib\PostMeta::class;
+    } elseif ($res->is_thing) {
+      $res->op_type = 'thing';
+      $res->php_class = \OpLib\Thing::class;
+      $res->php_metaclass = \OpLib\ThingMeta::class;
     }
   }
 
@@ -486,6 +535,10 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   op_record('Disabling old products...');
   $disabled_count = op_disable_old_products($all_items);
   op_record("disabled $disabled_count products");
+
+  op_record('Deleting old things...');
+  $disabled_count = op_delete_old_things($all_items);
+  op_record("deleted $disabled_count things");
 
 
   op_record('Creating php models');
@@ -518,7 +571,7 @@ function op_disable_old_products(array $imported_items) :int {
   $posts_to_remove = OpLib\Post::pluck('ID')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if (!$res->is_product) continue;
+    if ($res->op_type != 'post') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
         $posts_to_remove->forget($wp_id);
@@ -538,7 +591,7 @@ function op_disable_old_categories(array $imported_items) :int {
   $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->is_product) continue;
+    if ($res->op_type != 'term') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
         $tax_to_remove->forget($wp_id);
@@ -549,6 +602,22 @@ function op_disable_old_categories(array $imported_items) :int {
   // Set posts as drafts
   op_delete_taxonomies_and_terms($tax_to_remove);
   return $tax_to_remove->count();
+}
+function op_delete_old_things(array $imported_items) :int {
+  $things_to_remove = OpLib\Thing::get()->keyBy('id');
+  foreach ($imported_items as $res_id => $res_items) {
+    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
+    if ($res->op_type != 'thing') continue;
+    foreach ($res_items as $op_id => $new_item_langs) {
+      foreach ($new_item_langs as $lang => $wp_id) {
+        $things_to_remove->forget($wp_id);
+      }
+    }
+  }
+  foreach ($things_to_remove->keys()->chunk(1000) as $chunk) {
+    OpLib\Thing::query()->whereIn('id', $chunk)->delete();
+  }
+  return $things_to_remove->count();
 }
 
 function op_link_imported_data($schema) {
@@ -602,17 +671,23 @@ function op_locale_to_lang(string $locale) {
 
 
 function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items) {
+  $php_class = $res->php_class;
+  /** @var \OpLib\MetaFunctions */
+  $php_class = new $php_class;
+  
+  $php_metaclass = $res->php_metaclass;
+  $php_metaclass = new $php_metaclass;
+
+
   $lab_id = op_getopt("res-{$res->id}-name");
   $lab = collect($res->fields)->firstWhere('id', $lab_id)
      ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
-  $lab_img = collect($res->fields)->where('type', 'image')->first();
-  $base_table = $res->is_product ? 'posts' : 'terms';
-  $base_table_key = $res->is_product ? 'ID' : 'term_id';
-  $base_table_slug = $res->is_product ? 'post_name' : 'slug';
-  $base_tablemeta = $res->is_product ? 'postmeta' : 'termmeta';
-  $base_tablemeta_ref = $res->is_product ? 'post_id' : 'term_id';
-  $base_class = $res->is_product ? \OpLib\Post::class : \OpLib\Term::class;
-  $icl_type = $res->is_product ? 'post_product' : 'tax_product_cat';
+  $lab_img = $php_class->isThing() ? null : collect($res->fields)->where('type', 'image')->first();
+  $base_table = $php_class->getTableWithoutPrefix();
+  $base_table_key = $php_class->primaryKey;
+  $base_tablemeta_ref = $php_class::$meta_ref;
+  $base_class = $res->php_class;
+  $icl_type = !op_wpml_enabled() || $res->is_thing ? null : ($res->is_product ? 'post_product' : 'tax_product_cat');
   $icl_deflang = op_wpml_default();
 
   // Create map of resource fields [id => field]
@@ -644,11 +719,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     $icl_trid++;
 
     // Create the item in each language - first language is the primary one
-    foreach ($langs as $lang) {
+    foreach ($php_class->isThing() ? [null] : $langs as $lang) {
       // op_record("- lang $lang");
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
-      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang) : '') : null;
+      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
@@ -661,39 +736,52 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
 
       // Prepare data
-      $data = !$res->is_product ? [
-        'name' => $label,
-        'slug' => $object
-          ? $object->slug
-          : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
-        'term_group' => 0,
-        'op_order' => $thing_i,
-      ] : [
-        'post_author' => 1,
-        'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
-        'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
-        'post_content' => '',
-        'post_title' => $label,
-        'post_excerpt' => '',
-        'post_status' => 'publish',
-        'comment_status' => 'closed',
-        'ping_status' => 'closed',
-        'post_password' => '',
-        'post_name' => $object
-          ? $object->post_name
-          : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
-        'to_ping' => '',
-        'pinged' => '',
-        'post_modified' => $object ? $object->post_modified : $imported_at,
-        'post_modified_gmt' => $object ? $object->post_modified_gmt : $imported_at,
-        'post_content_filtered' => '',
-        'post_parent' => 0,
-        'guid' => '',
-        'menu_order' => $thing_i,
-        'post_type' => 'product',
-        'post_mime_type' => '',
-        'comment_count' => 0,
-      ];
+      $data = null;
+      if ($php_class->isThing()) {
+        $data = [
+          'id' => $thing->id,
+          'resource_id' => $thing->resource_id,
+          'op_order' => $thing_i,
+        ];
+      } elseif ($php_class->isPost()) {
+        $data = [
+          'post_author' => 1,
+          'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
+          'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
+          'post_content' => '',
+          'post_title' => $label,
+          'post_excerpt' => '',
+          'post_status' => 'publish',
+          'comment_status' => 'closed',
+          'ping_status' => 'closed',
+          'post_password' => '',
+          'post_name' => $object
+            ? $object->post_name
+            : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
+          'to_ping' => '',
+          'pinged' => '',
+          'post_modified' => $object ? $object->post_modified : $imported_at,
+          'post_modified_gmt' => $object ? $object->post_modified_gmt : $imported_at,
+          'post_content_filtered' => '',
+          'post_parent' => 0,
+          'guid' => '',
+          'menu_order' => $thing_i,
+          'post_type' => 'product',
+          'post_mime_type' => '',
+          'comment_count' => 0,
+        ];
+      } elseif ($php_class->isTerm()) {
+        $data = [
+          'name' => $label,
+          'slug' => $object
+            ? $object->slug
+            : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
+          'term_group' => 0,
+          'op_order' => $thing_i,
+        ];
+      }
+        
+         
       // op_record("- ready to upsert");
       // Create or update the object
       if ($object) {
@@ -714,6 +802,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         // op_record("- updated");
       } else {
         $object_id = DB::table($base_table)->insertGetId($data);
+
+        // Things use the same onpage id
+        if ($php_class->isThing()) $object_id = $data['id'];
+
+        // Check for errors
         if (!$object_id) {
           op_err("Cannot insert into $base_table: ".DB::instance()->db->last_error, [
             'data' => $data,
@@ -726,7 +819,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $all_items[$res->id][$thing->id][$lang] = $object_id;
 
       $tax_id = null;
-      if (!$res->is_product) {
+      if ($php_class->isTerm()) {
         $tax_id = @DB::table('term_taxonomy')->where('term_id', $object_id)->first()->term_taxonomy_id;
         if (!$tax_id) {
           $tax_id = DB::table('term_taxonomy')->insertGetId([
@@ -740,7 +833,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       }
 
       // Delete all relations with parents
-      if ($res->is_product) {
+      if ($php_class->isPost()) {
         DB::table('term_relationships')->where('object_id', $object_id)->delete();
         wp_set_object_terms($object_id, 'simple', 'product_type');
         // op_record("- wp_set_object_terms");
@@ -785,44 +878,47 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // op_record("- merging meta");
       $all_meta = array_merge($all_meta, $base_meta);
       // op_record("- merged: ".count($all_meta));
+      $all_meta = array_merge($all_meta, op_generate_data_meta($db, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
 
       // If this is the primary language
-      $icl_object_id = $res->is_product ? $object_id : $tax_id;
-      $all_icl_object_ids[] = $icl_object_id;
-      if (!$icl_object_id) {
-        op_err("cannot get taxonomy id: $object_id-$tax_id");
-      }
-      $all_meta = array_merge($all_meta, op_generate_data_meta($db, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
-      if ($is_primary) {
-        // Mark item as primary - others are translations
-        $icl_primary_id = $object_id;
+      if ($icl_type) {
+        $icl_object_id = $res->is_product ? $object_id : $tax_id;
+        $all_icl_object_ids[] = $icl_object_id;
+        if (!$icl_object_id) {
+          op_err("cannot get taxonomy id: $object_id-$tax_id");
+        }
 
-        // Recreate the metadata
+        if ($is_primary) {
+          // Mark item as primary - others are translations
+          $icl_primary_id = $object_id;
 
-        // Create icl translation
-        $icl_translations[] = [
-          'element_id' => $icl_object_id,
-          'element_type' => $icl_type,
-          'language_code' => $lang,
-          'trid' => $icl_trid,
-          'source_language_code' => null,
-        ];
-      } else {
-        // No metadata for the secondary items - only the essentials
-        $icl_translations[] = [
-          'element_id' => $icl_object_id,
-          'element_type' => $icl_type,
-          'language_code' => $lang,
-          'trid' => $icl_trid,
-          'source_language_code' => $icl_deflang,
-        ];
-      }
+          // Recreate the metadata
+
+          // Create icl translation
+          $icl_translations[] = [
+            'element_id' => $icl_object_id,
+            'element_type' => $icl_type,
+            'language_code' => $lang,
+            'trid' => $icl_trid,
+            'source_language_code' => null,
+          ];
+        } else {
+          // No metadata for the secondary items - only the essentials
+          $icl_translations[] = [
+            'element_id' => $icl_object_id,
+            'element_type' => $icl_type,
+            'language_code' => $lang,
+            'trid' => $icl_trid,
+            'source_language_code' => $icl_deflang,
+          ];
+        }
+      } // end icl
       // op_record("- end lang");
     } // end langs cycle
   } // end $thing->data cycle
 
 
-  if (op_wpml_enabled()) {
+  if ($icl_type) {
     DB::table('icl_translations')
       ->where('element_type', $icl_type)
       ->whereIn('element_id', $all_icl_object_ids)
@@ -833,7 +929,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   }
 
   // op_record('cycle ended');
-  DB::table($base_tablemeta)->whereIn($base_tablemeta_ref, $object_ids)
+  $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
     ->whereNotIn('meta_key', ['op_lang*', 'op_id*', 'op_res*'])
     ->where(function($q) {
       $q->where('meta_key', 'like', 'op\\_%')
@@ -854,7 +950,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
   // Insert new meta
   foreach (array_chunk($all_meta, 2000) as $chunk) {
-    DB::table($base_tablemeta)->insert($chunk);
+    $php_metaclass->insert($chunk);
   }
 }
 
@@ -888,6 +984,10 @@ function op_name_to_class(string $res_name) {
 
 function op_regenerate_import_slug(array $items) {
   foreach ($items as $res_id => $new_res_items) {
+    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
+    if ($res->op_type == 'thing') return;
+
+
     $wp_ids = [];
     foreach ($new_res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
@@ -895,7 +995,6 @@ function op_regenerate_import_slug(array $items) {
       }
     }
 
-    $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     $class = op_name_to_class($res->name);
     foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
         $items = $class::unlocalized()->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
@@ -937,38 +1036,69 @@ function op_regenerate_items_slug($items) {
 
 function op_import_snapshot_relations($schema, $json, array $all_items) {
   $langs = op_langs();
+  $resources = collect($schema->resources)->keyBy('id');
   foreach ($schema->resources as $res_i => $res) {
     $data = $json->resources[$res_i]->data;
     $meta = [];
     $updated_wp_ids = [];
-    $base_tablemeta = $res->is_product ? 'postmeta' : 'termmeta';
-    $base_tablemeta_ref = $res->is_product ? 'post_id' : 'term_id';
+
+    $php_class = $res->php_class;
+    /** @var \OpLib\MetaFunctions */
+    $php_class = new $php_class;
+  
+    $php_metaclass = $php_class::$meta_class;
+    $php_metaclass = new $php_metaclass;
+    
+    $base_tablemeta_ref = $php_class::$meta_ref;
+
+    $fid_to_relation_langs = [];
 
     foreach ($data as $thing) {
-      foreach ($langs as $lang) {
-        $wp_id = $all_items[$res->id][$thing->id][$lang];
+      // Things have only the null lang
+      foreach ($all_items[$res->id][$thing->id] as $lang => $wp_id) {
         $updated_wp_ids[] = $wp_id;
         foreach ($thing->rel_ids as $fid => $tids) {
           $field = $res->id_to_field[$fid];
+          $target_res = $resources[$field->rel_res_id];
+          // thing => non thing = duplicate relations by lang (null -> en, null -> it, ...)
+          // thing => thing = no duplication (null -> null)
+          // non thing => non thing = no duplication (en -> en)
+          // non thing => thing = no duplication (en -> null)
+          if (!isset($fid_to_relation_langs["$fid-$lang"])) {
+            $relation_langs = null;
+            if ($res->is_thing && !$target_res->is_thing) {
+              $relation_langs = $langs;
+            } elseif ($res->is_thing && $target_res->is_thing) {
+              $relation_langs = [null];
+            } elseif (!$res->is_thing && !$target_res->is_thing) {
+              $relation_langs = [$lang];
+            } elseif (!$res->is_thing && $target_res->is_thing) {
+              $relation_langs = [null];
+            }
+            $fid_to_relation_langs["$fid-$lang"] = $relation_langs;
+          }
+          $relation_langs = $fid_to_relation_langs["$fid-$lang"];
           foreach ($tids as $rel_tid) {
-            $rel_wp_id = $all_items[$field->rel_res_id][$rel_tid][$lang];
-            $meta[] = [
-              $base_tablemeta_ref => $wp_id,
-              'meta_key' => 'oprel_'.$field->name,
-              'meta_value' => $rel_wp_id,
-            ];
+            foreach ($relation_langs as $rel_lang) {
+              $rel_wp_id = $all_items[$target_res->id][$rel_tid][$rel_lang];
+              $meta[] = [
+                $base_tablemeta_ref => $wp_id,
+                'meta_key' => 'oprel_'.$field->name,
+                'meta_value' => $rel_wp_id,
+              ];
+            }
           }
         }
       }
     }
 
     foreach (array_chunk($updated_wp_ids, 10000) as $chunk) {
-      DB::table($base_tablemeta)
+      $php_metaclass
         ->whereIn($base_tablemeta_ref, $chunk)
         ->where('meta_key', 'like', 'oprel\\_%')
         ->delete();
     }
-    DB::table($base_tablemeta)->insert($meta);
+    $php_metaclass->insert($meta);
   }
 }
 
@@ -1043,11 +1173,12 @@ function op_generate_data_meta($schema, $res, $thing, int $object_id, $field_map
 
 function op_gen_model(object $schema, object $res) {
   $camel_name = op_snake_to_camel($res->name);
-  $extends = $res->is_product ? 'Post' : 'Term';
-  $extends_lc = strtolower($extends);
+  $extends = $res->php_class;
+
+  $extends_lc = strtolower(basename(str_replace('\\', '/', $extends)));
 
   $code = "<?php\nnamespace Op; \n";
-  $code.= "class $camel_name extends \\OpLib\\$extends {\n";
+  $code.= "class $camel_name extends \\{$extends} {\n";
   $code.= "  public static function boot() {
     parent::boot();
     self::addGlobalScope('_op-lang', function(\$q) {
@@ -1060,12 +1191,10 @@ function op_gen_model(object $schema, object $res) {
 
   foreach ($res->fields as $f) {
     if ($f->type == 'relation') {
-      $rel_method = $f->rel_res->is_product ? 'posts' : 'terms';
       $rel_class = op_snake_to_camel($f->rel_res->name);
-      $rel_class_primary = $f->rel_res->is_product ? 'ID' : 'term_id';
-      $code.= "  function $f->name() {\n";
-      $code.= "    return \$this->belongsToMany($rel_class::class, \\OpLib\\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value', null, '$rel_class_primary')\n";
-      $code.= "    ->wherePivot('meta_key', 'oprel_$f->name')\n";
+      $code.= "  function {$f->name}() {\n";
+      $code.= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')";
+      $code.= "    ->wherePivot('meta_key', 'oprel_{$f->name}')\n";
       $code.= "    ->orderBy('meta_id');\n";
       $code.= "  }\n";
     }
@@ -1127,8 +1256,8 @@ function op_list_files(bool $return_map = false) : array {
   if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
-    $class = $res->is_product ? 'OpLib\PostMeta' : 'OpLib\TermMeta';
-    $meta_col = $res->is_product ? 'post_id' : 'term_id';
+    $class = $res->php_metaclass;
+    $meta_col = $class::$relation_field;
     $res_files_query = $class::whereHas('parent', function($q) use ($res) {
       $q->whereRes($res->id);
     });
@@ -1586,6 +1715,9 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
       op_record("Terms to delete: ".$taxonomies->pluck('term_id')->implode('-'));
       op_delete_taxonomies_and_terms($taxonomies);
     }
+
+    OpLib\Thing::query()->delete();
+
   } catch (\Throwable $e) {
     op_err("Something went wrong: {$e->getMessage()}", [
       'exception' => $e,

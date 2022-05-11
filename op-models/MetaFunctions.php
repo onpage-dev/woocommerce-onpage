@@ -45,6 +45,15 @@ trait MetaFunctions {
     if (is_array($value) && $operator != '=') {
       throw new \Exception("Cannot apply operator $operator for array value");
     }
+    if (static::op_type == 'thing' && strpos($key, '*') !== false) {
+      $real_field = null;
+      if ($key == 'op_id*') $real_field = 'id';
+      else if ($key == 'op_res*') $real_field = 'resource_id';
+      if ($real_field) {
+        $q->where($real_field, $operator, $value);
+      }
+      return;
+    }
     $q->whereHas('meta', function($q) use ($key, $operator, $value) {
       $q->where('meta_key', $key);
       if (is_array($value)) {
@@ -63,27 +72,36 @@ trait MetaFunctions {
   static function scopeWhereRes($q, $op, $val = null) {
     $q->whereMeta('op_res*', $op, $val);
   }
-  static function scopeIsOutdated($q, $timestamp) {
-    $q->whereHas('meta', function($q) use ($timestamp) {
-      $q->where('meta_key', 'op_imported_at*');
-      $q->where('meta_value', $timestamp);
-    }, 0);
+
+  static function isThing() {
+    return static::op_type == 'thing';
+  }
+  static function isPost() {
+    return static::op_type == 'post';
+  }
+  static function isTerm() {
+    return static::op_type == 'term';
   }
   static function scopeOwned($q) {
-    $q->whereHas('meta', function($q) {
-      $q->where('meta_key', 'op_id*');
-    });
+    if (self::isThing()) return;
+
+    // These two checks are reduntant and have been disabled for performance
+    // on date 20220-05-11
+    // $q->whereHas('meta', function($q) { $q->where('meta_key', 'op_id*'); });
+    // $q->whereHas('meta', function($q) { $q->where('meta_key', 'op_lang*'); });
+
+    // This has been chosen as the proper way to check if something
+    // is owned by this plugin
     $q->whereHas('meta', function($q) {
       $q->where('meta_key', 'op_res*');
       if (method_exists(static::class, 'getResource')) {
         $q->where('meta_value', self::getResource()->id);
       }
     });
-    $q->whereHas('meta', function($q) {
-      $q->where('meta_key', 'op_lang*');
-    });
   }
   function scopeWhereWordpressId($q, $param) {
+    if (self::isThing()) return $q->whereRaw('false');
+
     if (is_array($param)) {
       $q->whereIn("{$this->getTable()}.{$this->primaryKey}", $param);
     } else {
@@ -91,18 +109,20 @@ trait MetaFunctions {
     }
   }
   function getMeta(string $key) {
-    return @$this->meta->firstWhere('meta_key', $key)->meta_value;
+    $meta = $this->meta->firstWhere('meta_key', $key);
+    if ($meta) return $meta->meta_value;
   }
   function getId() {
-    return @$this->getMeta('op_id*');
+    return $this->getMeta('op_id*');
   }
   function getLang() {
-    return @$this->getMeta('op_lang*');
+    return $this->getMeta('op_lang*');
   }
   function getResourceId() {
-    return @$this->getMeta('op_res*');
+    return $this->getMeta('op_res*');
   }
   function scopeLocalized($q, string $lang = null) {
+    if (self::isThing()) return;
     if (!$lang) {
       $lang = defined('ICL_LANGUAGE_CODE') ? ICL_LANGUAGE_CODE : op_locale();
     }
@@ -116,10 +136,11 @@ trait MetaFunctions {
   }
 
   function getTableWithoutPrefix() {
-    return substr($this->getTable(), count(OP_WP_PREFIX));
+    return substr($this->getTable(), strlen(OP_WP_PREFIX));
   }
 
   function slugExists($slug) {
+    if (self::isThing()) return false;
     if ($this->is_post) {
       $query = Post::query()->withoutGlobalScopes()->where(self::$slug_field, $slug);
       if (op_wpml_enabled()) {
@@ -142,6 +163,7 @@ trait MetaFunctions {
   }
 
   function setSlug($slug) {
+    if (self::isThing()) return false;
     if (!$slug) return null;
     $current_slug = $this->getSlug();
 
@@ -259,7 +281,7 @@ trait MetaFunctions {
     if (!preg_match('/^\d+$/', $res_id)) {
       $res_id = op_schema()->name_to_res[$res_id]->id;
     }
-    $q->where('op_res', $res_id);
+    $q->whereMeta('op_res*', $res_id);
   }
 
   public static function scopeWhereField($q, string $name, $op, $value = null, bool $is_or = false) {
@@ -351,7 +373,7 @@ trait MetaFunctions {
   }
 
   public function scopeSorted($q) {
-    $q->orderBy($this->is_post ? 'menu_order' : 'op_order');
+    $q->orderBy(self::isPost() ? 'menu_order' : 'op_order');
   }
 
   public static function getPrimaryKey() {
@@ -381,6 +403,8 @@ trait MetaFunctions {
   }
 
   public function permalink(string $lang = null) {
+    if (self::isThing()) return null;
+
     $permalink = $this->is_post
       ? get_permalink($this->id)
       : get_term_link($this->id, 'product_cat');
@@ -392,6 +416,7 @@ trait MetaFunctions {
   }
 
   public function getSlug() {
+    if (self::isThing()) return null;
     return $this->attributes[self::$slug_field];
   }
 

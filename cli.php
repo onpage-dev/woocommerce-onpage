@@ -27,7 +27,7 @@ class ONPAGE_CLI
     op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name'], !$force_import);
     $t2 = microtime(true);
     print_r([
-      'log' => op_record('finish'),
+      // 'log' => op_record('finish'),
       'c_count' => OpLib\Term::localized()->count(),
       'p_count' => OpLib\Post::localized()->count(),
       'time' => $t2 - $t1,

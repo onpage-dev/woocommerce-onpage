@@ -12,10 +12,11 @@ class Post extends Model {
   protected $guarded = [];
   public $timestamps = false;
   public $is_post = true;
-  protected $primaryKey = 'ID';
-  protected static $meta_ref = 'post_id';
-  protected static $meta_class = PostMeta::class;
-  protected static $slug_field = 'post_name';
+  const op_type = 'post';
+  public $primaryKey = 'ID';
+  public static $meta_ref = 'post_id';
+  public static $meta_class = PostMeta::class;
+  public static $slug_field = 'post_name';
 
   public static function boot() {
     parent::boot();
