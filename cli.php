@@ -45,6 +45,11 @@ class ONPAGE_CLI
   {
     print_r(op_list_files());
   }
+  public function cleanmeta($args, $assoc_args)
+  {
+    op_record("Deleting orphaned meta...");
+    print_r(op_delete_orphan_meta());
+  }
 }
 
 add_action('cli_init', function () {

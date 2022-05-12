@@ -544,6 +544,8 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   $disabled_count = op_delete_old_things($all_items);
   op_record("deleted $disabled_count things");
 
+  op_record('Deleting orphaned metadata');
+  op_delete_orphan_meta();
 
   op_record('Creating php models');
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
@@ -569,6 +571,15 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 
   op_setopt('last_import_token', $token_to_import);
   do_action('op_import_completed');
+}
+
+
+function op_delete_orphan_meta() {
+  global $table_prefix;
+  return [
+    'postmeta' => (int) DB::statement("delete FROM `{$table_prefix}postmeta` where not exists(select 1 from `{$table_prefix}posts` where ID=post_id)"),
+    'termmeta' => (int) DB::statement("delete FROM `{$table_prefix}termmeta` where not exists(select 1 from `{$table_prefix}terms` t where `{$table_prefix}termmeta`.term_id=t.term_id)"),
+  ];
 }
 
 function op_disable_old_products(array $imported_items) :int {
