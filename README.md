@@ -9,6 +9,22 @@ When you import your snapshots, the plugin will generate [Eloquent Models](https
 
 You can view the models generated for your project in the plugin import page. For each model, you'll find the list of relations and fields imported.
 
+
+## Configure how to import each resource
+Before importing the data, you should specify how to import each resource (in your `functions.php`).
+Resources that are not listed here will still be imported in a custom `op_things` table (which makes them invisible to wordpress, and faster to import).
+You should only list those resources that will have their own page.
+For example, if you plan to have a page for each "Category" and one for each "Product", you can do it as follows (the format is "resource alias" => "import method").
+```
+add_filter('op_resource_types', function() {
+  return [
+    'product' => 'post', // "post" = woocommerce product
+    'category' => 'term', // "term" = woocommerce category
+  ];
+});
+```
+
+
 ## Selecting data
 For instance, assuming you want to select all your products (codenamed `Product`), you can run:
 ```php
@@ -233,10 +249,8 @@ add_action('op_gen_slug', function($item) {
 ```
 
 
-## Configure whether each resource is a product or a category
-By default resources will reflect the way they are set up in On Page,
-but you can force resources to be imported in a custom way.
 
+## Legacy way to specify import method (do not use)
 The following hook will import only the resource 'shoes' and 't_shirts' as product,
 and any other resource will be imported as a category.
 
