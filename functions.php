@@ -1260,7 +1260,8 @@ function op_list_files(bool $return_map = false) : array {
   if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
-    $class = $res->php_metaclass;
+    $class = op_name_to_class($res->name);
+    $class = $class::$meta_class;
     $meta_col = $class::$relation_field;
     $res_files_query = $class::whereHas('parent', function($q) use ($res) {
       $q->whereRes($res->id);
@@ -1278,12 +1279,11 @@ function op_list_files(bool $return_map = false) : array {
     $res_files_query->whereIn('meta_key', $media_fields);
 
     $res_files = $res_files_query->get()
-    ->pluck('meta_value')
+    ->pluck('meta_value', $meta_col)
     ->map(function($el) {
       return @json_decode($el);
     })
     ->filter(function($x) { return $x && @$x->token; })
-    ->values()
     ->all();
     foreach ($res_files as $object_id => $file) {
       if (!isset($files[$file->token])) {
