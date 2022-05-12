@@ -213,7 +213,7 @@
           <tr>
             <th><label>Snapshot token</label></th>
             <td>
-              <input class="regular-text code" v-model="settings_form.token">
+              <input class="regular-text code" v-model="settings_form.token" type="password">
             </td>
           </tr>
           <!-- <tr>
