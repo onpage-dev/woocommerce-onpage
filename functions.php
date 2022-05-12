@@ -432,13 +432,17 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
 }
 
 function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null, bool $stop_if_same = false) {
-  $semaphore = sem_get(333666333, 1, 0666, true);
-	if(!$semaphore) {
-    op_err('Could not create semaphore, please verify sem_get() is enabled or contact support');
-	}
-  $semaphore_acquired = sem_acquire($semaphore, true);
-  if (!$semaphore_acquired) {
-    op_err('Another import is already in progress, please try later');
+  if (function_exists('sem_get')) {
+    $semaphore = sem_get(333666333, 1, 0666, true);
+    if(!$semaphore) {
+      op_err('Could not create semaphore, please verify sem_get() is enabled or contact support');
+    }
+    $semaphore_acquired = sem_acquire($semaphore, true);
+    if (!$semaphore_acquired) {
+      op_err('Another import is already in progress, please try later');
+    }
+  } else {
+    op_record('!!! php is not supporting sem_get() so the plugin cannot make sure the import is atomic !!!');
   }
 
   
