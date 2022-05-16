@@ -83,7 +83,13 @@ trait MetaFunctions {
     return static::op_type == 'term';
   }
   static function scopeOwned($q) {
-    if (self::isThing()) return;
+    if (self::isThing()) {
+      if (method_exists(static::class, 'getResource')) {
+        $q->where('resource_id', self::getResource()->id);
+      }
+      return;
+    }
+
 
     // These two checks are reduntant and have been disabled for performance
     // on date 20220-05-11
