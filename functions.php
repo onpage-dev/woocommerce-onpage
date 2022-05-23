@@ -431,7 +431,7 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
   return $slug.$suffix;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false, string $file_name=null, bool $stop_if_same = false) {
+function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $stop_if_same = false) {
   if (function_exists('sem_get')) {
     $semaphore = sem_get(333666333, 1, 0666, true);
     if(!$semaphore) {
@@ -453,7 +453,9 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
   ini_set('max_execution_time', '600');
   $token_to_import = null;
   $schema_json = null;
-  if(!$file_name){
+  if ($restore_previous_snapshot) {
+    $schema_json = op_get_saved_snapshot($restore_previous_snapshot);
+  } else {
     $token_to_import = op_latest_snapshot_token();
 
     if ($stop_if_same && $token_to_import == op_getopt('last_import_token')) {
@@ -463,54 +465,57 @@ function op_import_snapshot(bool $force_slug_regen = false, string $file_name=nu
 
 
     $schema_json = op_download_snapshot($token_to_import);
-    $snapshot_to_save = clone $schema_json;
     op_record('download completed');
-  } else {
-    $schema_json = op_get_saved_snapshot($file_name);
-  }
 
-  // Create imported_at field
-  $schema_json->imported_at = date('Y-m-d H:i:s');
+    // Create imported_at field
+    $schema_json->imported_at = date('Y-m-d H:i:s');
 
-  // Overwrite which resource must be imported as a product
-  // This is a legacy hook
-  $overwrite_products = apply_filters('on_page_product_resources', null);
-  if (is_array($overwrite_products)) {
-    foreach ($schema_json->resources as $res) {
-      $res->is_product = in_array($res->name, $overwrite_products);
-    }
-  }
-
-  // This is the newer hook which defines how to import resources
-  $overwrite_things = apply_filters('op_resource_types', null);
-  if (is_array($overwrite_things)) {
-    foreach ($schema_json->resources as $res) {
-      $type = 'thing';
-      if (isset($overwrite_things[$res->name])) {
-        $type = $overwrite_things[$res->name];
-        if (!in_array($type, ['thing', 'term', 'post'])) {
-          throw new \Exception("Invalid type for resource $res->name: $type");
-        }
+    // Overwrite which resource must be imported as a product
+    // This is a legacy hook
+    $overwrite_products = apply_filters('on_page_product_resources', null);
+    if (is_array($overwrite_products)) {
+      foreach ($schema_json->resources as $res) {
+        $res->is_product = in_array($res->name, $overwrite_products);
       }
+    }
 
-      $res->is_thing = $type == 'thing';
-      $res->is_product = $type == 'post';
+    // This is the newer hook which defines how to import resources
+    $overwrite_things = apply_filters('op_resource_types', null);
+    if (is_array($overwrite_things)) {
+      foreach ($schema_json->resources as $res) {
+        $type = 'thing';
+        if (isset($overwrite_things[$res->name])) {
+          $type = $overwrite_things[$res->name];
+          if (!in_array($type, ['thing', 'term', 'post'])) {
+            throw new \Exception("Invalid type for resource $res->name: $type");
+          }
+        }
+
+        $res->is_thing = $type == 'thing';
+        $res->is_product = $type == 'post';
+      }
     }
-  }
-  foreach ($schema_json->resources as $res) {
-    $res->php_class = \OpLib\Term::class;
-    $res->php_metaclass = \OpLib\TermMeta::class;
-    $res->op_type = 'term';
-    if ($res->is_product) {
-      $res->op_type = 'post';
-      $res->php_class = \OpLib\Post::class;
-      $res->php_metaclass = \OpLib\PostMeta::class;
-    } elseif ($res->is_thing) {
-      $res->op_type = 'thing';
-      $res->php_class = \OpLib\Thing::class;
-      $res->php_metaclass = \OpLib\ThingMeta::class;
+
+    // Setup php_class, php_metaclass, op_type for all the resources
+    foreach ($schema_json->resources as $res) {
+      $res->php_class = \OpLib\Term::class;
+      $res->php_metaclass = \OpLib\TermMeta::class;
+      $res->op_type = 'term';
+      if ($res->is_product) {
+        $res->op_type = 'post';
+        $res->php_class = \OpLib\Post::class;
+        $res->php_metaclass = \OpLib\PostMeta::class;
+      } elseif ($res->is_thing) {
+        $res->op_type = 'thing';
+        $res->php_class = \OpLib\Thing::class;
+        $res->php_metaclass = \OpLib\ThingMeta::class;
+      }
     }
+
+    // Clone this element
+    $snapshot_to_save = clone $schema_json;
   }
+
 
   // Store the new schema (this will remove the data from the schema)
   $schema = op_schema($schema_json);
@@ -1000,7 +1005,7 @@ function op_name_to_class(string $res_name) {
 function op_regenerate_import_slug(array $items) {
   foreach ($items as $res_id => $new_res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->op_type == 'thing') return;
+    if ($res->op_type == 'thing') continue;
 
 
     $wp_ids = [];
