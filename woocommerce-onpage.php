@@ -135,7 +135,7 @@ add_filter('admin_menu', function() {
 
 // Set image for posts
 add_filter( 'wp_get_attachment_image_src', function ( $image, $attachment_id, $size, $icon ){
-  if (@$attachment_id[0] != '{') return $image;
+  if (@$attachment_id[0] != '{' || !is_scalar($size)) return $image;
   $file = @json_decode($attachment_id);
   if (!$file) return $image;
   $sizes = [
