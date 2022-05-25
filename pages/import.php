@@ -289,7 +289,7 @@
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
-      <div v-for="res in Object.values(next_schema.resources)">
+      <div v-for="res in Object.values(next_schema.resources)"  v-if="!thing_resources.includes(res.name)">
         <br>
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
@@ -303,7 +303,7 @@
                 </select>
               </td>
             </tr>
-            <template v-if="product_resources.includes(res)">
+            <template v-if="product_resources.includes(res.name)">
               <tr>
                 <td>Price</td>
                 <td>
@@ -580,10 +580,10 @@
     },
     computed: {
       product_resources() {
-        if (!this.next_schema) return []
-        if (!this.server_config) return []
-        return Object.values(this.next_schema.resources)
-          .filter(x => this.server_config.product_resources ? this.server_config.product_resources.includes(x.name) : x.is_product)
+        return this.server_config?.product_resources ?? []
+      },
+      thing_resources() {
+        return this.server_config?.thing_resources ?? []
       },
       form_unsaved() {
         return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)

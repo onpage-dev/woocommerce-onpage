@@ -69,7 +69,15 @@ add_filter('init', function() {
         op_ret($schema);
       case 'server-config':
         op_ret([
-          'product_resources' => apply_filters('on_page_product_resources', null),
+          'product_resources' => !op_schema() ? [] : collect(op_schema()->resources)
+            ->where('op_type', 'post')
+            ->pluck('name'),
+          'term_resources' => !op_schema() ? [] : collect(op_schema()->resources)
+            ->where('op_type', 'term')
+            ->pluck('name'),
+          'thing_resources' => !op_schema() ? [] : collect(op_schema()->resources)
+            ->where('op_type', 'thing')
+            ->pluck('name'),
         ]);
 
 
