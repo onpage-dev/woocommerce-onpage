@@ -282,6 +282,8 @@ function op_schema(object $set = null) {
     $schema = op_stored_schema();
     if (!$schema) return null;
     $schema->id_to_res = [];
+    $schema->id_to_folder = [];
+    $schema->id_to_field = [];
     $schema->name_to_res = [];
     foreach ($schema->resources as $res) {
       $schema->id_to_res[$res->id] = $res;
@@ -292,6 +294,13 @@ function op_schema(object $set = null) {
         $schema->id_to_field[$field->id] = $field;
         $res->id_to_field[$field->id] = $field;
         $res->name_to_field[$field->name] = $field;
+      }
+      foreach ($res->field_folders as $folder) {
+        $schema->id_to_folder[$folder->id] = $folder;
+        $folder->fields = [];
+        foreach ($folder->fids as $field_id) {
+          $folder->fields[] = $schema->id_to_field[$field_id];
+        }
       }
     }
 
@@ -877,6 +886,14 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           $base_tablemeta_ref => $object_id,
           'meta_key' => 'op_lang*',
           'meta_value' => $lang,
+        ];
+      }
+      
+      if ($thing->default_folder_id) {
+        $base_meta[] = [
+          $base_tablemeta_ref => $object_id,
+          'meta_key' => 'op_default_folder_id*',
+          'meta_value' => $thing->default_folder_id,
         ];
       }
 

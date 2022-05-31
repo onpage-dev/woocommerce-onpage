@@ -67,6 +67,33 @@ foreach ($prods as $prod) {
   $file->getAverageColor();
 ```
 
+
+### Accessing folders
+In On Page you can create field folders, and mark them as "default"
+for any element you have.
+You can easily access the folder name and the folder fields just like in the following example:
+```php
+// Not all items have a default folder set, so be careful!
+if ($folder = $prod->getDefaultFolder()) {
+    echo "Default folder: ";
+    // show the translated folder label
+    echo op_label($folder);
+    echo "<br>";
+
+    // Get the fields in this folder
+    foreach ($folder->fields as $field) {
+      // show the translated field label
+        echo op_label($field);
+        echo ": ";
+
+        // use the field name to access the item values
+        echo $prod->val($field->name);
+        echo "<br>";
+    }
+    // echo "<hr>";
+}
+```
+
 ### File import settings
 By default, all files are imported in a local folder and the thumbnail generation will happen when calling `$file->thumb(...)`. The generated thumbnails are stored in a cache folder.
 

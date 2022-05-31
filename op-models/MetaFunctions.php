@@ -127,6 +127,9 @@ trait MetaFunctions {
   function getResourceId() {
     return $this->getMeta('op_res*');
   }
+  function getDefaultFolderId() {
+    return $this->getMeta('op_default_folder_id*');
+  }
   function scopeLocalized($q, string $lang = null) {
     if (self::isThing()) return;
     if (!$lang) {
@@ -448,5 +451,11 @@ trait MetaFunctions {
       $q->orWhere('meta_key', op_field_to_meta_key($field));
     });
     $q->orderBy("$meta_table.meta_value", $mode);
+  }
+
+  function getDefaultFolder() {
+    $id = $this->getDefaultFolderId();
+    if (!$id || !isset(op_schema()->id_to_folder[$id])) return null;
+    return op_schema()->id_to_folder[$id];
   }
 }
