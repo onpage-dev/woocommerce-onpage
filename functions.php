@@ -618,6 +618,11 @@ function op_disable_old_products(array $imported_items) :int {
 }
 function op_disable_old_categories(array $imported_items) :int {
   $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
+  
+  foreach (op_get_static_terms() as $wp_id) {
+    $tax_to_remove->forget($wp_id);
+  }
+
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type != 'term') continue;
@@ -631,6 +636,24 @@ function op_disable_old_categories(array $imported_items) :int {
   // Set posts as drafts
   op_delete_taxonomies_and_terms($tax_to_remove);
   return $tax_to_remove->count();
+}
+
+function op_get_static_terms() {
+
+  $static_parents = apply_filters('op_import_relations', null) ?: [];
+  $all_ids = [];
+  foreach ($static_parents as $term_id) {
+    if (!is_numeric($term_id)) continue;
+
+    if (!op_wpml_enabled()) {
+      $all_ids[] = $term_id;
+    } else {
+      foreach (op_wpml_langs() as $lang) {
+        $all_ids[] = apply_filters('wpml_object_id', $term_id, 'product_cat', true, $lang);
+      }
+    }
+  }
+  return $all_ids;
 }
 function op_delete_old_things(array $imported_items) :int {
   $things_to_remove = OpLib\Thing::get()->keyBy('id');
@@ -653,29 +676,48 @@ function op_link_imported_data($schema) {
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
 
+  if (op_wpml_enabled()) {
+    op_locale(op_wpml_default());
+    do_action( 'wpml_switch_language', op_wpml_default() );
+  }
 
   foreach ($relations as $resource_name => $parent_relation) {
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
     if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations; available resources: ".collect($schema->resources)->pluck('name')->implode(', '));
-
-    $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
-    if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
-
     $class = op_name_to_class($res->name);
-    if (op_wpml_enabled()) {
-      op_locale(op_wpml_default());
-      do_action( 'wpml_switch_language', op_wpml_default() );
-    }
-    $terms = $class::with($parent_relation)->get();
 
-    foreach ($terms as $child_term) {
-      foreach ($child_term->$parent_relation as $parent_term) {
+    // Static parent -> static category id
+    if (is_int($parent_relation)) {
+      foreach ($class::query()->get() as $child_term) {
+        // make sure this is the primary language term
+        if (op_wpml_enabled()) {
+          $parent_relation = apply_filters('wpml_object_id', $parent_relation, 'product_cat', true, op_wpml_default());
+        }
+        // op_err("child $child_term->id parent is $parent_relation");
         $ret = wp_update_term($child_term->id, 'product_cat', [
-          'parent' => $parent_term->id,
+          'parent' => $parent_relation,
           'slug' => $child_term->slug,
         ]);
         if ($ret instanceof \WP_Error) {
           op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
+        }
+      }
+    } else {
+      // Parent relation is a relation name
+      $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
+      if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
+  
+      $terms = $class::with($parent_relation)->get();
+  
+      foreach ($terms as $child_term) {
+        foreach ($child_term->$parent_relation as $parent_term) {
+          $ret = wp_update_term($child_term->id, 'product_cat', [
+            'parent' => $parent_term->id,
+            'slug' => $child_term->slug,
+          ]);
+          if ($ret instanceof \WP_Error) {
+            op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
+          }
         }
       }
     }
@@ -697,7 +739,6 @@ function op_locale_to_lang(string $locale) {
   $locale = explode('_', $locale)[0];
   return $locale;
 }
-
 
 function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items) {
   $php_class = $res->php_class;
@@ -809,7 +850,6 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'op_order' => $thing_i,
         ];
       }
-        
          
       // op_record("- ready to upsert");
       // Create or update the object
@@ -1003,6 +1043,7 @@ function op_remove_corrupted() {
   op_record("Deleted corrupted posts: $deleted_posts");
   
   $deleted_terms = OpLib\Term::withoutGlobalScopes()
+    ->whereNotIn('term_id', op_get_static_terms())
     ->whereHas('taxonomies', function($tax_query) { $tax_query->where('taxonomy', 'product_cat'); })
     ->where(function($q) {
       $q->whereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_id*'); });
