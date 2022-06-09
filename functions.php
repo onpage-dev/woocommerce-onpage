@@ -256,6 +256,13 @@ function op_label($res, string $lang = null) {
   if (!$lang) $lang = op_locale();
   return $res->labels->$lang ?? $res->labels->{op_schema()->default_lang} ?? '?';
 }
+function op_description($res, string $lang = null) {
+  if (!is_object($res) || !isset($res->descriptions)) {
+    throw new Exception('First parameter for op_label must be resource or field');
+  }
+  if (!$lang) $lang = op_locale();
+  return $res->descriptions->$lang ?? $res->descriptions->{op_schema()->default_lang} ?? '?';
+}
 function op_ignore_user_scopes(bool $set = null) {
   static $safe = false;
   if (!is_null($set)) {
