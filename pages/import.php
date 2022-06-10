@@ -305,6 +305,16 @@
             </tr>
             <template v-if="product_resources.includes(res.name)">
               <tr>
+                <td>Image field</td>
+                <td>
+                  <i>WARNING: importing images in the Wordpress Gallery will greatly slow down the import process and is generally not needed</i>
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-image`]">
+                    <option :value="''">-- none --</option>
+                    <option v-for="field in Object.values(res.fields).filter(x => ['image'].includes(x.type))" :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
                 <td>Price</td>
                 <td>
                   <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
@@ -388,13 +398,13 @@
             </template>
           </tbody>
         </table>
+        <p class="submit">
+          <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+          <div v-if="is_saving">
+            Saving...
+          </div>
+        </p>
       </div>
-      <p class="submit">
-        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-      <div v-if="is_saving">
-        Saving...
-      </div>
-      </p>
     </form>
   </div>
   <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) : ?>

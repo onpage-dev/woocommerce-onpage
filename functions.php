@@ -461,6 +461,10 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     op_record('!!! php is not supporting sem_get() so the plugin cannot make sure the import is atomic !!!');
   }
 
+  if (op_wpml_enabled()) {
+    op_locale(op_wpml_default());
+    do_action( 'wpml_switch_language', op_wpml_default() );
+  }
   
   op_remove_corrupted();
 
@@ -572,13 +576,15 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   foreach ($schema->resources as $res) op_gen_model($schema, $res);
   op_record('done');
 
-  op_record('Importing relations...');
-  op_link_imported_data($schema);
-  op_record('done');
-
   op_record('Generating slugs...');
   op_regenerate_import_slug($force_slug_regen ? $all_items : $new_items);
   op_record('done');
+
+  op_record('Importing relations...');
+  op_link_imported_data($schema);
+  op_record('done');
+  
+  op_import_gallery($schema);
 
   flush_rewrite_rules();
   op_record('permalinks flushed');
@@ -594,6 +600,33 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   do_action('op_import_completed');
 }
 
+function op_import_gallery($schema) {
+  foreach ($schema->resources as $res) {
+    if ($res->op_type != 'post') continue;
+    
+    $image_field_id = op_getopt("res-{$res->id}-image");
+    $field = $res->id_to_field[$image_field_id] ?? null;
+    if (!$field || $field->type != 'image') continue;
+
+    op_record("Importing images for $res->label ($field->name)...");
+
+    $class = op_name_to_class($res->name);
+
+    // op_record("Importing images for $res->label...");
+    foreach ($class::query()->unlocalized()->whereLang(op_langs()[0])->whereField($field->name, 'like', '%')->get() as $item) {
+      // op_record("Importing image for $item->post_title...");
+      $file = $item->file($field->name, $item->getLang());
+      // print_r($file);
+      if (is_array($file)) $file = $file[0] ?? null;
+      if (is_null($file)) continue;
+      if ($file instanceof OpLib\File) {
+        // op_record("Importing image for $item->post_title...");
+        op_set_product_featured_image($file, $item->id);
+      }
+    }
+    op_record("done");
+  }
+}
 
 function op_delete_orphan_meta() {
   global $table_prefix;
@@ -700,7 +733,8 @@ function op_link_imported_data($schema) {
         if (op_wpml_enabled()) {
           $parent_relation = apply_filters('wpml_object_id', $parent_relation, 'product_cat', true, op_wpml_default());
         }
-        // op_err("child $child_term->id parent is $parent_relation");
+
+        // Call wp_update_term
         $ret = wp_update_term($child_term->id, 'product_cat', [
           'parent' => $parent_relation,
           'slug' => $child_term->slug,
@@ -1313,12 +1347,12 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
       $op_name.= '-contain';
     }
 
-    $ext = defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
+    $ext = op_preferred_image_format();
     $op_name.= ".$ext";
     $filename.= ".$ext";
   }
 
-  $op_url = 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$op_name.'?name='.urlencode($filename);
+  $op_url = op_http_file_url($op_name,$filename);
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
@@ -1334,6 +1368,14 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   }
 
   return op_link($target_path);
+}
+
+function op_preferred_image_format() {
+  return defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
+}
+
+function op_http_file_url(string $token, $name = null) {
+  return 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$token.($name?'?name='.urlencode($filename):'');
 }
 
 
@@ -1829,4 +1871,60 @@ function op_delete_taxonomies_and_terms($taxonomies) {
   DB::table('terms')
     ->whereIn('term_id', $taxonomies->pluck('term_id'))
     ->delete();
+}
+
+function op_set_product_featured_image(OpLib\File $op_file, int $post_id  ){
+  static $attach_to_id = null;
+  static $postid_to_attach_id = null;
+  static $full_folder = null;
+  static $custom_folder_name = 'onpage';
+  if (is_null($attach_to_id)) {
+    $full_folder = wp_upload_dir()['basedir']."/$custom_folder_name";  
+    wp_mkdir_p($full_folder);
+    $attach_to_id = DB::table('posts')
+      ->where('post_type', 'attachment')
+      ->where('post_title', 'like', 'op_image_%')
+      ->pluck('ID', 'post_title')
+      ->all();
+    $postid_to_attach_id = DB::table('postmeta')
+      ->where('meta_key', '=', '_wp_attached_file')
+      ->where('meta_value', 'like', "$custom_folder_name/op_image_%")
+      ->pluck('post_id', 'meta_value')
+      ->all();
+  }
+
+  $full_token = basename($op_file->token).'.1980x.'.op_preferred_image_format();
+  $attach_key = "op_image_$full_token";
+
+  $file = $full_folder . '/' . $attach_key;
+
+  if (!isset($attach_to_id[$attach_key])) {
+    if (!is_file($file)) {
+      echo "importing...\n";
+      op_download_file(op_http_file_url($full_token), $file);
+    }
+
+    $wp_filetype = wp_check_filetype($attach_key, null);
+    $attachment = array(
+        'post_mime_type' => $wp_filetype['type'],
+        'post_title' => $attach_key,
+        'post_content' => '',
+        'post_status' => 'open',
+    );
+
+    // op_record('insert attachemnt...');
+    $attach_id = wp_insert_attachment( $attachment, $file );
+    
+    // op_record('setting post attachemnt...');
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
+    wp_update_attachment_metadata( $attach_id, $attach_data );
+    
+    $attach_to_id[$attach_key] = $attach_id;
+    
+  }
+  $attach_id = $attach_to_id[$attach_key];
+  // op_record('set thumb '.$attach_id."   ".$post_id);
+  set_post_thumbnail( $post_id, $attach_id );
+  // op_record('done...');
 }
