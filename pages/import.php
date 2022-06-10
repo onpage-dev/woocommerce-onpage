@@ -247,6 +247,10 @@
     <br>
     <!-- Import button and log -->
     <input type="button" :disabled="is_loading_next_schema || is_importing" class="button button-primary" value="Import data" :disabled="is_importing || is_saving" @click="startImport()">
+    <br>
+    <i v-if="is_importing">Importing... please wait</i>
+
+
     <div v-if="schema && schema.imported_at" style="margin: 1rem 0">
       Last import: {{ schema.imported_at }}
     </div>
@@ -255,7 +259,7 @@
     <br>
     <i v-if="is_loading_next_schema">Loading...</i>
     <i v-else-if="!next_schema">Configure above</i>
-    <i v-else-if="is_importing">Importing... please wait</i>
+
     <div v-if="res = import_result">
       <b style="margin: 0 0 .5rem">Import result:</b>
       <br>
@@ -272,7 +276,7 @@
           {{ res.t_count }} other items
         </li>
       </ul>
-      <pre>{{ res.log.join('\n') }}</pre>
+      <!-- <pre>{{ res.log.join('\n') }}</pre> -->
     </div>
 
     <div v-if="snapshots_list && snapshots_list.length">
@@ -284,6 +288,12 @@
       </div>
     </div>
 
+    <div v-if="import_log" style="padding-top: 2rem">
+      <div>
+        <b style="margin: 2rem">Import log:</b>
+      </div>
+      <pre v-text="import_log"></pre>
+    </div>
   </div>
 
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
@@ -550,21 +560,24 @@
     if (err.response) {
       if (err.response.status == 400) {
         alert('Error: ' + err.response.data.error)
+      } else if (err.response.status == 500) {
+        alert(`On Page plugin error ${err.response.status}`)
       } else {
-        alert(`Error ${err.response.status}`)
+        // nothing
       }
     } else if (err.request) {
-      alert('Request error')
+      alert('Connection error')
     } else {
       alert('Connection error: ' + err.message)
     }
     return Promise.reject(err)
   })
-
   new Vue({
     el: '#op-app',
     data: {
+      import_log: '',
       panel_active: 'settings',
+      import_log_link: <?= json_encode(op_link(op_import_log_path())) ?>,
       settings: <?= json_encode(op_settings()) ?>,
       settings_form: <?= json_encode(op_settings()) ?>,
       is_saving: false,
@@ -614,6 +627,11 @@
       this.refreshSchema()
       this.getSnapshotsList()
       this.getServerConfig()
+      setInterval(() => {
+        axios.get(this.import_log_link).then(res => {
+          this.import_log = res.data
+        })
+      }, 1000)
     },
     methods: {
       saveSettings() {

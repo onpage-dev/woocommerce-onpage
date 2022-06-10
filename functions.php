@@ -363,9 +363,9 @@ function op_record($label, $end = false) {
     WP_CLI::line($message);
   }
   if (count($steps) == 1) {
-    @unlink(__DIR__."/storage/.log");
+    @unlink(op_import_log_path());
   }
-  file_put_contents(__DIR__."/storage/.log", "$message\n", FILE_APPEND);
+  file_put_contents(op_import_log_path(), "$message\n", FILE_APPEND);
   return $steps;
 }
 
@@ -1368,6 +1368,12 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
   }
 
   return op_link($target_path);
+}
+
+function op_import_log_path() {
+  $path = op_file_path('import-log.txt');
+  if (!is_file($path)) touch($path);
+  return $path;
 }
 
 function op_preferred_image_format() {
