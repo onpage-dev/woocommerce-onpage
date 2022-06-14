@@ -1488,10 +1488,11 @@ function op_download_file(string $url, string $final_path) : int {
     curl_setopt($ch, CURLOPT_FILE, $fp);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err = curl_errno($ch);
     curl_close($ch);
     fclose($fp);
-    if ($err) {
+    if (!in_array($code, [200, 201]) || $err) {
       if ($max_tries) {
         $max_tries--;
         sleep(3);
