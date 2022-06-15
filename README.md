@@ -341,8 +341,8 @@ First of all, define a random token in your theme functions.php:
 define('OP_API_TOKEN', '0T780347N89YGA78EYN');
 ```
 
-You can do a POST call to your website passing the following parameters
-https://yourwebsite/?op-api=import&op-token=0T780347N89YGA78EYN&regen-snapshot=true&force=false
+You can do a POST call to your website passing the following parameters:
+
 __Command__:
 op-api: import
 __Your secret token__:
@@ -351,6 +351,10 @@ __Generate a new snapshot before importing__:
 regen-snapshot: true/false
 __Import even if there are no updates from On Page__:
 force: true/false
+
+If you are using cron or similar, you can use the CURL command:
+`curl -X POST 'https://yourwebsite/?op-api=import&op-token=0T780347N89YGA78EYN&regen-snapshot=true&force=false'`
+
 
 
 # Automate imports with wp-cli
