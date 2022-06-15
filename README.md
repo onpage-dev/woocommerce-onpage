@@ -343,14 +343,14 @@ define('OP_API_TOKEN', '0T780347N89YGA78EYN');
 
 You can do a POST call to your website passing the following parameters:
 
-__Command__:
-op-api: import
-__Your secret token__:
-op-token: 0T780347N89YGA78EYN
-__Generate a new snapshot before importing__:
-regen-snapshot: true/false
-__Import even if there are no updates from On Page__:
-force: true/false
+__Command__:  
+op-api: import  
+__Your secret token__:  
+op-token: 0T780347N89YGA78EYN  
+__Generate a new snapshot before importing__:  
+regen-snapshot: true/false  
+__Import even if there are no updates from On Page__:  
+force: true/false  
 
 If you are using cron or similar, you can use the CURL command:
 `curl -X POST 'https://yourwebsite/?op-api=import&op-token=0T780347N89YGA78EYN&regen-snapshot=true&force=false'`
