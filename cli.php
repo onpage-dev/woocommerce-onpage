@@ -15,16 +15,15 @@ class ONPAGE_CLI
       echo "Use --regen-snapshot to regenerate the snapshot before importing\n";
       return;
     }
-    $regen_snapshot = isset($assoc_args['regen-snapshot']);
-    if ($regen_snapshot) {
-      $sett = op_settings();
-      op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or die("Error: canot regenerate snapshot - check your settings\n");
-    }
 
-    $force_import = isset($assoc_args['force']);
     op_record("Beginning import...");
     $t1 = microtime(true);
-    op_import_snapshot((bool) @$assoc_args['force-slug-regen'], (string) @$assoc_args['file_name'], !$force_import);
+    op_import_snapshot(
+      (bool) @$assoc_args['force-slug-regen'],
+      (string) @$assoc_args['file_name'],
+      !isset($assoc_args['force']),
+      isset($assoc_args['regen-snapshot'])
+    );
     $t2 = microtime(true);
     print_r([
       // 'log' => op_record('finish'),

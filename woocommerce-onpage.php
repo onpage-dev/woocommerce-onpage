@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
@@ -11,31 +12,32 @@
  *
  * @package OnPage
  */
-defined( 'ABSPATH' ) || exit;
-require_once __DIR__.'/functions.php';
+defined('ABSPATH') || exit;
+require_once __DIR__ . '/functions.php';
 // require_once __DIR__.'/router.php';
-require_once __DIR__.'/cli.php';
+require_once __DIR__ . '/cli.php';
 
 
-function op_version() {
+function op_version()
+{
   $plugin_data = get_plugin_data(__FILE__);
   return $plugin_data['Version'];
 }
 
-add_filter('init', function() {
+add_filter('init', function () {
   if (!current_user_can('administrator')) return;
 
   if (!is_dir(op_file_path('/'))) {
-      mkdir(op_file_path('/'));
+    mkdir(op_file_path('/'));
   }
   if (!is_dir(op_file_path('cache'))) {
-      mkdir(op_file_path('cache'));
+    mkdir(op_file_path('cache'));
   }
-  if (!is_dir(__DIR__.'/db-models')) {
-      mkdir(__DIR__.'/db-models');
+  if (!is_dir(__DIR__ . '/db-models')) {
+    mkdir(__DIR__ . '/db-models');
   }
-  if (!is_dir(__DIR__.'/snapshots')) {
-      mkdir(__DIR__.'/snapshots');
+  if (!is_dir(__DIR__ . '/snapshots')) {
+    mkdir(__DIR__ . '/snapshots');
   }
 
   op_initdb();
@@ -50,7 +52,12 @@ add_filter('init', function() {
 
       case 'import':
         $t1 = microtime(true);
-        op_import_snapshot((bool) op_request('force_slug_regen'), (string) op_request('file_name'));
+        op_import_snapshot(
+          (bool) (op_request('force_slug_regen') ?? op_request('force-slug-regen')),
+          (string) op_request('file_name'),
+          (bool) op_request('force'),
+          (bool) (op_request('regen-snapshot') ?? op_request('regen_snapshot')),
+        );
         $t2 = microtime(true);
         op_ret([
           'log' => op_record('finish'),
@@ -61,7 +68,7 @@ add_filter('init', function() {
         ]);
 
       case 'schema':
-        $schema=op_stored_schema();
+        $schema = op_stored_schema();
         if (!$schema) op_ret(null);
         foreach ($schema->resources as $res) {
           $res->class_name = op_name_to_class($res->name);
@@ -95,7 +102,7 @@ add_filter('init', function() {
         op_ret(op_list_old_files());
 
       case 'drop-old-files':
-				op_drop_old_files();
+        op_drop_old_files();
         op_ret(op_list_old_files());
 
       case 'upgrade':
@@ -110,31 +117,34 @@ add_filter('init', function() {
       case 'reset-data':
         op_ret(op_reset_data());
 
-      default: op_err('Not implemented');
+      default:
+        op_err('Not implemented');
     }
-  } catch ( Exception $e ) {
-     op_ret([
-       'error' => $e->getMessage(),
-       'trace' => $e->getTrace(),
-     ]);
+  } catch (Exception $e) {
+    op_ret([
+      'error' => $e->getMessage(),
+      'trace' => $e->getTrace(),
+    ]);
   }
 });
 
-add_filter('admin_menu', function() {
+add_filter('admin_menu', function () {
   add_submenu_page(
     'woocommerce',
     'OnPage Importer',
     'OnPage Importer',
     'administrator',
     'onpage-importer',
-    function() { require __DIR__.'/pages/import.php'; }
+    function () {
+      require __DIR__ . '/pages/import.php';
+    }
   );
 });
 
 
 
 // Set image for posts
-add_filter( 'wp_get_attachment_image_src', function ( $image, $attachment_id, $size, $icon ){
+add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
   if (@$attachment_id[0] != '{' || !is_scalar($size)) return $image;
   $file = @json_decode($attachment_id);
   if (!$file) return $image;
@@ -152,29 +162,29 @@ add_filter( 'wp_get_attachment_image_src', function ( $image, $attachment_id, $s
     $src, '', '',
   ];
   return $img;
-}, 50, 4 );
+}, 50, 4);
 
 
 
 // Add tab with product info
-add_filter( 'woocommerce_product_data_tabs', function ( $tabs ) {
-    $tabs['onpage-meta'] = array(
-        'label' => __( 'OnPage Meta', 'op' ),
-        'target' => 'onpage_meta',
-    );
-    // print_r($tabs);
-    return $tabs;
-} , 99 , 1 );
+add_filter('woocommerce_product_data_tabs', function ($tabs) {
+  $tabs['onpage-meta'] = array(
+    'label' => __('OnPage Meta', 'op'),
+    'target' => 'onpage_meta',
+  );
+  // print_r($tabs);
+  return $tabs;
+}, 99, 1);
 
 
-add_action('woocommerce_product_data_panels', function($post) {
-	global $woocommerce, $post;
+add_action('woocommerce_product_data_panels', function ($post) {
+  global $woocommerce, $post;
   $item = op_product('ID', $post->ID);
-  require_once __DIR__.'/pages/show-meta.php';
+  require_once __DIR__ . '/pages/show-meta.php';
 });
 
 
-add_action('product_cat_edit_form_fields', function($tag) {
+add_action('product_cat_edit_form_fields', function ($tag) {
   $item = op_category('term_id', $tag->term_id);
-  include __DIR__.'/pages/show-meta.php';
+  include __DIR__ . '/pages/show-meta.php';
 });

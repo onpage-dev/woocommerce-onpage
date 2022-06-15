@@ -238,8 +238,16 @@
   <div class="op-panel-box " if="next_schema" v-show="panel_active=='data-importer'">
     <h1>Data Importer</h1>
     <label>
+      <input type="checkbox" v-model="import_generate_new_snap" />
+      Generate a new snapshot before importing
+    </label>
+    <label>
+      <input type="checkbox" v-model="import_force_flag" />
+      Import even if there are no updates from On Page
+    </label>
+    <label>
       <input type="checkbox" v-model="force_slug_regen" />
-      Force slug field regeneration for existing objects
+      Regenerate all slugs
       <br>
       <i>(might slow down the import and is a bad SEO practice - only use in development).</i>
     </label>
@@ -299,7 +307,7 @@
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
-      <div v-for="res in Object.values(next_schema.resources)"  v-if="!thing_resources.includes(res.name)">
+      <div v-for="res in Object.values(next_schema.resources)" v-if="!thing_resources.includes(res.name)">
         <br>
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
@@ -410,9 +418,9 @@
         </table>
         <p class="submit">
           <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-          <div v-if="is_saving">
-            Saving...
-          </div>
+        <div v-if="is_saving">
+          Saving...
+        </div>
         </p>
       </div>
     </form>
@@ -596,6 +604,8 @@
       is_caching_file: false,
       file_error: true,
       force_slug_regen: false,
+      import_generate_new_snap: true,
+      import_force_flag: false,
       old_files: [],
       snapshots_list: null,
       field_modal: null,
@@ -652,6 +662,8 @@
         axios.post('?op-api=import', {
             settings: this.settings_form,
             force_slug_regen: this.force_slug_regen,
+            regen_snapshot: this.import_generate_new_snap,
+            force: this.import_force_flag,
             file_name
           }).then(res => {
             alert('Import completed!')

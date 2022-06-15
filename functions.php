@@ -447,7 +447,7 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
   return $slug.$suffix;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $stop_if_same = false) {
+function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $stop_if_same = false, bool $regen_snapshot = false) {
   if (function_exists('sem_get')) {
     $semaphore = sem_get(333666333, 1, 0666, true);
     if(!$semaphore) {
@@ -464,6 +464,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
     do_action( 'wpml_switch_language', op_wpml_default() );
+  }
+
+  // Regenerate the snapshot
+  if ($regen_snapshot) {
+    op_record('Generating a fresh snapshot...');
+    $sett = op_settings();
+    op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or die("Error: canot regenerate snapshot - check your settings\n");
+    op_record('done');
   }
   
   op_remove_corrupted();
