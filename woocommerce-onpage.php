@@ -25,7 +25,12 @@ function op_version()
 }
 
 add_filter('init', function () {
-  if (!current_user_can('administrator')) return;
+  $authorized = current_user_can('administrator');
+  if (defined('OP_API_TOKEN') && op_request('op_token') == OP_API_TOKEN) {
+    $authorized = true;
+  }
+
+  if (!$authorized) return;
 
   if (!is_dir(op_file_path('/'))) {
     mkdir(op_file_path('/'));
