@@ -13,8 +13,8 @@ class File {
   }
 
   /** @return string|null the image url */
-  public function link() {
-    return op_file_url($this);
+  public function link(bool $inline = false) {
+    return op_file_url($this, null, null, null, $inline);
   }
 
   /** @return string|null the image url */

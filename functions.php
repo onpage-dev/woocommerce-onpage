@@ -1328,7 +1328,7 @@ function op_link(string $path) {
 }
 
 
-function op_file_url(object $file, $w = null, $h = null, $contain = null) {
+function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
   $path = op_file_path($file->token);
 
   $pi = pathinfo($file->name);
@@ -1352,7 +1352,7 @@ function op_file_url(object $file, $w = null, $h = null, $contain = null) {
     $filename.= ".$ext";
   }
 
-  $op_url = op_http_file_url($op_name,$filename);
+  $op_url = op_http_file_url($op_name,$filename,$inline);
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
@@ -1380,8 +1380,13 @@ function op_preferred_image_format() {
   return defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
 }
 
-function op_http_file_url(string $token, $name = null) {
-  return 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$token.($name?'?name='.urlencode($filename):'');
+function op_http_file_url(string $token, string $name = null, bool $inline = null) {
+  $params = array_filter([
+    'name' => $name,
+    'inline' => $inline,
+  ], function($x) { return !is_null($x); });
+  $query_string = empty($params) ? '' : '?'.http_build_query($params);
+  return 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$token.$query_string;
 }
 
 
