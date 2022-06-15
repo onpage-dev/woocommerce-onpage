@@ -26,7 +26,7 @@ function op_version()
 
 add_filter('init', function () {
   $authorized = current_user_can('administrator');
-  if (defined('OP_API_TOKEN') && op_request('op_token') == OP_API_TOKEN) {
+  if (defined('OP_API_TOKEN') && OP_API_TOKEN && op_request('op-token') === OP_API_TOKEN) {
     $authorized = true;
   }
 

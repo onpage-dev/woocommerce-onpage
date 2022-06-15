@@ -335,6 +335,24 @@ foreach ($category->products as $prod): ?>
 ## Product Page
 You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
 
+# Automate imports with APIs
+First of all, define a random token in your theme functions.php:
+```php
+define('OP_API_TOKEN', '0T780347N89YGA78EYN');
+```
+
+You can do a POST call to your website passing the following parameters
+https://yourwebsite/?op-api=import&op-token=0T780347N89YGA78EYN&regen-snapshot=true&force=false
+__Command__:
+op-api: import
+__Your secret token__:
+op-token: 0T780347N89YGA78EYN
+__Generate a new snapshot before importing__:
+regen-snapshot: true/false
+__Import even if there are no updates from On Page__:
+force: true/false
+
+
 # Automate imports with wp-cli
 You can easily automate the snapshot through wp-cli using the command `wp onpage import`.
 

@@ -241,10 +241,12 @@
       <input type="checkbox" v-model="import_generate_new_snap" />
       Generate a new snapshot before importing
     </label>
+    <br>
     <label>
       <input type="checkbox" v-model="import_force_flag" />
       Import even if there are no updates from On Page
     </label>
+    <br>
     <label>
       <input type="checkbox" v-model="force_slug_regen" />
       Regenerate all slugs
@@ -562,6 +564,11 @@
 
 
 <script type="text/javascript">
+  axios.defaults.headers = {
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  };
   axios.interceptors.response.use(function(response) {
     return response
   }, function(err) {
@@ -641,7 +648,7 @@
         axios.get(this.import_log_link).then(res => {
           this.import_log = res.data
         })
-      }, 1000)
+      }, 2000)
     },
     methods: {
       saveSettings() {
@@ -659,13 +666,13 @@
       startImport(file_name) {
         this.is_importing = true
         this.import_result = null
-        axios.post('?op-api=import', {
-            settings: this.settings_form,
+        axios.post('/', {}, {params:{
+            'op-api': 'import',
             force_slug_regen: this.force_slug_regen,
             regen_snapshot: this.import_generate_new_snap,
             force: this.import_force_flag,
             file_name
-          }).then(res => {
+          }}).then(res => {
             alert('Import completed!')
             this.import_result = res.data
             this.refreshSchema()

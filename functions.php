@@ -447,7 +447,10 @@ function op_slug(string $title, $base_class, string $old_slug = null) {
   return $slug.$suffix;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $stop_if_same = false, bool $regen_snapshot = false) {
+function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $force_import = false, bool $regen_snapshot = false) {
+  op_record("Starting import");
+  op_record("Server time: ".date('Y-m-d H:i:s'));
+
   if (function_exists('sem_get')) {
     $semaphore = sem_get(333666333, 1, 0666, true);
     if(!$semaphore) {
@@ -486,9 +489,17 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   } else {
     $token_to_import = op_latest_snapshot_token();
 
-    if ($stop_if_same && $token_to_import == op_getopt('last_import_token')) {
-      op_record("Current data is up to date, skipping import");
-      return;
+    $data_changed = $token_to_import != op_getopt('last_import_token');
+
+
+    if (!$data_changed) {
+      op_record("Current data is already up to date");
+      if (!$force_import) {
+        op_record("Skipping import");
+        return;
+      } else {
+        op_record("Import anyway");
+      }
     }
 
 
@@ -1088,8 +1099,8 @@ function op_remove_corrupted() {
       $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
       $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
     })
-    ->count();
-  op_record("Deleted corrupted posts: $deleted_posts");
+    ->delete();
+  if ($deleted_posts) op_record("Deleted corrupted posts: $deleted_posts");
   
   $deleted_terms = OpLib\Term::withoutGlobalScopes()
     ->whereNotIn('term_id', op_get_static_terms())
@@ -1099,8 +1110,8 @@ function op_remove_corrupted() {
       $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
       $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
     })
-    ->count();
-  op_record("Deleted corrupted terms: $deleted_terms");
+    ->delete();
+  if ($deleted_terms) op_record("Deleted corrupted terms: $deleted_terms");
 }
 
 
@@ -1598,7 +1609,9 @@ function op_request(string $name = null) {
     $data = file_get_contents('php://input');
     $req = (object) json_decode($data);
   }
-  return $name ? @$req->$name ?: @$_REQUEST[$name] : $req;
+  $ret = $name ? @$req->$name ?: @$_REQUEST[$name] : $req;
+  if ($ret === 'false') $ret = false;
+  return $ret;
 }
 
 function op_locale($set = null) {
