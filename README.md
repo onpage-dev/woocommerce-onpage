@@ -53,6 +53,8 @@ foreach ($prods as $prod) {
   echo $p->file('info_file')->name; // e.g. MK100.pdf
   // Gets the original image/file url
   echo '<a href="'. $p->file('info_file')->link() .'">Download PDF</a>'
+  // This will generate open the file in the browser instead of downloading it
+  echo '<a href="'. $p->file('info_file')->link(true) .'">Open PDF</a>'
   // Resize image to width 100 and automatic height (generated in run-time and cached)
   echo '<img src="'. $p->file('cover')->thumb(100) .'">'
   // Generate thumbnail cropping (zooming) the image
