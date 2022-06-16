@@ -324,6 +324,10 @@ trait MetaFunctions {
         $must_exist = false;
         $value = true;
       }
+      if ($op == 'not in') {
+        $op = 'in';
+        $must_exist = false;
+      }
 
       $method = $must_exist
         ? ($is_or ? 'orWhereHas' : 'whereHas')
