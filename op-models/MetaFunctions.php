@@ -353,6 +353,9 @@ trait MetaFunctions {
 
   public static function scopePluckField($q, $name, $lang = null) {
     $ids = $q->pluck(self::getPrimaryKey());
+    if ($ids->isEmpty()) {
+      return [];
+    }
     return self::$meta_class::whereIn(self::$meta_ref, $ids)
       ->where('meta_key', self::fieldToMetaKey($name, $lang))
       ->orderByRaw('FIELD ('.self::$meta_ref.', ' . $ids->implode(',') . ') ASC')
