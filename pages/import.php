@@ -323,11 +323,21 @@
                 </select>
               </td>
             </tr>
+            <tr>
+              <td>Description field</td>
+              <td>
+                <select style="width: 20rem" v-model="settings_form[`res-${res.id}-description`]">
+                  <option :value="undefined">-- auto --</option>
+                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'text', 'html', 'int', 'real'].includes(x.type))" :value="field.id">{{ field.label }}</option>
+                </select>
+              </td>
+            </tr>
             <template v-if="product_resources.includes(res.name)">
               <tr>
                 <td>Image field</td>
                 <td>
                   <i>WARNING: importing images in the Wordpress Gallery will greatly slow down the import process and is generally not needed</i>
+                  <br>
                   <select style="width: 20rem" v-model="settings_form[`res-${res.id}-image`]">
                     <option :value="''">-- none --</option>
                     <option v-for="field in Object.values(res.fields).filter(x => ['image'].includes(x.type))" :value="field.id">{{ field.label }}</option>

@@ -812,6 +812,10 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   $lab_id = op_getopt("res-{$res->id}-name");
   $lab = collect($res->fields)->firstWhere('id', $lab_id)
      ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
+     
+
+  $description_field = $res->id_to_field[op_getopt("res-{$res->id}-description")] ?? null;
+
   $lab_img = $php_class->isThing() ? null : collect($res->fields)->where('type', 'image')->first();
   $base_table = $php_class->getTableWithoutPrefix();
   $base_table_key = $php_class->primaryKey;
@@ -854,11 +858,16 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
       $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
+      $description_field_alias = $description_field ? $description_field->id.($description_field->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
       if (is_array($label)) $label = implode(' - ', $label);
       if (!is_scalar($label)) $label = json_encode($label);
+
+      $description = (string) @$thing->fields->$description_field_alias;
+      if (is_array($description)) $description = implode('<br/>', $description);
+      if (!is_scalar($description)) $description = json_encode($description);
 
 
       // Look for the object if it exists already
@@ -878,7 +887,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'post_author' => 1,
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
           'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
-          'post_content' => '',
+          'post_content' => (string) $description,
           'post_title' => $label,
           'post_excerpt' => '',
           'post_status' => 'publish',
