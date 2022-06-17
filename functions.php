@@ -734,6 +734,7 @@ function op_delete_old_things(array $imported_items) :int {
 function op_link_imported_data($schema) {
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
+  $id_to_parent = DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->pluck('parent', 'term_id');
 
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
@@ -771,6 +772,9 @@ function op_link_imported_data($schema) {
   
       foreach ($terms as $child_term) {
         foreach ($child_term->$parent_relation as $parent_term) {
+          if (($id_to_parent[$child_term->id] ?? null) == $parent_term->id) {
+            continue;
+          }
           $ret = wp_update_term($child_term->id, 'product_cat', [
             'parent' => $parent_term->id,
             'slug' => $child_term->slug,
@@ -778,6 +782,7 @@ function op_link_imported_data($schema) {
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
           }
+          break;
         }
       }
     }
