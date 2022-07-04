@@ -1,6 +1,5 @@
 <?php
 namespace OpLib;
-use \WeDevs\ORM\Eloquent\Facades\DB;
 
 if (!defined('OP_PLUGIN')) die(400);
 

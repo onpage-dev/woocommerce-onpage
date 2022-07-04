@@ -271,7 +271,7 @@ function op_ignore_user_scopes(bool $set = null) {
   return $safe;
 }
 function op_stored_schema() {
-  return op_getopt('schema') ?? op_read_json('schema');
+  return op_read_json('schema') ?? op_getopt('schema');
 }
 function op_schema(object $set = null) {
   static $schema = null;

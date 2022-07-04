@@ -3,8 +3,6 @@ namespace OpLib;
 
 if (!defined('OP_PLUGIN')) die(400);
 
-use WeDevs\ORM\Eloquent\Model;
-
 class TermMeta extends Model {
     protected $table = OP_WP_PREFIX.'termmeta';
     protected $guarded = [];
