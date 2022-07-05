@@ -1,6 +1,8 @@
 <?php
 namespace OpLib;
 
+use Illuminate\Support\Collection;
+
 if (!defined('OP_PLUGIN')) die(400);
 
 
@@ -436,7 +438,7 @@ trait MetaFunctions {
   }
 
 
-  function getRelatedItems(string $path) {
+  function getRelatedItems(string $path) : Collection {
     $path = explode('.', $path);
     $ret = collect([$this]);
     foreach ($path as $field) {
@@ -444,7 +446,7 @@ trait MetaFunctions {
         return $thing->$field;
       });
     }
-    return $ret;
+    return $ret->unique('id');
   }
   function scopeOrderByField($q, string $field_name, string $mode = 'asc') {
     $meta_class = static::$meta_class;
