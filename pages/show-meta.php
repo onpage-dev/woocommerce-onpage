@@ -1,14 +1,21 @@
 <?php
 if (!defined('OP_PLUGIN')) die(400);
-
 // error_reporting(E_ALL ^ E_NOTICE);
 // ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
 // error_reporting(E_ALL);
 
+if (!$item || !$item->resource) return;
+
 if (!$item->resource->is_product) echo '<tr><td colspan="2">';
 ?>
 <div id="onpage_meta" class="panel woocommerce_options_panel">
-  <h1 style="margin: 10px 20px 0">OnPage Fields - <?= op_label($item->resource) ?></h1>
+  <h1 style="margin: 10px 20px 0">OnPage Fields</h1>
+  <div>
+    ID: <b>#<?= $item->getId() ?></b>
+  </div>
+  <div>
+    Resource: <b><?= op_label($item->resource) ?></b>
+  </div>
   <table>
     <tbody>
       <?php foreach (collect($item->resource->fields)->sortBy(function($f) { if ($f->type == 'relation') return 9999+$f->order; else return 1+$f->order; }) as $f): ?>
