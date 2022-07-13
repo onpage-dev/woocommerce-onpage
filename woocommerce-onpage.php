@@ -193,3 +193,47 @@ add_action('product_cat_edit_form_fields', function ($tag) {
   $item = op_category('term_id', $tag->term_id);
   include __DIR__ . '/pages/show-meta.php';
 });
+
+
+// Add the "On Page" column to the woocommerce product list
+add_filter( 'manage_edit-product_columns', function ( $columns ){
+  $columns['onpage_info'] = 'On Page';
+  return $columns;
+} );
+add_filter( 'manage_product_posts_custom_column', function ( $column, $product_id ){
+   if ( $column == 'onpage_info' ) {
+     echo '#'.OpLib\PostMeta::where('post_id', $product_id )->where('meta_key', 'op_id*')->pluck('meta_value')->first();
+     // echo $product->get_catalog_visibility();
+     echo "<br>";
+     $res_id = OpLib\PostMeta::where('post_id', $product_id )->where('meta_key', 'op_res*')->pluck('meta_value')->first();
+     if ($res_id) {
+       $res = op_schema()->id_to_res[$res_id] ?? null;
+       if ($res) {
+         echo op_label($res);
+       }
+     }
+     // echo $product->get_catalog_visibility();
+   }
+}, 10, 2 );
+
+
+// Add the "On Page" column to the woocommerce category list
+add_filter( 'manage_edit-product_cat_columns', function ( $columns ){
+  $columns['onpage_info'] = 'On Page';
+  return $columns;
+} );
+add_filter( 'manage_product_cat_custom_column', function ( $dep, $column, $product_id ){
+   if ( $column == 'onpage_info' ) {
+       echo '#'.OpLib\TermMeta::where('term_id', $product_id )->where('meta_key', 'op_id*')->pluck('meta_value')->first();
+     // echo $product->get_catalog_visibility();
+     echo "<br>";
+     $res_id = OpLib\TermMeta::where('term_id', $product_id )->where('meta_key', 'op_res*')->pluck('meta_value')->first();
+     if ($res_id) {
+       $res = op_schema()->id_to_res[$res_id] ?? null;
+       if ($res) {
+         echo op_label($res);
+       }
+     }
+     // echo $product->get_catalog_visibility();
+   }
+}, 10, 3 );
