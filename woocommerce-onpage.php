@@ -50,7 +50,7 @@ add_filter('init', function () {
   $api = $_REQUEST['op-api'] ?? null;
   if (!$api) return;
   try {
-    op_ignore_user_scopes();
+    op_ignore_user_scopes(true);
     switch ($api) {
       case 'save-settings':
         op_ret(op_settings(op_post('settings')));
