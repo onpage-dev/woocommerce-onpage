@@ -605,6 +605,9 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   
   op_import_gallery($schema);
 
+  wc_update_product_lookup_tables();
+  op_record('updating woocommerce product meta');
+
   flush_rewrite_rules();
   op_record('permalinks flushed');
 
