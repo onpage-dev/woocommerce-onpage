@@ -306,6 +306,15 @@ add_action('op_import_relations', function() {
 });
 ```
 
+# Advanced language options
+You can map WPML locales to a specific On Page language just like the following:
+```php
+// a map of WPML_LOCALE => OP_LANGUAGE to use
+set_op_locale_to_lang([
+  'it_it' => 'it',
+  'en_int' => 'en_us'
+]);
+```
 
 
 # Example templates

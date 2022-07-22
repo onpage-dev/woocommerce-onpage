@@ -827,8 +827,26 @@ function op_link_imported_data($schema) {
   delete_option("product_cat_children");
 }
 
+function set_op_locale_to_lang(array $set = null) {
+  static $locales = [];
+  if ($set) {
+    $locales = [];
+    foreach ($set as $wpml_locale => $op_lang) {
+      $locales[strtolower(str_replace('-', '_', $wpml_locale))] = $op_lang;
+    }
+  }
+  return $locales;
+}
+
 function op_locale_to_lang(string $locale) {
-  $locale = explode('-', $locale)[0];
+  $locale = strtolower(str_replace('-', '_', $locale));
+
+  $locales = set_op_locale_to_lang();
+  if (isset($locales[$locale])) return $locales[$locale];
+
+  $schema_langs = op_schema()->langs ?? [];
+  if (in_array($locale, $schema_langs)) return $locale;
+
   $locale = explode('_', $locale)[0];
   return $locale;
 }
