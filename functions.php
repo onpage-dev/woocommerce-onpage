@@ -1302,7 +1302,7 @@ function op_generate_data_meta($schema, $res, $thing, int $object_id, $field_map
   $meta = [];
   // Fields
   foreach ($thing->fields as $field_hc_name => $values) {
-    $e = explode('_', $field_hc_name);
+    $e = explode('_', $field_hc_name, 2);
     $f = $field_map[$e[0]];
     $lang = @$e[1];
     if (!$f->is_multiple) {
@@ -1708,8 +1708,7 @@ function op_prod_res(WC_Product $product) {
 function op_field_to_meta_key($field, $lang = null) {
   $key = "op_{$field->name}";
   if ($field->is_translatable) {
-    if (!$lang) $lang = op_locale();
-    $lang = op_locale_to_lang($lang);
+    if (!$lang) $lang = op_locale_to_lang(op_locale());
     $key.= "_$lang";
   }
   return $key;
