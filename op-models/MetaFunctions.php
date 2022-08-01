@@ -365,6 +365,8 @@ trait MetaFunctions {
       ->where('meta_key', self::fieldToMetaKey($name, $lang))
       ->orderByRaw('FIELD ('.self::$meta_ref.', ' . $ids->implode(',') . ') ASC')
       ->pluck('meta_value')
+      ->unique()
+      ->sort()
       ->all();
   }
 
