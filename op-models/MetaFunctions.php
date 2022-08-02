@@ -200,13 +200,30 @@ trait MetaFunctions {
 
     $field = @$this->resource->name_to_field[$name];
     if (!$field) return;
-    $meta_key = op_field_to_meta_key($field, $lang);
-    if (!$meta_key) return null;
-    $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
-    if ($field->type == 'dim1' || $field->type == 'dim2' || $field->type == 'dim3') {
-      $values = $values->map('json_decode');
+
+
+    // This array contains all the languages in which we will look for a possible translation
+    $fallback_langs = [];
+    if (!$field->is_translatable) {
+      $fallback_langs = [null];
+    } elseif (!is_null($lang)){
+      $fallback_langs = [$lang];
+    } else {
+      $fallback_langs = op_fallback_langs();
     }
-    return $field->is_multiple ? $values->all() : $values->first();
+
+    // Parse all the available languages and return first available value
+    foreach ($fallback_langs as $lang) {
+      $meta_key = op_field_to_meta_key($field, $lang);
+      if (!$meta_key) return null;
+      $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
+      if ($field->type == 'dim1' || $field->type == 'dim2' || $field->type == 'dim3') {
+        $values = $values->map('json_decode');
+      }
+      if ($values->isEmpty()) continue;
+      return $field->is_multiple ? $values->all() : $values->first();
+    }
+    return $field->is_multiple ? [] : null;
   }
 
   function getValues(string $lang = null) {

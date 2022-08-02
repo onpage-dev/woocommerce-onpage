@@ -251,17 +251,30 @@ function op_read_json($name) {
 
 function op_label($res, string $lang = null) {
   if (!is_object($res) || !isset($res->labels)) {
-    throw new Exception('First parameter for op_label must be resource or field');
+    throw new Exception('First parameter for op_label must be resource or field or folder');
   }
-  if (!$lang) $lang = op_locale();
-  return $res->labels->$lang ?? $res->labels->{op_schema()->default_lang} ?? '?';
+  $fallback_langs = $lang ? [$lang] : op_fallback_langs();
+  foreach ($fallback_langs as $lang) {
+    if (isset($res->labels->$lang)) return $res->labels->$lang;
+  }
 }
 function op_description($res, string $lang = null) {
   if (!is_object($res) || !isset($res->descriptions)) {
     throw new Exception('First parameter for op_label must be resource or field');
   }
-  if (!$lang) $lang = op_locale();
-  return $res->descriptions->$lang ?? $res->descriptions->{op_schema()->default_lang} ?? '?';
+  $fallback_langs = $lang ? [$lang] : op_fallback_langs();
+  foreach ($fallback_langs as $lang) {
+    if (isset($res->descriptions->$lang)) return $res->descriptions->$lang;
+  }
+}
+function op_fallback_langs($lang = null) {
+  if (!$lang) $lang = op_locale_to_lang(op_locale());
+  $fallback_langs = [$lang];
+  if (strlen($lang) > 2) {
+    $fallback_langs[] = substr($lang, 0, 2);
+  }
+  $fallback_langs[] = op_schema()->langs[0];
+  return $fallback_langs;
 }
 function op_ignore_user_scopes(bool $set = null) {
   static $safe = false;
