@@ -579,8 +579,8 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   $imported_at = date('Y-m-d H:i:s');
 
   $langs = op_langs();
-  foreach ($schema->resources as $res_i => $res) {
-    $data = $schema_json->resources[$res_i]->data;
+  foreach ($schema->resources as $res) {
+    $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (".count($data)." items)...");
     op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items);
     op_record("completed $res->label");
