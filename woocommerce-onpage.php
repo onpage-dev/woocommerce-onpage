@@ -61,7 +61,7 @@ add_filter('init', function () {
           (bool) (op_request('force_slug_regen') ?? op_request('force-slug-regen')),
           (string) op_request('file_name'),
           (bool) op_request('force'),
-          (bool) (op_request('regen-snapshot') ?? op_request('regen_snapshot')),
+          (bool) (op_request('regen-snapshot') ?? op_request('regen_snapshot'))
         );
         $t2 = microtime(true);
         op_ret([
