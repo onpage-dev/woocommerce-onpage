@@ -314,9 +314,8 @@ By default, if no value is found in the current project, the system will fallbac
 If the current language is country-specific (e.g. de_AU) then the system will also try the country-free alternative "de".
 If you need to use alternative languages when translations are missing, you can setup your own fallback languages:
 ```php
-// a map of WPML_LOCALE => OP_LANGUAGE to use
+// When Norwegian is empty, try to find a value in the English or Italian language
 op_set_fallback_lang('no', ['en', 'it']);
-// Now, when Norwegian is empty, try to find a value in the English or Italian language
 ```
 
 ### Mapping WPML locale to On Page language
