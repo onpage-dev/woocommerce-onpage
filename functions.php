@@ -16,6 +16,10 @@ global $wpdb;
 define('OP_PLUGIN', true);
 define('OP_WP_PREFIX', $wpdb->prefix);
 
+$___op_conf = (object)[
+  'op_fallback_langs' => [],
+];
+
 function op_debug() {
   error_reporting(E_ALL ^ E_NOTICE);
   ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
@@ -267,13 +271,23 @@ function op_description($res, string $lang = null) {
     if (isset($res->descriptions->$lang)) return $res->descriptions->$lang;
   }
 }
+
+function op_set_fallback_lang(string $missing, array $fallback) {
+  global $___op_conf;
+  $___op_conf->op_fallback_langs[$missing] = $fallback;
+}
 function op_fallback_langs($lang = null) {
+  global $___op_conf;
   if (!$lang) $lang = op_locale_to_lang(op_locale());
   $fallback_langs = [$lang];
-  if (strlen($lang) > 2) {
-    $fallback_langs[] = substr($lang, 0, 2);
+  if (isset($___op_conf->op_fallback_langs[$lang])) {
+    $fallback_langs = array_merge($fallback_langs, $___op_conf->op_fallback_langs[$lang]);
+  } else {
+    if (strlen($lang) > 2) {
+      $fallback_langs[] = substr($lang, 0, 2);
+    }
+    $fallback_langs[] = op_schema()->langs[0];
   }
-  $fallback_langs[] = op_schema()->langs[0];
   return $fallback_langs;
 }
 function op_ignore_user_scopes(bool $set = null) {

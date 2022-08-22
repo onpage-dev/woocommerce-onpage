@@ -307,6 +307,18 @@ add_action('op_import_relations', function() {
 ```
 
 # Advanced language options
+
+
+### Setting up fallback languages
+If you need to use alternative languages when translations are missing, you can setup your own fallback languages:
+```php
+// a map of WPML_LOCALE => OP_LANGUAGE to use
+set_op_locale_to_lang([
+  'no' => ['en', 'it'], // when Norwegian is empty, try to find a value in the English or Italian language
+]);
+```
+
+### Mapping WPML locale to On Page language
 You can map WPML locales to a specific On Page language just like the following:
 ```php
 // a map of WPML_LOCALE => OP_LANGUAGE to use
@@ -314,6 +326,7 @@ set_op_locale_to_lang([
   'en' => 'en_gb',
 ]);
 ```
+
 
 
 # Example templates
