@@ -152,6 +152,12 @@ $prods = Op\Product::whereField('_id', 1872378)->get();
 // Filter by Wordpress ID
 $prods = Op\Product::whereField('_wp_id', 6123)->get();
 
+// Join filters using OR
+$prods = Op\Product::where(function($q) {
+  $q->whereField('length', '>', 10);
+  $q->orWhereField('height', '>', 10);
+})->get();
+
 // Use deep where to customize the final query
 $prods = Op\Product::deepWhere('colors.category', function($q) {
   $q->whereField('name', 'Dark colors');
