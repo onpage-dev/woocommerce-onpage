@@ -4,7 +4,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.1.32
+ * Version: 1.1.33
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage
@@ -150,7 +150,7 @@ add_filter('admin_menu', function () {
 
 // Set image for posts
 add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
-  if (@$attachment_id[0] != '{' || !is_scalar($size)) return $image;
+  if (!isset($attachment_id[0]) || $attachment_id[0] != '{' || !is_scalar($size)) return $image;
   $file = @json_decode($attachment_id);
   if (!$file) return $image;
   $sizes = [

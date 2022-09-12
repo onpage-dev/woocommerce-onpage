@@ -1481,7 +1481,7 @@ function op_import_log_path() {
 }
 
 function op_preferred_image_format() {
-  return defined('OP_THUMBNAIL_FORMAT') ? OP_THUMBNAIL_FORMAT : 'png';
+  return (defined('OP_THUMBNAIL_FORMAT') && OP_THUMBNAIL_FORMAT) ? OP_THUMBNAIL_FORMAT : 'png';
 }
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null) {
@@ -1495,7 +1495,7 @@ function op_http_file_url(string $token, string $name = null, bool $inline = nul
 
 
 function op_list_files(bool $return_map = false) : array {
-  if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) return [];
+  if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = op_name_to_class($res->name);

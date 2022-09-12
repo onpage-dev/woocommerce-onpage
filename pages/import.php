@@ -183,7 +183,7 @@
       <div class="op-panel-btn" @click="panel_active='import-settings'" v-if="next_schema" :active="panel_active=='import-settings'">
         Import settings
       </div>
-      <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) : ?>
+      <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') || !OP_DISABLE_ORIGINAL_FILE_IMPORT) : ?>
         <div class="op-panel-btn" @click="panel_active='file-importer'" v-if="schema" :active="panel_active=='file-importer'">
           File Importer
         </div>
@@ -437,7 +437,7 @@
       </div>
     </form>
   </div>
-  <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) : ?>
+  <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') || !OP_DISABLE_ORIGINAL_FILE_IMPORT) : ?>
     <div class="op-panel-box " v-if="schema" v-show="panel_active=='file-importer'">
       <h1>File importer</h1>
 
