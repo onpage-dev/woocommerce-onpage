@@ -18,6 +18,7 @@ For example, if you plan to have a page for each "Category" and one for each "Pr
 ```
 add_filter('op_resource_types', function() {
   return [
+    'colors' => 'thing', // "thing" = hidden plugin table
     'product' => 'post', // "post" = woocommerce product
     'category' => 'term', // "term" = woocommerce category
   ];
