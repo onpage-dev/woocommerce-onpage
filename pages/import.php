@@ -649,7 +649,7 @@
       startImport(file_name) {
         this.is_importing = true
         this.import_result = null
-        axios.post('/', {}, {
+        axios.post(location.pathname, {}, {
             params: {
               'op-api': 'import',
               force_slug_regen: this.force_slug_regen,
