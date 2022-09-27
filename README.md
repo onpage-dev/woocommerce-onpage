@@ -20,6 +20,7 @@ add_filter('op_resource_types', function() {
   return [
     'product' => 'post', // "post" = woocommerce product
     'category' => 'term', // "term" = woocommerce category
+    // all other resources will be imported in a hidden plugin table with high performance
   ];
 });
 ```
@@ -31,8 +32,16 @@ For instance, assuming you want to select all your products (codenamed `Product`
 $prods = Op\Product::get(); // a collection of products
 ```
 
+By default, no ordering is used (fastest method).
+The order is only applied when accessing relations, and not for global order.
+If you need to maintain On Page global order, you should also add `->sorted()` to the query like so:
+```php
+$prods = Op\Product::sorted()->get(); // a collection of products sorted with the global ordering
+```
+
 You can also sort results by field value:
 ```php
+
 $prods = Op\Product::orderByField('price')->get();
 
 // Sort in descending order:
