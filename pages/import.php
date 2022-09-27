@@ -183,11 +183,6 @@
       <div class="op-panel-btn" @click="panel_active='import-settings'" v-if="next_schema" :active="panel_active=='import-settings'">
         Import settings
       </div>
-      <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') || !OP_DISABLE_ORIGINAL_FILE_IMPORT) : ?>
-        <div class="op-panel-btn" @click="panel_active='file-importer'" v-if="schema" :active="panel_active=='file-importer'">
-          File Importer
-        </div>
-      <?php endif; ?>
       <div class="op-panel-btn" @click="panel_active='variable-names'" v-if="schema" :active="panel_active=='variable-names'">
         Variables
       </div>
@@ -437,34 +432,6 @@
       </div>
     </form>
   </div>
-  <?php if (!defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') || !OP_DISABLE_ORIGINAL_FILE_IMPORT) : ?>
-    <div class="op-panel-box " v-if="schema" v-show="panel_active=='file-importer'">
-      <h1>File importer</h1>
-
-      <div v-if="is_loading_file || !files">
-        Loading...
-      </div>
-      <div v-else>
-        <b>You have imported {{ files.length - non_imported_files.length }} / {{ files.length }} files.</b>
-        <div v-if="file_error">
-          Error while importing file, please <a @click.prevent="cacheFiles()" href="#">click here</a> to try again
-        </div>
-        <div v-else-if="non_imported_files.length > 0">
-          We are importing the rest, please do not close this page.
-        </div>
-        <div v-else>
-          All your files have been imported :-)
-        </div>
-      </div>
-
-      <div v-if="old_files.length">
-        <hr>
-        <h2>There are {{ old_files.length }} old files</h2>
-
-        <input type="button" class="button button-primary" value="Drop old files" :disabled="is_loading_old_files || is_dropping_old_files" @click="dropOldFiles">
-      </div>
-    </div>
-  <?php endif; ?>
 
   <div class="op-panel-box " v-if="schema" v-show="panel_active=='variable-names'">
     <h1>Variable names</h1>

@@ -1433,8 +1433,6 @@ function op_link(string $path) {
 
 
 function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
-  $path = op_file_path($file->token);
-
   $pi = pathinfo($file->name);
   $filename = $pi['filename'];
 
@@ -1460,7 +1458,9 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
-    return $op_url;
+    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+      return $op_url;
+    }
   }
 
   // Save thumbnails to the local storage
@@ -1495,7 +1495,7 @@ function op_http_file_url(string $token, string $name = null, bool $inline = nul
 
 
 function op_list_files(bool $return_map = false) : array {
-  if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) return [];
+  return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = op_name_to_class($res->name);

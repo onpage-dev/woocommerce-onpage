@@ -97,15 +97,16 @@ if ($folder = $prod->getDefaultFolder()) {
 ```
 
 ### File import settings
-By default, all files are imported in a local folder and the thumbnail generation will happen when calling `$file->thumb(...)`. The generated thumbnails are stored in a cache folder.
+Files and thumbnails will not be downloaded during the import process, instead they are downloaded and stored when you reference them.
+So, when you do something like `$prod->file('main_image')->link()` or `$prod->file('main_image')->thumb(200)` for the first time, the file will be downloaded in the plugin folder, so the page may take a while to load. Later calls will be instantaneous because the file has already been downloaded.
 
-You can decide wether to import or not the original files defining the following:
+While this is very handful, original files can be very heavy to store on your server.
+You can change the behaviour and use On Page as a CDN, so the `->link()` function will return the url from the On Page servers directly, without storing anything on your server:
 ```php
 define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
 ```
 
-If you decide to not import the original files, On Page will be used as a CDN when using the `$file->link()` function.
-In this scenario, `$file->thumb(...)` will ask On Page to generate the thumbnail, and the thumbnail will be saved in the local cache.
+Note: in this scenario, `$file->thumb(...)` will still ask On Page to generate the thumbnail, and the thumbnail will be saved in the plugin folder.
 
 ### CDN support
 On Page supports uploading files to external CDNs.
