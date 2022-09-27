@@ -342,10 +342,16 @@
               <tr>
                 <td>Price</td>
                 <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
+                  <div style="display: flex; flex-direction: row; gap: 1rem">
+                    <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
+                      <option :value="undefined">-- not set --</option>
+                      <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price', 'relation'].includes(x.type))" :value="field.id">{{ field.label }}</option>
+                    </select>
+                    <select v-if="fieldById(settings_form[`res-${res.id}-price`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-price-2`]">
+                      <option :value="undefined">-- not set --</option>
+                      <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-price`]).fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
+                    </select>
+                  </div>
                 </td>
               </tr>
               <tr>
@@ -643,13 +649,15 @@
       startImport(file_name) {
         this.is_importing = true
         this.import_result = null
-        axios.post('/', {}, {params:{
-            'op-api': 'import',
-            force_slug_regen: this.force_slug_regen,
-            regen_snapshot: this.import_generate_new_snap,
-            force: this.import_force_flag,
-            file_name
-          }}).then(res => {
+        axios.post('/', {}, {
+            params: {
+              'op-api': 'import',
+              force_slug_regen: this.force_slug_regen,
+              regen_snapshot: this.import_generate_new_snap,
+              force: this.import_force_flag,
+              file_name
+            }
+          }).then(res => {
             alert('Import completed!')
             this.import_result = res.data
             this.refreshSchema()
@@ -777,6 +785,17 @@
         axios.post(`?op-api=server-config`).then(res => {
           this.server_config = res.data
         })
+      },
+      fieldById(id) {
+        for (const r of this.next_schema.resources)
+          for (const f of r.fields)
+            if (f.id == id) return f
+      },
+      relatedFieldResource(id) {
+        const f = this.fieldById(id)
+        if (!f) return
+        for (const r of this.next_schema.resources)
+          if (r.id == f.rel_res_id) return r
       },
     },
 

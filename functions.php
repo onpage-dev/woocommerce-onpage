@@ -596,7 +596,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (".count($data)." items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $schema_json);
     op_record("completed $res->label");
   }
   op_record("Importing relations...");
@@ -878,7 +878,7 @@ function op_locale_to_lang(string $locale) {
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items) {
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, object $schema_json) {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
   $php_class = new $php_class;
@@ -1100,7 +1100,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // op_record("- merging meta");
       $all_meta = array_merge($all_meta, $base_meta);
       // op_record("- merged: ".count($all_meta));
-      $all_meta = array_merge($all_meta, op_generate_data_meta($db, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
+      $all_meta = array_merge($all_meta, op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
 
       // If this is the primary language
       if ($icl_type) {
@@ -1325,7 +1325,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
   }
 }
 
-function op_generate_data_meta($schema, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
+function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
   $meta = [];
   // Fields
   foreach ($thing->fields as $field_hc_name => $values) {
@@ -1363,14 +1363,39 @@ function op_generate_data_meta($schema, $res, $thing, int $object_id, $field_map
     foreach ($meta_map as $meta_name => $meta_key) {
       $values[$meta_key] = null;
       $op_fid = op_getopt("res-{$res->id}-{$meta_name}");
-      if ($op_fid && ($f = collect($res->fields)->firstWhere('id', $op_fid))) {
-        $fid = $f->id;
-        if ($f->is_translatable) $fid.= "_".$schema->langs[0];
-        $val = @$thing->fields->$fid;
-        if (!is_null($val)) {
-          $values[$meta_key] = $val;
-        }
+      if (!$op_fid) continue;
+
+      $f = collect($res->fields)->firstWhere('id', $op_fid);
+      if (!$f) continue;
+
+      $source_thing = $thing;
+
+      if ($f->type == 'relation') {
+        
+        $rel_thing_id = @$thing->rel_ids->{$f->id}[0];
+        if (!$rel_thing_id) continue;
+        
+
+        $rel_res = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id);
+        if (!$rel_res) continue;
+
+        $rel_res_things = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id)->data ?? [];
+
+        $source_thing = collect($rel_res_things)->firstWhere('id', $rel_thing_id);
+        
+        if (!$source_thing) return;
+
+        $op_fid = op_getopt("res-{$res->id}-{$meta_name}-2");
+        $f = collect($rel_res->fields)->firstWhere('id', $op_fid);
+        if (!$f) continue;
       }
+
+      $fid = $f->id;
+      if ($f->is_translatable) $fid.= "_".op_locale_to_lang(op_locale());
+      $val = @$source_thing->fields->$fid;
+      if (is_null($val)) continue;
+
+      $values[$meta_key] = $val;
     }
 
     $sale_period_active = true;
