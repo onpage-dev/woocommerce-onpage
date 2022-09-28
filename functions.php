@@ -1492,7 +1492,8 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
   $target_folder = op_file_path("/cache/$op_name");
   $target_path = "$target_folder/$filename";
   if (!is_file($target_path)) {
-    if (!is_dir($target_folder)) mkdir($target_folder, 0775, true);
+    if (is_file($target_path)) unlink($target_path);
+    if (!is_dir($target_folder) || !is_link($target_folder)) mkdir($target_folder, 0775, true);
     op_download_file($op_url, $target_path);
   }
 
@@ -1639,6 +1640,10 @@ function op_download_file(string $url, string $final_path) : int {
     }
   }
 
+  $dir = pathinfo($final_path, PATHINFO_DIRNAME);
+  if (!is_dir($dir)) {
+    mkdir($dir);
+  }
   rename($tmp_path, $final_path);
 
   $ret = [
