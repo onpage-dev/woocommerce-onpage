@@ -263,6 +263,9 @@ trait MetaFunctions {
   public function getIdAttribute() : int {
     return $this->attributes[$this->primaryKey];
   }
+  public function getOpIdAttribute() : int {
+    return $this->getId();
+  }
 
   public function getResourceAttribute() {
     return op_schema()->id_to_res[$this->getResourceId()];
