@@ -1492,7 +1492,7 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
   $target_folder = op_file_path("/cache/$op_name");
   $target_path = "$target_folder/$filename";
   if (!is_file($target_path)) {
-    if (is_file($target_path)) unlink($target_path);
+    if (is_file($target_folder)) unlink($target_folder);
     if (!is_dir($target_folder) || !is_link($target_folder)) mkdir($target_folder, 0775, true);
     op_download_file($op_url, $target_path);
   }
