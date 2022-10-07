@@ -1,6 +1,8 @@
 <?php
 namespace OpLib;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 
 if (!defined('OP_PLUGIN')) die(400);
@@ -470,16 +472,18 @@ trait MetaFunctions {
     }
     return $ret->unique('id');
   }
-  function scopeOrderByField($q, string $field_name, string $mode = 'asc') {
+  function scopeOrderByField(Builder $q, string $field_name, string $mode = 'asc') {
     $meta_class = static::$meta_class;
     $meta_table = (new $meta_class)->getTable();
-    $q->leftJoin($meta_table, $q->qualifyColumn(self::getPrimaryKey()), '=', "$meta_table.".($meta_class::$relation_field));
     $field = @static::getResource()->name_to_field[$field_name];
-    if (!$field) throw new \Exception("Cannot find field $field_name");
-    $q->where(function($q) use ($field) {
-      $q->whereNull('meta_key');
-      $q->orWhere('meta_key', op_field_to_meta_key($field));
+    $q->leftJoin($meta_table, function (JoinClause $join_q) use ($q, $field, $meta_class, $meta_table) {
+      $join_q->whereColumn(
+        "{$meta_table}.{$meta_class::$relation_field}",
+        $q->qualifyColumn(self::getPrimaryKey()),
+      );
+      $join_q->where('meta_key', op_field_to_meta_key($field));
     });
+    if (!$field) throw new \Exception("Cannot find field $field_name");
     $q->orderBy("$meta_table.meta_value", $mode);
   }
 
