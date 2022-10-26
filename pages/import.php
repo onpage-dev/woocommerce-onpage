@@ -2,7 +2,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" charset="utf-8"></script>
 
-<style file="screen">
+<style>
   .op-card {
     background: #fff;
     padding: 1rem;
@@ -220,12 +220,12 @@
         </tbody>
       </table>
 
-      <p class="submit">
-        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-      <div v-if="is_saving">
-        Saving...
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving" />
+        <div v-if="is_saving">
+          Saving...
+        </div>
       </div>
-      </p>
 
     </form>
   </div>
@@ -449,12 +449,12 @@
             </template>
           </tbody>
         </table>
-        <p class="submit">
+        <div class="submit">
           <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-        <div v-if="is_saving">
-          Saving...
+          <div v-if="is_saving">
+            Saving...
+          </div>
         </div>
-        </p>
       </div>
     </form>
   </div>
