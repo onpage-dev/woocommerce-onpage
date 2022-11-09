@@ -309,144 +309,27 @@
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
           <tbody>
-            <tr>
-              <td>Name field</td>
+            <tr v-for="property in generic_fields.concat(product_resources.includes(res.name) ? product_fields : [])">
+              <td>{{ property.label }}</td>
               <td>
-                <select style="width: 20rem" v-model="settings_form[`res-${res.id}-name`]">
-                  <option :value="undefined">-- auto --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'text', 'int', 'real'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                </select>
+                <div style="display: flex; flex-direction: row; gap: 1rem">
+                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-${property.name}`]">
+                    <option :value="undefined">-- not set --</option>
+                    <optgroup label="Fields">
+                      <option v-for="field in Object.values(res.fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
+                    </optgroup>
+                    <optgroup label="Relations">
+                      <option v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')" :value="field.id">{{ field.label }}</option>
+                    </optgroup>
+                  </select>
+                  <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-${property.name}-2`]">
+                    <option :value="undefined">-- not set --</option>
+                    <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-${property.name}`]).fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
+                  </select>
+                </div>
+                <div v-if="property.note">{{ property.note }}</div>
               </td>
             </tr>
-            <tr>
-              <td>Description field</td>
-              <td>
-                <select style="width: 20rem" v-model="settings_form[`res-${res.id}-description`]">
-                  <option :value="undefined">-- auto --</option>
-                  <option v-for="field in Object.values(res.fields).filter(x => ['string', 'text', 'html', 'int', 'real'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                </select>
-              </td>
-            </tr>
-            <template v-if="product_resources.includes(res.name)">
-              <tr>
-                <td>Image field</td>
-                <td>
-                  <i>WARNING: importing images in the Wordpress Gallery will greatly slow down the import process and is generally not needed</i>
-                  <br>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-image`]">
-                    <option :value="''">-- none --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['image'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>SKU field</td>
-                <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-sku`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['string', 'int'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>Weight</td>
-                <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-weight`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'weight'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>Length</td>
-                <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-length`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>Width</td>
-                <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-width`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>Height</td>
-                <td>
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-height`]">
-                    <option :value="undefined">-- not set --</option>
-                    <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>Price</td>
-                <td>
-                  <div style="display: flex; flex-direction: row; gap: 1rem">
-                    <select style="width: 20rem" v-model="settings_form[`res-${res.id}-price`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price', 'relation'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                    <select v-if="fieldById(settings_form[`res-${res.id}-price`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-price-2`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-price`]).fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Discounted price (optional)</td>
-                <td>
-                  <div style="display: flex; flex-direction: row; gap: 1rem">
-                    <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-price`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(res.fields).filter(x => ['real', 'int', 'price', 'relation'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                    <select v-if="fieldById(settings_form[`res-${res.id}-discounted-price`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-price-2`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-discounted-price`]).fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Discount start date</td>
-
-                <td>
-                  <div style="display: flex; flex-direction: row; gap: 1rem">
-                    <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-start-date`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(res.fields).filter(x => ['date'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                    <select v-if="fieldById(settings_form[`res-${res.id}-discounted-start-date`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-start-date-2`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-discounted-start-date`]).fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Discount end date</td>
-
-                <td>
-                  <div style="display: flex; flex-direction: row; gap: 1rem">
-                    <select style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-end-date`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(res.fields).filter(x => ['date'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                    <select v-if="fieldById(settings_form[`res-${res.id}-discounted-end-date`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-discounted-end-date-2`]">
-                      <option :value="undefined">-- not set --</option>
-                      <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-discounted-end-date`]).fields).filter(x => ['real', 'int', 'price'].includes(x.type))" :value="field.id">{{ field.label }}</option>
-                    </select>
-                  </div>
-                </td>
-              </tr>
-            </template>
           </tbody>
         </table>
         <div class="submit">
@@ -620,6 +503,113 @@
       snapshots_list: null,
       field_modal: null,
       server_config: null,
+      generic_fields: [{
+          name: 'name',
+          label: 'Name',
+          default: 'auto',
+          types: ['string', 'text', 'int', 'real'],
+        },
+        {
+          name: 'description',
+          label: 'Description',
+          default: 'auto',
+          types: ['string', 'text', 'html', 'int', 'real'],
+        },
+      ],
+      product_fields: [
+
+        {
+          name: 'sku',
+          label: 'Sku',
+          default: 'none',
+          types: ['string', 'int'],
+        },
+        {
+          name: 'weight',
+          label: 'Weight',
+          default: 'none',
+          types: ['weight', 'int', 'real'],
+        },
+        {
+          name: 'length',
+          label: 'Length',
+          default: 'none',
+          types: ['int', 'real'],
+        },
+        {
+          name: 'width',
+          label: 'Width',
+          default: 'none',
+          types: ['int', 'real'],
+        },
+        {
+          name: 'height',
+          label: 'Height',
+          default: 'none',
+          types: ['int', 'real'],
+        },
+        {
+          name: 'price',
+          label: 'Price',
+          default: 'none',
+          types: ['int', 'real', 'price'],
+        },
+        {
+          name: 'discounted-price',
+          label: 'Discounted Price',
+          default: 'none',
+          types: ['int', 'real', 'price'],
+        },
+        {
+          name: 'discounted-start-date',
+          label: 'Discount start date',
+          default: 'none',
+          types: ['date'],
+        },
+        {
+          name: 'discounted-end-date',
+          label: 'Discount end date',
+          default: 'none',
+          types: ['date'],
+        },
+        {
+          name: 'downloadable',
+          label: 'Downloadable',
+          default: 'none',
+          types: ['bool'],
+        },
+        {
+          name: 'low_stock_amount',
+          label: 'Low stock threshold',
+          default: 'none',
+          types: ['int'],
+        },
+        {
+          name: 'manage_stock',
+          label: 'Manage stock',
+          default: 'off',
+          types: ['bool'],
+        },
+        {
+          name: 'stock',
+          label: 'Stock (available pieces)',
+          default: 'none',
+          types: ['int'],
+        },
+        {
+          name: 'virtual',
+          label: 'Stock (available pieces)',
+          default: 'none',
+          types: ['bool'],
+        },
+        {
+          name: 'image',
+          label: 'Image',
+          default: 'none',
+          note: 'WARNING: importing images in the Wordpress Gallery will greatly slow down the import process and is generally not needed',
+          types: ['image'],
+        },
+      ],
     },
     computed: {
       product_resources() {

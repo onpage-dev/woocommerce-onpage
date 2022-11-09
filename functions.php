@@ -1167,6 +1167,12 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             '_length',
             '_height',
             '_thumbnail_id',
+            '_downloadable',
+            '_low_stock_amount',
+            '_manage_stock',
+            '_stock',
+            '_stock_status',
+            '_virtual',
         ]);
     })->delete();
 
@@ -1346,22 +1352,64 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
 
   // Append the price and other woocommerce metadata
   if ($res->is_product) {
+    $yes_no = function($v) { return $v ? 'yes' : 'no';  };
     $meta_map = [
-      'price' => '_regular_price',
-      'discounted-price' => '_sale_price',
-      'discounted-start-date' => '_sale_price_dates_from',
-      'discounted-end-date' => '_sale_price_dates_to',
-      'sku' => '_sku',
-      'weight' => '_weight',
-      'width' => '_width',
-      'length' => '_length',
-      'height' => '_height',
+      '_regular_price' => [
+        'option' => 'price',
+      ],
+      '_sale_price' => [
+        'option' => 'discounted-price',
+      ],
+      '_sale_price_dates_from' => [
+        'option' => 'discounted-start-date',
+      ],
+      '_sale_price_dates_to' => [
+        'option' => 'discounted-end-date',
+      ],
+      '_sku' => [
+        'option' => 'sku',
+      ],
+      '_weight' => [
+        'option' => 'weight',
+      ],
+      '_width' => [
+        'option' => 'width',
+      ],
+      '_length' => [
+        'option' => 'length',
+      ],
+      '_height' => [
+        'option' => 'height',
+      ],
+      '_downloadable' => [
+        'option' => 'downloadable', // yes|no
+        'mapper' => $yes_no,
+      ],
+      '_low_stock_amount' => [
+        'option' => 'low_stock_amount',
+      ],
+      '_manage_stock' => [
+        'option' => 'manage_stock', // yes|no
+        'mapper' => $yes_no,
+      ],
+      '_stock' => [
+        'option' => 'stock',
+      ],
+      // TODO
+      '_stock_status' => [
+        'option' => 'stock_status', // instock|outofstock|onbackorder
+        'mapper' => function($v) { return $v ? 'instock' : 'outofstock'; },
+      ],
+      '_virtual' => [
+        'option' => 'virtual', // yes|no
+        'mapper' => $yes_no,
+      ],
     ];
 
     // Fill values using the mapping above
     $values = [];
-    foreach ($meta_map as $meta_name => $meta_key) {
-      $values[$meta_key] = null;
+    foreach ($meta_map as $meta_name => $meta_info) {
+      $values[$meta_info['meta_key']] = null;
       $op_fid = op_getopt("res-{$res->id}-{$meta_name}");
       if (!$op_fid) continue;
 
@@ -1395,7 +1443,13 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
       $val = @$source_thing->fields->$fid;
       if (is_null($val)) continue;
 
-      $values[$meta_key] = $val;
+
+      // Map the value
+      if (isset($meta_info['mapper'])) {
+        $val = $meta_info['mapper']($val);
+      }
+      // Set the value
+      $values[$meta_info['meta_key']] = $val;
     }
 
     $sale_period_active = true;
