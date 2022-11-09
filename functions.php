@@ -1395,7 +1395,6 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
       '_stock' => [
         'option' => 'stock',
       ],
-      // TODO
       '_stock_status' => [
         'option' => 'stock_status', // instock|outofstock|onbackorder
         'mapper' => function($v) { return $v ? 'instock' : 'outofstock'; },
@@ -1446,10 +1445,14 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
 
       // Map the value
       if (isset($meta_info['mapper'])) {
-        $val = $meta_info['mapper']($val);
+        $val = $meta_info['mapper']($val, $values);
       }
       // Set the value
       $values[$meta_info['meta_key']] = $val;
+    }
+
+    if (!isset($values['_stock_status']) && isset($values['_stock'])) {
+      $values['_stock_status'] = $values['_stock'] > 0;
     }
 
     $sale_period_active = true;

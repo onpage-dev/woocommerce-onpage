@@ -579,12 +579,6 @@
           types: ['bool'],
         },
         {
-          name: 'low_stock_amount',
-          label: 'Low stock threshold',
-          default: 'none',
-          types: ['int'],
-        },
-        {
           name: 'manage_stock',
           label: 'Manage stock',
           default: 'off',
@@ -593,12 +587,24 @@
         {
           name: 'stock',
           label: 'Stock (available pieces)',
+          default: 'infinity',
+          types: ['int'],
+        },
+        {
+          name: 'low_stock_amount',
+          label: 'Low stock threshold',
           default: 'none',
           types: ['int'],
         },
         {
+          name: 'stock_status',
+          label: 'In stock (true/false)',
+          default: 'if stock > 0',
+          types: ['bool'],
+        },
+        {
           name: 'virtual',
-          label: 'Stock (available pieces)',
+          label: 'Virtual product',
           default: 'none',
           types: ['bool'],
         },
