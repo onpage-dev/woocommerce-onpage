@@ -1413,7 +1413,9 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     $values = [];
     foreach ($meta_map as $meta_name => $meta_info) {
       $values[$meta_info['meta_key']] = null;
-      $op_fid = op_getopt("res-{$res->id}-{$meta_name}");
+      $opt_name = $meta_info['option'];
+
+      $op_fid = op_getopt("res-{$res->id}-{$opt_name}");
       if (!$op_fid) continue;
 
       $f = collect($res->fields)->firstWhere('id', $op_fid);
@@ -1436,7 +1438,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
         
         if (!$source_thing) return;
 
-        $op_fid = op_getopt("res-{$res->id}-{$meta_name}-2");
+        $op_fid = op_getopt("res-{$res->id}-{$opt_name}-2");
         $f = collect($rel_res->fields)->firstWhere('id', $op_fid);
         if (!$f) continue;
       }
@@ -1452,7 +1454,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
         $val = $meta_info['mapper']($val, $values);
       }
       // Set the value
-      $values[$meta_info['meta_key']] = $val;
+      $values[$meta_name] = $val;
     }
 
     if (!isset($values['_stock_status']) && isset($values['_stock'])) {
