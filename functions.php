@@ -38,7 +38,11 @@ function op_download_json($url) {
   }
   $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
-  return $status == 200 && $result ? json_decode($result) : null;
+  return op_is_successfull_status($status) && $result ? json_decode($result) : null;
+}
+
+function op_is_successfull_status($status) {
+  return in_array($status, [200, 201]);
 }
 
 function op_initdb() {
@@ -500,7 +504,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   if ($regen_snapshot) {
     op_record('Generating a fresh snapshot...');
     $sett = op_settings();
-    op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or die("Error: canot regenerate snapshot - check your settings\n");
+    op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
     op_record('done');
   }
   
@@ -1684,7 +1688,7 @@ function op_download_file(string $url, string $final_path) : int {
     $err = curl_errno($ch);
     curl_close($ch);
     fclose($fp);
-    if (!in_array($code, [200, 201]) || $err) {
+    if (!op_is_successfull_status($code) || $err) {
       if ($max_tries) {
         $max_tries--;
         sleep(3);
