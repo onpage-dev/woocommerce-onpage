@@ -1154,30 +1154,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     }
   }
 
-  // op_record('cycle ended');
+  // Delete old meta values
+  $non_op_meta_keys = collect($all_meta)->pluck('meta_key')->unique()->filter(function($key) {return substr($key, 0, 3) !== 'op_';})->values()->all();
   $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
     ->whereNotIn('meta_key', ['op_lang*', 'op_id*', 'op_res*'])
-    ->where(function($q) {
+    ->where(function($q) use ($non_op_meta_keys) {
       $q->where('meta_key', 'like', 'op\\_%')
-        ->orWhereIn('meta_key', [
-            '_price', // do not remove this line
-            '_regular_price',
-            '_sale_price',
-            '_sale_price_dates_from',
-            '_sale_price_dates_to',
-            '_sku',
-            '_weight',
-            '_width',
-            '_length',
-            '_height',
-            '_thumbnail_id',
-            '_downloadable',
-            '_low_stock_amount',
-            '_manage_stock',
-            '_stock',
-            '_stock_status',
-            '_virtual',
-        ]);
+        ->orWhereIn('meta_key', $non_op_meta_keys);
     })->delete();
 
   // Insert new meta
