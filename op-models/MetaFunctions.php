@@ -136,7 +136,7 @@ trait MetaFunctions {
   function scopeLocalized($q, string $lang = null) {
     if (self::isThing()) return;
     if (!$lang) {
-      $lang = defined('ICL_LANGUAGE_CODE') ? ICL_LANGUAGE_CODE : op_locale();
+      $lang = op_locale();
     }
     $q->whereLang($lang);
   }
@@ -197,7 +197,7 @@ trait MetaFunctions {
 		  $item = $items->first();
 		  if (!$item) return null;
 		  $path[] = $name;
-		  return $item->val(implode('.', $path));
+		  return $item->val(implode('.', $path), $lang);
 	  }
 
     $field = @$this->resource->name_to_field[$name];
