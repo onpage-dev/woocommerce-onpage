@@ -508,7 +508,9 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     op_record('done');
   }
   
-  op_remove_corrupted();
+  if (!op_getopt('maintain_user_prods_and_cats')) {
+    op_remove_corrupted();
+  }
 
   ini_set('memory_limit','2G');
   set_time_limit(600);

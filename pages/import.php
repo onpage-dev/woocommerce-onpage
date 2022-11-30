@@ -304,6 +304,22 @@
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
+      <label>
+        <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
+        Maintain user created categories and products
+      </label>
+
+      <br>
+
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">
+          Saving...
+        </div>
+      </div>
+
+      <hr />
+
       <div v-for="res in Object.values(next_schema.resources)" v-if="!thing_resources.includes(res.name)">
         <br>
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
