@@ -448,7 +448,10 @@ function op_wpml_langs() :? array {
   if (!op_wpml_enabled()) return null;
   $icl_deflang = op_wpml_default();
   $wpml_langs = [];
-  foreach (apply_filters( 'wpml_active_languages', null) as $lang => $_) {
+  foreach (array_merge(
+    array_keys(apply_filters('wpml_active_languages', null)),
+    apply_filters('wpml_setting', [], 'hidden_languages'),
+  ) as $lang) {
     if ($lang != $icl_deflang) {
       $wpml_langs[] = $lang;
     }
