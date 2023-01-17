@@ -33,7 +33,7 @@ $prods = Op\Product::get(); // a collection of products
 ```
 
 By default, no ordering is used (fastest method).
-The order is only applied when accessing relations, and not for global order.
+The order is only applied when accessing relations (e.g. `$product->variants()->get()`), and not for global order.
 If you need to maintain On Page global order, you should also add `->sorted()` to the query like so:
 ```php
 $prods = Op\Product::sorted()->get(); // a collection of products sorted with the global ordering
