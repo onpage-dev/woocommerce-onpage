@@ -356,7 +356,7 @@ trait MetaFunctions {
         ? ($is_or ? 'orWhereHas' : 'whereHas')
         : ($is_or ? 'orWhereDoesntHave' : 'whereDoesntHave');
       $q->$method('meta', function($q) use ($field_name, $op, $value) {
-        $lang = op_locale();
+        $lang = op_locale_to_lang(op_locale());
         $q->where('meta_key', self::fieldToMetaKey($field_name, $lang));
         if ($op == 'in') {
           $q->whereIn('meta_value', $value);
@@ -399,7 +399,7 @@ trait MetaFunctions {
     $string = str_replace('%', '\\%', $string);
     $string = str_replace('_', '\\_', $string);
     if (!$lang) {
-      $lang = op_locale();
+      $lang = op_locale_to_lang(op_locale());
     }
     $q->whereHas('meta', function($q) use ($fields, $string, $lang) {
       $q->where(function($q) use ($fields, $string, $lang) {
