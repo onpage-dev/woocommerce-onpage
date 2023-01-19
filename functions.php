@@ -1225,7 +1225,6 @@ function op_regenerate_import_slug(array $items) {
 }
 
 function op_regenerate_all_slugs() {
-  op_debug();
   foreach (op_schema()->resources as $res) {
     // if ($res->name != 'categorie') continue;
     $class = op_name_to_class($res->name);
