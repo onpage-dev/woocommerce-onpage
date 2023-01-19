@@ -456,7 +456,7 @@ function op_wpml_langs() :? array {
       $wpml_langs[] = $lang;
     }
   }
-  return $wpml_langs;
+  return array_values(array_unique($wpml_langs));
 }
 
 function op_langs() {
@@ -464,7 +464,7 @@ function op_langs() {
   if ($other_langs = op_wpml_langs()) {
     $langs = array_merge($langs, $other_langs);
   }
-  return $langs;
+  return array_values(array_unique($langs));
 }
 
 function op_slug(string $title, $base_class, string $old_slug = null) {
@@ -598,14 +598,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
 
   $all_items = []; // [res][id][lang] -> wpid
-  $new_items = []; // [res][id][lang] -> wpid
+  $regen_slug_items = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
 
   $langs = op_langs();
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (".count($data)." items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $schema_json);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $regen_slug_items, $schema_json);
     op_record("completed $res->label");
   }
   op_record("Importing relations...");
@@ -632,7 +632,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Generating slugs...');
-  op_regenerate_import_slug($force_slug_regen ? $all_items : $new_items);
+  op_regenerate_import_slug($force_slug_regen ? $all_items : $regen_slug_items);
   op_record('done');
 
   op_record('Importing relations...');
@@ -887,7 +887,7 @@ function op_locale_to_lang(string $locale) {
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, object $schema_json) {
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json) {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
   $php_class = new $php_class;
@@ -962,7 +962,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
       $op_fid = op_getopt("res-{$res->id}-slug");
       $op_fid2 = op_getopt("res-{$res->id}-slug-2");
-      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2, op_locale_to_lang($lang));
+      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
       if (strlen($preferred_slug)) {
         $preferred_slug = sanitize_title_with_dashes($preferred_slug);
       }
@@ -1039,7 +1039,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             'data' => $data,
           ]);
         }
-        $new_items[$res->id][$thing->id][$lang] = $object_id;
+        if (!$preferred_slug) {
+          $regen_slug_items[$res->id][$thing->id][$lang] = $object_id;
+        }
         // op_record("- created");
       }
       $object_ids["{$thing->id}-$lang"] = $object_id;
@@ -1440,7 +1442,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     // Fill values using the mapping above
     $values = [];
     foreach ($meta_map as $meta_name => $meta_info) {
-      $values[$meta_info['meta_key']] = null;
+      $values[$meta_name] = null;
       $opt_name = $meta_info['option'];
 
       $op_fid = op_getopt("res-{$res->id}-{$opt_name}");
