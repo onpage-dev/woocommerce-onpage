@@ -526,6 +526,12 @@
           types: ['string', 'text', 'int', 'real'],
         },
         {
+          name: 'slug',
+          label: 'Slug',
+          default: 'auto',
+          types: ['string'],
+        },
+        {
           name: 'description',
           label: 'Description',
           default: 'auto',

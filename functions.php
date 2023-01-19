@@ -960,6 +960,12 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Look for the object if it exists already
       $object = @$current_objects["{$thing->id}-{$lang}"];
 
+      $op_fid = op_getopt("res-{$res->id}-slug");
+      $op_fid2 = op_getopt("res-{$res->id}-slug-2");
+      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2, op_locale_to_lang($lang));
+      if (strlen($preferred_slug)) {
+        $preferred_slug = sanitize_title_with_dashes($preferred_slug);
+      }
 
       // Prepare data
       $data = null;
@@ -981,7 +987,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'comment_status' => $object ? $object->comment_status : 'closed',
           'ping_status' => $object ? $object->ping_status : 'closed',
           'post_password' => $object ? $object->post_password : '',
-          'post_name' => $object ? $object->post_name : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
+          'post_name' => $preferred_slug ?: ($object ? $object->post_name : sanitize_title_with_dashes("{$thing->id}-$label-$lang")),
           'to_ping' => '',
           'pinged' => '',
           'post_modified' => $object ? $object->post_modified : $imported_at,
@@ -997,9 +1003,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       } elseif ($php_class->isTerm()) {
         $data = [
           'name' => $label,
-          'slug' => $object
-            ? $object->slug
-            : sanitize_title_with_dashes("{$thing->id}-$label-$lang"),
+          'slug' => $preferred_slug ?: ($object ? $object->slug : sanitize_title_with_dashes("{$thing->id}-$label-$lang")),
           'term_group' => 0,
           'op_order' => $thing_i,
         ];
@@ -1322,6 +1326,43 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
   }
 }
 
+
+
+function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null)
+{
+
+  if (!$op_fid1) return;
+
+  $f = collect($res->fields)->firstWhere('id', $op_fid1);
+  if (!$f) return;
+
+  $source_thing = $thing;
+
+  if ($f->type == 'relation') {
+
+    $rel_thing_id = @$thing->rel_ids->{$f->id}[0];
+    if (!$rel_thing_id) return;
+
+
+    $rel_res = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id);
+    if (!$rel_res) return;
+
+    $rel_res_things = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id)->data ?? [];
+
+    $source_thing = collect($rel_res_things)->firstWhere('id', $rel_thing_id);
+
+    if (!$source_thing) return;
+
+    $f = collect($rel_res->fields)->firstWhere('id', $opfid2);
+    if (!$f) return;
+  }
+
+  $fid = $f->id;
+  if ($f->is_translatable) $fid .= "_" . ($lang ?? op_locale_to_lang(op_locale()));
+  $val = @$source_thing->fields->$fid;
+  return $val;
+}
+
 function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
   $meta = [];
   // Fields
@@ -1403,36 +1444,9 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
       $opt_name = $meta_info['option'];
 
       $op_fid = op_getopt("res-{$res->id}-{$opt_name}");
-      if (!$op_fid) continue;
+      $op_fid2 = op_getopt("res-{$res->id}-{$opt_name}-2");
+      $val = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2);
 
-      $f = collect($res->fields)->firstWhere('id', $op_fid);
-      if (!$f) continue;
-
-      $source_thing = $thing;
-
-      if ($f->type == 'relation') {
-        
-        $rel_thing_id = @$thing->rel_ids->{$f->id}[0];
-        if (!$rel_thing_id) continue;
-        
-
-        $rel_res = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id);
-        if (!$rel_res) continue;
-
-        $rel_res_things = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id)->data ?? [];
-
-        $source_thing = collect($rel_res_things)->firstWhere('id', $rel_thing_id);
-        
-        if (!$source_thing) return;
-
-        $op_fid = op_getopt("res-{$res->id}-{$opt_name}-2");
-        $f = collect($rel_res->fields)->firstWhere('id', $op_fid);
-        if (!$f) continue;
-      }
-
-      $fid = $f->id;
-      if ($f->is_translatable) $fid.= "_".op_locale_to_lang(op_locale());
-      $val = @$source_thing->fields->$fid;
       if (is_null($val)) continue;
 
 
