@@ -276,6 +276,16 @@ function op_description($res, string $lang = null) {
   }
 }
 
+function op_lang() {
+  return op_locale_to_lang(op_locale());
+}
+
+function op_langs() {
+  $s = op_schema();
+  if (!$s) return [];
+  return $s->langs;
+}
+
 function op_set_fallback_lang(string $missing, array $fallback) {
   global $___op_conf;
   $___op_conf->op_fallback_langs[$missing] = $fallback;
@@ -459,7 +469,7 @@ function op_wpml_langs() :? array {
   return array_values(array_unique($wpml_langs));
 }
 
-function op_langs() {
+function op_locales() {
   $langs = [ op_wpml_default() ?: op_locale()?: 'it' ];
   if ($other_langs = op_wpml_langs()) {
     $langs = array_merge($langs, $other_langs);
@@ -601,7 +611,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   $regen_slug_items = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
 
-  $langs = op_langs();
+  $langs = op_locales();
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (".count($data)." items)...");
@@ -671,7 +681,7 @@ function op_import_gallery($schema) {
     $class = op_name_to_class($res->name);
 
     // op_record("Importing images for $res->label...");
-    foreach ($class::query()->unlocalized()->whereLang(op_langs()[0])->whereField($field->name, 'like', '%')->get() as $item) {
+    foreach ($class::query()->unlocalized()->whereLang(op_locales()[0])->whereField($field->name, 'like', '%')->get() as $item) {
       // op_record("Importing image for $item->post_title...");
       $file = $item->file($field->name, $item->getLang());
       // print_r($file);
@@ -1261,7 +1271,7 @@ function op_regenerate_items_slug($items) {
 }
 
 function op_import_snapshot_relations($schema, $json, array $all_items) {
-  $langs = op_langs();
+  $langs = op_locales();
   $resources = collect($schema->resources)->keyBy('id');
   foreach ($schema->resources as $res_i => $res) {
     $data = $json->resources[$res_i]->data;
