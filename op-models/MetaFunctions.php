@@ -209,7 +209,7 @@ trait MetaFunctions {
     if (!$field->is_translatable) {
       $fallback_langs = [null];
     } elseif (!is_null($lang)){
-      $fallback_langs = [$lang];
+      $fallback_langs = [$lang ?: op_lang()];
     } else {
       $fallback_langs = op_fallback_langs();
     }
