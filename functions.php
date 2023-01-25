@@ -477,9 +477,14 @@ function op_locales() {
   return array_values(array_unique($langs));
 }
 
-function op_slug(string $title, $base_class, string $old_slug = null) {
-  $slug = sanitize_title($title);
+function op_slug(string $title, $base_class = null, string $old_slug = null) {
+  $slug = $title;
+  // This is very important because this function depends on what locale you pass to it
+  // For example "ä" becomes "e" if you pass "en_US" and "ae" if you pass "de_DE"
+  $slug = remove_accents($slug, op_locale());
+  $slug = sanitize_title($slug);
 
+  if (!$base_class) return $slug;
   $suffix = '';
   while ($old_slug != $slug.$suffix && $base_class->slugExists($slug.$suffix)) {
     if (!$suffix) {
@@ -974,7 +979,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $op_fid2 = op_getopt("res-{$res->id}-slug-2");
       $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
       if (strlen($preferred_slug)) {
-        $preferred_slug = sanitize_title_with_dashes($preferred_slug);
+        $preferred_slug = op_slug($preferred_slug);
       }
 
       // Prepare data
@@ -997,7 +1002,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'comment_status' => $object ? $object->comment_status : 'closed',
           'ping_status' => $object ? $object->ping_status : 'closed',
           'post_password' => $object ? $object->post_password : '',
-          'post_name' => $preferred_slug ?: ($object ? $object->post_name : sanitize_title_with_dashes("{$thing->id}-$label-$lang")),
+          'post_name' => $preferred_slug ?: ($object ? $object->post_name : op_slug("{$thing->id}-$label-$lang")),
           'to_ping' => '',
           'pinged' => '',
           'post_modified' => $object ? $object->post_modified : $imported_at,
@@ -1013,7 +1018,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       } elseif ($php_class->isTerm()) {
         $data = [
           'name' => $label,
-          'slug' => $preferred_slug ?: ($object ? $object->slug : sanitize_title_with_dashes("{$thing->id}-$label-$lang")),
+          'slug' => $preferred_slug ?: ($object ? $object->slug : op_slug("{$thing->id}-$label-$lang")),
           'term_group' => 0,
           'op_order' => $thing_i,
         ];
