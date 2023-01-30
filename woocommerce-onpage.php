@@ -237,3 +237,44 @@ add_filter( 'manage_product_cat_custom_column', function ( $dep, $column, $produ
      // echo $product->get_catalog_visibility();
    }
 }, 10, 3 );
+
+
+// This filter corrects the image url for the data imported from On Page
+add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
+  static $sizes = null;
+  if (!$sizes) $sizes = wp_get_additional_image_sizes();
+  $size = $sizes[$size];
+  // $image[0] = 'http://newimagesrc.com/myimage.jpg';
+  if ($image !== false || strpos($attachment_id, '[{') !== 0) {
+    return $image;
+  }
+  $json = null;
+  try {
+    $json = json_decode($attachment_id);
+    if (!is_array($json)) return $image;
+
+    $w = null;
+    $h = null;
+    $contain = true;
+    if ($size) {
+      $w = $size['width'] ?: null;
+      $h = $size['height'] ?: null;
+      $contain = !($size['crop'] ?: false);
+
+      // Round the size to something that On Page API can understand (modulo 10)
+      $steps_px = 10;
+      if ($w && ($w % $steps_px)) $w += $steps_px - ($w % $steps_px);
+      if ($h && ($h % $steps_px)) $h += $steps_px - ($h % $steps_px);
+    } else {
+      $w = 1000;
+    }
+
+    return array_map(function ($file) use ($w, $h, $contain) {
+      return op_file_url($file, $w, $h, $contain);
+    }, $json);
+
+    // var_dump([$image, $attachment_id]);
+  } catch (\Exception $e) {
+    return $image;
+  }
+}, 10, 4);
