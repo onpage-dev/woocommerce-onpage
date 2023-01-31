@@ -329,8 +329,8 @@
               <td>{{ property.label }}</td>
               <td>
                 <div style="display: flex; flex-direction: row; gap: 1rem">
-                  <select style="width: 20rem" v-model="settings_form[`res-${res.id}-${property.name}`]">
-                    <option :value="undefined">-- not set --</option>
+                  <select style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}`, $event.target.value || null)">
+                    <option :value="null">-- not set --</option>
                     <optgroup label="Fields">
                       <option v-for="field in Object.values(res.fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                     </optgroup>
@@ -338,8 +338,8 @@
                       <option v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')" :value="field.id">{{ field.label }}</option>
                     </optgroup>
                   </select>
-                  <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type == 'relation'" style="width: 20rem" v-model="settings_form[`res-${res.id}-${property.name}-2`]">
-                    <option :value="undefined">-- not set --</option>
+                  <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type == 'relation'" style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}-2`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}-2`, $event.target.value || null)">
+                    <option value="">-- not set --</option>
                     <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-${property.name}`]).fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                   </select>
                 </div>
@@ -536,6 +536,12 @@
           label: 'Description',
           default: 'auto',
           types: ['string', 'text', 'html', 'int', 'real'],
+        },
+        {
+          name: 'fakeimage',
+          label: 'Image',
+          default: 'none',
+          types: ['image'],
         },
       ],
       product_fields: [

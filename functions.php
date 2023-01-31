@@ -975,12 +975,12 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Look for the object if it exists already
       $object = @$current_objects["{$thing->id}-{$lang}"];
 
-      $op_fid = op_getopt("res-{$res->id}-slug");
-      $op_fid2 = op_getopt("res-{$res->id}-slug-2");
-      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
+      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-slug"), op_getopt("res-{$res->id}-slug-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
       if (strlen($preferred_slug)) {
         $preferred_slug = op_slug($preferred_slug);
       }
+      
+      $preferred_images = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true);
 
       // Prepare data
       $data = null;
@@ -1118,15 +1118,14 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'meta_value' => $imported_at,
       ];
 
-      if ($lab_img_field && @$thing->fields->$lab_img_field) {
+      if (is_array($preferred_images)) {
         $base_meta[] = [
           $base_tablemeta_ref => $object_id,
           'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-          'meta_value' => json_encode(
-            $lab_img_field->is_multiple ? $thing->fields->$lab_img_field : [$thing->fields->$lab_img_field]
-          ),
+          'meta_value' => json_encode($preferred_images),
         ];
       }
+
       // op_record("- merging meta");
       $all_meta = array_merge($all_meta, $base_meta);
       // op_record("- merged: ".count($all_meta));
@@ -1345,39 +1344,44 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
 
 
 
-function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null)
+function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false)
 {
+  $ret = $as_list ? [] : null;
 
-  if (!$op_fid1) return;
+  if (!$op_fid1) return $ret;
 
   $f = collect($res->fields)->firstWhere('id', $op_fid1);
-  if (!$f) return;
+  if (!$f) return $ret;
 
   $source_thing = $thing;
 
   if ($f->type == 'relation') {
 
     $rel_thing_id = @$thing->rel_ids->{$f->id}[0];
-    if (!$rel_thing_id) return;
+    if (!$rel_thing_id) return $ret;
 
 
     $rel_res = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id);
-    if (!$rel_res) return;
+    if (!$rel_res) return $ret;
 
     $rel_res_things = collect($schema_json->resources)->firstWhere('id', $f->rel_res_id)->data ?? [];
 
     $source_thing = collect($rel_res_things)->firstWhere('id', $rel_thing_id);
 
-    if (!$source_thing) return;
+    if (!$source_thing) return $ret;
 
     $f = collect($rel_res->fields)->firstWhere('id', $opfid2);
-    if (!$f) return;
+    if (!$f) return $ret;
   }
 
   $fid = $f->id;
   if ($f->is_translatable) $fid .= "_" . ($lang ?? op_locale_to_lang(op_locale()));
   $val = @$source_thing->fields->$fid;
-  return $val;
+  if ($as_list) {
+    return $f->is_multiple ? $val : [$val];
+  } else {
+    return $f->is_multiple ? @$val[0] : $val;
+  }
 }
 
 function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
