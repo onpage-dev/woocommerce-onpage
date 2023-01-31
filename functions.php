@@ -1565,6 +1565,7 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
 
 function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
   $op_url = op_file_remote_url($file, $w, $h, $contain, $inline);
+  $is_thumb = $w || $h;
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
