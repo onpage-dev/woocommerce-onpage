@@ -148,29 +148,6 @@ add_filter('admin_menu', function () {
 
 
 
-// Set image for posts
-add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
-  if (!isset($attachment_id[0]) || $attachment_id[0] != '{' || !is_scalar($size)) return $image;
-  $file = @json_decode($attachment_id);
-  if (!$file) return $image;
-  $sizes = [
-    'thumbnail' => [150, 150],
-  ];
-  $size = @$sizes[$size];
-  if ($size) {
-    $src = op_file_url($file, $size[0], $size[1], 'zoom');
-  } else {
-    $src = op_file_url($file);
-  }
-  if (!$src) return $image;
-  $img = [
-    $src, '', '',
-  ];
-  return $img;
-}, 50, 4);
-
-
-
 // Add tab with product info
 add_filter('woocommerce_product_data_tabs', function ($tabs) {
   $tabs['onpage-meta'] = array(
@@ -242,7 +219,8 @@ add_filter( 'manage_product_cat_custom_column', function ( $dep, $column, $produ
 // This filter corrects the image url for the data imported from On Page
 add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $size, $icon) {
   static $sizes = null;
-  if (!$sizes) $sizes = wp_get_additional_image_sizes();
+  if (!$sizes) $sizes = wp_get_registered_image_subsizes();
+  if (!isset($sizes[$size])) return $image;
   $size = $sizes[$size];
   // $image[0] = 'http://newimagesrc.com/myimage.jpg';
   if ($image !== false || strpos($attachment_id, '[{') !== 0) {
@@ -270,7 +248,7 @@ add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $siz
     }
 
     return array_map(function ($file) use ($w, $h, $contain) {
-      return op_file_url($file, $w, $h, $contain);
+      return is_admin() ? op_file_remote_url($file, $w, $h, $contain) : op_file_url($file, $w, $h, $contain);
     }, $json);
 
     // var_dump([$image, $attachment_id]);

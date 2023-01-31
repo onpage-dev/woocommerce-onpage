@@ -1123,7 +1123,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           $base_tablemeta_ref => $object_id,
           'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
           'meta_value' => json_encode(
-            $thing->fields->$lab_img_field
+            $lab_img_field->is_multiple ? $thing->fields->$lab_img_field : [$thing->fields->$lab_img_field]
           ),
         ];
       }
@@ -1537,8 +1537,8 @@ function op_link(string $path) {
   return plugins_url('', $path).'/'.basename($path);
 }
 
+function op_file_remote_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
 
-function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
   $pi = pathinfo($file->name);
   $filename = $pi['filename'];
 
@@ -1547,20 +1547,24 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
   $is_thumb = $w || $h;
   if (!$is_thumb) {
     $ext = $pi['extension'] == 'php' ? 'txt' : $pi['extension'];
-    $op_name.= '.' . $ext;
-    $filename.= '.'. $ext;
+    $op_name .= '.' . $ext;
+    $filename .= '.' . $ext;
   } else {
-    $op_name.= '.'.implode('x', [$w ?: '', $h ?: '']);
+    $op_name .= '.' . implode('x', [$w ?: '', $h ?: '']);
     if ($contain) {
-      $op_name.= '-contain';
+      $op_name .= '-contain';
     }
 
     $ext = op_preferred_image_format();
-    $op_name.= ".$ext";
-    $filename.= ".$ext";
+    $op_name .= ".$ext";
+    $filename .= ".$ext";
   }
 
-  $op_url = op_http_file_url($op_name,$filename,$inline);
+  return op_http_file_url($op_name, $filename, $inline);
+}
+
+function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
+  $op_url = op_file_remote_url($file, $w, $h, $contain, $inline);
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
