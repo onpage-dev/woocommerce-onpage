@@ -248,7 +248,7 @@ add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $siz
     }
 
     return array_map(function ($file) use ($w, $h, $contain) {
-      return is_admin() ? op_file_remote_url($file, $w, $h, $contain) : op_file_url($file, $w, $h, $contain);
+      return is_admin() ? op_file_remote_url($file, $w, $h, $contain)[2] : op_file_url($file, $w, $h, $contain);
     }, $json);
 
     // var_dump([$image, $attachment_id]);
