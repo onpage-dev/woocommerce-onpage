@@ -252,7 +252,9 @@ add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $siz
 
     // See this for return type:
     //  https://developer.wordpress.org/reference/functions/wp_get_attachment_image_src/
-    $url = is_admin() ? op_file_remote_url($op_file, $w, $h, $contain)[2] : op_file_url($op_file, $w, $h, $contain);
+    $url = is_admin()
+      ? op_file_remote_url($op_file, $w, $h, $contain)[2]
+      : op_file_url($op_file, $w, $h, $contain);
     return [$url, $w, $h, true];
 
     // var_dump([$image, $attachment_id]);
