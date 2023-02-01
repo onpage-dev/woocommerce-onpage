@@ -221,7 +221,7 @@ add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $siz
   static $sizes = null;
 
   // $image[0] = 'http://newimagesrc.com/myimage.jpg';
-  if ($image !== false || strpos($attachment_id, '[{') !== 0) {
+  if ($image !== false || strpos($attachment_id, '{') !== 0) {
     return $image;
   }
 
@@ -245,14 +245,15 @@ add_filter('wp_get_attachment_image_src', function ($image, $attachment_id, $siz
   if ($w && ($w % $steps_px)) $w += $steps_px - ($w % $steps_px);
   if ($h && ($h % $steps_px)) $h += $steps_px - ($h % $steps_px);
 
-  $json = null;
   try {
-    $json = json_decode($attachment_id);
-    if (!is_array($json)) return $image;
+    $op_file = json_decode($attachment_id);
 
-    return array_map(function ($file) use ($w, $h, $contain) {
-      return is_admin() ? op_file_remote_url($file, $w, $h, $contain)[2] : op_file_url($file, $w, $h, $contain);
-    }, $json);
+    if (!is_object($op_file) || !isset($op_file->token)) return $image;
+
+    // See this for return type:
+    //  https://developer.wordpress.org/reference/functions/wp_get_attachment_image_src/
+    $url = is_admin() ? op_file_remote_url($op_file, $w, $h, $contain)[2] : op_file_url($op_file, $w, $h, $contain);
+    return [$url, $w, $h, true];
 
     // var_dump([$image, $attachment_id]);
   } catch (\Exception $e) {

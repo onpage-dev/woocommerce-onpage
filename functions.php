@@ -980,7 +980,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         $preferred_slug = op_slug($preferred_slug);
       }
       
-      $preferred_images = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true);
+      $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
 
       // Prepare data
       $data = null;
@@ -1118,11 +1118,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'meta_value' => $imported_at,
       ];
 
-      if (is_array($preferred_images)) {
+      if ($preferred_image) {
         $base_meta[] = [
           $base_tablemeta_ref => $object_id,
           'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-          'meta_value' => json_encode($preferred_images),
+          'meta_value' => json_encode($preferred_image),
         ];
       }
 
