@@ -968,7 +968,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $preferred_description = implode(
         '<br/>',
         array_map(
-          function($d) use (&$extract_field) { if (!is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          function($d) use (&$extract_field) { if (!is_null($d) && !is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
           op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
@@ -976,7 +976,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $preferred_excerpt = implode(
         '<br/>',
         array_map(
-          function($d) use (&$extract_field) { if (!is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          function($d) use (&$extract_field) { if (!is_null($d) && !is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
           op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );

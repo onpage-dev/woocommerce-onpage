@@ -553,7 +553,7 @@
           types: ['string', 'int'],
         },
         {
-          name: 'exceprt',
+          name: 'excerpt',
           label: 'Short Description',
           default: 'auto',
           types: ['string', 'text', 'html', 'int', 'real'],
