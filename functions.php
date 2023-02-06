@@ -964,18 +964,19 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       if (is_array($label)) $label = implode(' - ', $label);
       if (!is_scalar($label)) $label = json_encode($label);
 
+      $extract_field = null;
       $preferred_description = implode(
         '<br/>',
         array_map(
-          function($d) { if (!is_scalar($d)) $d = json_encode($d); return $d; },
-          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true)
+          function($d) use (&$extract_field) { if (!is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
       $preferred_excerpt = implode(
         '<br/>',
         array_map(
-          function($d) { if (!is_scalar($d)) $d = json_encode($d); return $d; },
-          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true)
+          function($d) use (&$extract_field) { if (!is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
 
@@ -1352,7 +1353,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
 
 
 
-function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false)
+function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false, string &$extract_field = null)
 {
   $ret = $as_list ? [] : null;
 
@@ -1383,6 +1384,7 @@ function op_extract_value_from_raw_thing(object $schema_json, object $res, objec
   }
 
   $fid = $f->id;
+  $extract_field = $f;
   if ($f->is_translatable) $fid .= "_" . ($lang ?? op_locale_to_lang(op_locale()));
   $val = @$source_thing->fields->$fid;
   if ($as_list) {
