@@ -538,12 +538,6 @@
           types: ['string', 'text', 'html', 'int', 'real'],
         },
         {
-          name: 'exceprt',
-          label: 'Short Description',
-          default: 'auto',
-          types: ['string', 'text', 'html', 'int', 'real'],
-        },
-        {
           name: 'fakeimage',
           label: 'Image',
           default: 'none',
@@ -557,6 +551,12 @@
           label: 'Sku',
           default: 'none',
           types: ['string', 'int'],
+        },
+        {
+          name: 'exceprt',
+          label: 'Short Description',
+          default: 'auto',
+          types: ['string', 'text', 'html', 'int', 'real'],
         },
         {
           name: 'weight',

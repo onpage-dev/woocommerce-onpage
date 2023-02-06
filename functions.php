@@ -972,6 +972,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
+      $extract_field = null;
       $preferred_excerpt = implode(
         '<br/>',
         array_map(
@@ -1353,7 +1354,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items) {
 
 
 
-function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false, string &$extract_field = null)
+function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false, &$extract_field = null)
 {
   $ret = $as_list ? [] : null;
 
