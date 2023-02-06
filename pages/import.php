@@ -538,6 +538,12 @@
           types: ['string', 'text', 'html', 'int', 'real'],
         },
         {
+          name: 'exceprt',
+          label: 'Short Description',
+          default: 'auto',
+          types: ['string', 'text', 'html', 'int', 'real'],
+        },
+        {
           name: 'fakeimage',
           label: 'Image',
           default: 'none',

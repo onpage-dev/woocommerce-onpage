@@ -916,8 +916,6 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
      ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
      
 
-  $description_field = $res->id_to_field[op_getopt("res-{$res->id}-description")] ?? null;
-
   $lab_img = $php_class->isThing() ? null : collect($res->fields)->where('type', 'image')->first();
   $base_table = $php_class->getTableWithoutPrefix();
   $base_table_key = $php_class->primaryKey;
@@ -960,16 +958,26 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
       $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
-      $description_field_alias = $description_field ? $description_field->id.($description_field->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
       if (is_array($label)) $label = implode(' - ', $label);
       if (!is_scalar($label)) $label = json_encode($label);
 
-      $description = (string) @$thing->fields->$description_field_alias;
-      if (is_array($description)) $description = implode('<br/>', $description);
-      if (!is_scalar($description)) $description = json_encode($description);
+      $preferred_description = implode(
+        '<br/>',
+        array_map(
+          function($d) { if (!is_scalar($d)) $d = json_encode($d); return $d; },
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true)
+        )
+      );
+      $preferred_excerpt = implode(
+        '<br/>',
+        array_map(
+          function($d) { if (!is_scalar($d)) $d = json_encode($d); return $d; },
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true)
+        )
+      );
 
 
       // Look for the object if it exists already
@@ -995,10 +1003,10 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'post_author' => 1,
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
           'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
-          'post_content' => (string) $description,
+          'post_content' => $preferred_description ?: ($object ? $object->post_description : ''),
           'post_title' => $label,
           'post_status' => 'publish',
-          'post_excerpt' => $object ? $object->post_excerpt : '',
+          'post_excerpt' => $preferred_excerpt ?: ($object ? $object->post_excerpt : ''),
           'comment_status' => $object ? $object->comment_status : 'closed',
           'ping_status' => $object ? $object->ping_status : 'closed',
           'post_password' => $object ? $object->post_password : '',
