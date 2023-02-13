@@ -1001,13 +1001,26 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'op_order' => $thing_i,
         ];
       } elseif ($php_class->isPost()) {
+        // Be default we always activate the product for both create/update
+        $status = 'publish';
+
+        // If the user does not want to update the status
+        if (op_getopt('disable_product_status_update')) {
+          // We keep the existing status for updates
+          if ($object) {
+            $status = $object->post_status;
+          } else {
+            // We use the user option for product creation
+            $status = op_getopt('disable_product_status_update_default_status') ?: 'publish';
+          }
+        }
         $data = [
           'post_author' => 1,
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
           'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
           'post_content' => $preferred_description ?: ($object ? $object->post_description : ''),
           'post_title' => $label,
-          'post_status' => 'publish',
+          'post_status' => $status,
           'post_excerpt' => $preferred_excerpt ?: ($object ? $object->post_excerpt : ''),
           'comment_status' => $object ? $object->comment_status : 'closed',
           'ping_status' => $object ? $object->ping_status : 'closed',
@@ -1248,7 +1261,7 @@ function op_regenerate_import_slug(array $items) {
 
     $class = op_name_to_class($res->name);
     foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
-        $items = $class::unlocalized()->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
+        $items = $class::unlocalized()->withoutGlobalScope('post_status_publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
         op_regenerate_items_slug($items);
     }
   }

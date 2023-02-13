@@ -304,17 +304,34 @@
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
     <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
-      <label>
-        <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
-        Maintain user created categories and products
-      </label>
 
-      <br>
+      <div style="display: flex; flex-direction: column; gap: 1rem">
+        <label>
+          <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
+          Maintain user created categories and products
+        </label>
 
-      <div class="submit">
-        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-        <div v-if="is_saving">
-          Saving...
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_product_status_update" />
+          Disable product publishing when UPDATING existing products.
+          <br />
+          (products in the "draft" status will not be automatically re-published).
+        </label>
+
+        <div v-if="settings_form.disable_product_status_update">
+          Default product status for NEW products:
+          <br />
+          <select placeholder="Default: Active" style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
+            <option :value="null">Default: publish</option>
+            <option value="publish">Publish</option>
+            <option value="'draft'">Draft</option>
+          </select>
+        </div>
+        <div class="submit">
+          <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+          <div v-if="is_saving">
+            Saving...
+          </div>
         </div>
       </div>
 
@@ -659,6 +676,8 @@
         return this.server_config?.thing_resources ?? []
       },
       form_unsaved() {
+        console.log(JSON.stringify(this.settings))
+        console.log(JSON.stringify(this.settings_form))
         return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)
       },
       connection_string() {
