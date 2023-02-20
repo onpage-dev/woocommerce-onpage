@@ -138,7 +138,7 @@ trait MetaFunctions {
     if (!$lang) {
       $lang = op_locale();
     }
-    $q->whereLang($lang);
+    $q->unlocalized()->whereLang($lang);
   }
   function scopeUnlocalized($q) {
     $q->withoutGlobalScope('_op-lang');
