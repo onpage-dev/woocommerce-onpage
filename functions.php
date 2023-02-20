@@ -1013,6 +1013,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             $status = op_getopt('disable_product_status_update_default_status') ?: 'publish';
           }
         }
+        if ($status == 'trash') {
+          $status = 'draft';
+        }
         $data = [
           'post_author' => 1,
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
