@@ -30,12 +30,14 @@ class Post extends Model {
     self::metaBoot();
   }
 
-  public function scopeWithStatus($q, string $status = null) {
+  public function scopeWithStatus($q, $status = null) {
     $this->withoutGlobalScope('post_status_publish');
-    $q->where('post_status', $status);
+    $q->withAnyStatus();
+    if (is_array($status)) $q->whereIn('post_status', $status);
+    if (is_string($status)) $q->where('post_status', $status);
   }
   public function scopeWithAnyStatus($q) {
-    $this->withoutGlobalScope('post_status_publish');
+    $q->withoutGlobalScope('post_status_publish');
   }
 
   public function scopeSlug($q, $slug) {
