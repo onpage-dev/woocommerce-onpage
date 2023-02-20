@@ -315,7 +315,7 @@
           <input type="checkbox" v-model="settings_form.disable_product_status_update" />
           Disable product publishing when UPDATING existing products.
           <br />
-          (products in the "draft" status will not be automatically re-published).
+          (products in the "draft" or "trash" status will not be automatically re-published).
         </label>
 
         <div v-if="settings_form.disable_product_status_update">
