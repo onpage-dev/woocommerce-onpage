@@ -47,4 +47,11 @@ class Post extends Model {
   public function icl_translation() {
     return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', 'post_product');
   }
+
+  public function scopePublish($q) {
+    return $q->update([ 'post_status' => 'publish' ]);
+  }
+  public function scopeUnpublish($q) {
+    return $q->update([ 'post_status' => 'draft' ]);
+  }
 }
