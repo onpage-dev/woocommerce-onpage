@@ -721,10 +721,10 @@ function op_disable_old_products(array $imported_items) :int {
     }
   }
 
-  // Set posts as drafts
+  // Set posts as trashed
   foreach ($posts_to_remove->keys()->chunk(1000) as $chunk) {
     OpLib\Post::whereIn('ID', $chunk)->update([
-      'post_status' => 'draft',
+      'post_status' => 'trash',
     ]);
   }
   return $posts_to_remove->count();
@@ -746,7 +746,6 @@ function op_disable_old_categories(array $imported_items) :int {
     }
   }
 
-  // Set posts as drafts
   op_delete_taxonomies_and_terms($tax_to_remove);
   return $tax_to_remove->count();
 }
