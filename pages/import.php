@@ -324,7 +324,7 @@
           <select placeholder="Default: Active" style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
             <option :value="null">Default: publish</option>
             <option value="publish">Publish</option>
-            <option value="'draft'">Draft</option>
+            <option value="draft">Draft</option>
           </select>
         </div>
         <div class="submit">
