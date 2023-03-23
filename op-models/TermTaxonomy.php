@@ -25,7 +25,7 @@ class TermTaxonomy extends Model
   }
   public function icl_translation()
   {
-    return $this->hasOne(IclTranslation::class, 'element_id', 'term_id')->where('element_type', 'tax_product_cat');
+    return $this->hasOne(IclTranslation::class, 'element_id', 'term_taxonomy_id')->where('element_type', 'tax_product_cat');
   }
 
   function getIdAttribute()
