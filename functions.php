@@ -1613,7 +1613,10 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
     op_download_file($op_url, $target_path);
   }
 
-  return op_link($target_path);
+
+  $target_url = "$target_folder/". rawurlencode($filename);
+
+  return op_link($target_url);
 }
 
 function op_import_log_path() {
