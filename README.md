@@ -52,10 +52,15 @@ $prods = Op\Product::orderByField('price', 'desc')->get();
 You can get each record values through the `->val(field_name, language)` function:
 ```php
 foreach ($prods as $prod) {
-  // get the name in the current language
+  // get the name in the current language - will fallback on the primary language if no translation is found
   echo $prod->val('name')."<br>\n";
-  // get the name in a custom language
+  
+  // get the name in a custom language - will never fallback on other languages
   echo $prod->val('name', 'zh')."<br>\n";
+  
+  // get the name in the current language, disabling fallback
+  echo $prod->val('name', false)."<br>\n";
+  
   // access relation values (will return the value from the first relation)
   echo $prod->val('category.name')."<br>\n";
   // Gets a file name
