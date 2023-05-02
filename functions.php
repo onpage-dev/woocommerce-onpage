@@ -14,6 +14,7 @@ use \WeDevs\ORM\Eloquent\Facades\DB;
 
 global $wpdb;
 define('OP_PLUGIN', true);
+define('OP_MAGIC_VALUE_NULL', 'QXY7NG087REYFN0N7YA08D7NS7');
 define('OP_WP_PREFIX', $wpdb->prefix);
 
 $___op_conf = (object)[
@@ -1214,6 +1215,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     })->delete();
 
   // Insert new meta
+  $all_meta = array_filter($all_meta, function($meta) {
+    return !is_null($meta['meta_value']);
+  });
   foreach (array_chunk($all_meta, 2000) as $chunk) {
     $php_metaclass->insert($chunk);
   }
@@ -1487,13 +1491,18 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     // Fill values using the mapping above
     $values = [];
     foreach ($meta_map as $meta_name => $meta_info) {
-      $values[$meta_name] = null;
       $opt_name = $meta_info['option'];
-
       $op_fid = op_getopt("res-{$res->id}-{$opt_name}");
       $op_fid2 = op_getopt("res-{$res->id}-{$opt_name}-2");
-      $val = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2);
 
+      // user wants to maintain current values without overwriting
+      if (!$op_fid) continue;
+
+      // User wants to set this option from on page
+      $values[$meta_name] = null; // null = delete meta
+      
+      // Get the otpion value from on page
+      $val = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2);
       if (is_null($val)) continue;
 
 
@@ -1510,19 +1519,18 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     }
 
     $sale_period_active = true;
-    if ($values['_sale_price_dates_from']) {
+    if (isset($values['_sale_price_dates_from']) && $values['_sale_price_dates_from']) {
       $values['_sale_price_dates_from'] = strtotime($values['_sale_price_dates_from']);
       if (time() < $values['_sale_price_dates_from']) $sale_period_active = false;
     }
-    if ($values['_sale_price_dates_to']) {
+    if (isset($values['_sale_price_dates_to']) && $values['_sale_price_dates_to']) {
       $values['_sale_price_dates_to'] = strtotime($values['_sale_price_dates_to']);
       if (time() > $values['_sale_price_dates_to']) $sale_period_active = false;
     }
     // Calculate final (real) price
-    $values['_price'] = $values['_sale_price'] && $sale_period_active ? $values['_sale_price'] : $values['_regular_price'];
+    $values['_price'] = @$values['_sale_price'] && $sale_period_active ? @$values['_sale_price'] : @$values['_regular_price'];
 
     foreach ($values as $meta_key => $value) {
-      if (is_null($value)) continue;
       $meta[] = [ 'post_id' => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key ];
     }
   }
