@@ -348,6 +348,7 @@
                 <div style="display: flex; flex-direction: row; gap: 1rem">
                   <select style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}`, $event.target.value || null)">
                     <option :value="null">-- not set --</option>
+                    <option v-if="property.can_be_empty" value="empty">-- empty --</option>
                     <optgroup label="Fields">
                       <option v-for="field in Object.values(res.fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                     </optgroup>
@@ -357,6 +358,7 @@
                   </select>
                   <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type == 'relation'" style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}-2`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}-2`, $event.target.value || null)">
                     <option value="">-- not set --</option>
+                    <option v-if="property.can_be_empty" value="empty">-- empty --</option>
                     <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-${property.name}`]).fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                   </select>
                 </div>
@@ -604,30 +606,35 @@
           label: 'Price',
           default: 'none',
           types: ['int', 'real', 'price'],
+          can_be_empty: true,
         },
         {
           name: 'discounted-price',
           label: 'Discounted Price',
           default: 'none',
           types: ['int', 'real', 'price'],
+          can_be_empty: true,
         },
         {
           name: 'discounted-start-date',
           label: 'Discount start date',
           default: 'none',
           types: ['date'],
+          can_be_empty: true,
         },
         {
           name: 'discounted-end-date',
           label: 'Discount end date',
           default: 'none',
           types: ['date'],
+          can_be_empty: true,
         },
         {
           name: 'downloadable',
           label: 'Downloadable',
           default: 'none',
           types: ['bool'],
+          can_be_empty: true,
         },
         {
           name: 'manage_stock',

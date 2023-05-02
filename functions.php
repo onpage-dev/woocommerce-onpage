@@ -1377,7 +1377,7 @@ function op_extract_value_from_raw_thing(object $schema_json, object $res, objec
 {
   $ret = $as_list ? [] : null;
 
-  if (!$op_fid1) return $ret;
+  if (!$op_fid1 || $op_fid1 == 'empty') return $ret;
 
   $f = collect($res->fields)->firstWhere('id', $op_fid1);
   if (!$f) return $ret;
