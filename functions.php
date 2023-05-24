@@ -1581,12 +1581,14 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
   $filename = $pi['filename'];
 
   // Build On Page filename
+  $token = null;
   $op_name = "$file->token";
   $is_thumb = $w || $h;
   if (!$is_thumb) {
     $ext = $pi['extension'] == 'php' ? 'txt' : $pi['extension'];
     $op_name .= '.' . $ext;
     $filename .= '.' . $ext;
+    $token = $file->token;
   } else {
     $op_name .= '.' . implode('x', [$w ?: '', $h ?: '']);
     if ($contain) {
@@ -1596,9 +1598,10 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
     $ext = op_preferred_image_format();
     $op_name .= ".$ext";
     $filename .= ".$ext";
+    $token = $op_name;
   }
 
-  return [$op_name, $filename, op_http_file_url($op_name, $filename, $inline)];
+  return [$op_name, $filename, op_http_file_url($token, $filename, $inline)];
 }
 
 function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
@@ -1638,12 +1641,14 @@ function op_preferred_image_format() {
 }
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null) {
-  $params = array_filter([
-    'name' => $name,
-    'inline' => $inline,
-  ], function($x) { return !is_null($x); });
-  $query_string = empty($params) ? '' : '?'.http_build_query($params);
-  return 'https://'.op_getopt('company').'.onpage.it/api/storage/'.$token.$query_string;
+  $url = 'https://' . op_getopt('company') . '.onpage.it/api/storage/' . $token;
+  if ($name) {
+    $url.= '/'.urlencode($name);
+  }
+  if (!$inline) {
+    $url.= '?download=1';
+  }
+  return $url;
 }
 
 
