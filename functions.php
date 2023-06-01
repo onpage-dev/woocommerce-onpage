@@ -687,7 +687,7 @@ function op_import_gallery($schema) {
     $class = op_name_to_class($res->name);
 
     // op_record("Importing images for $res->label...");
-    foreach ($class::query()->unlocalized()->whereLang(op_locales()[0])->whereField($field->name, 'like', '%')->get() as $item) {
+    foreach ($class::query()->localized(op_locales()[0])->whereField($field->name, 'like', '%')->get() as $item) {
       // op_record("Importing image for $item->post_title...");
       $file = $item->file($field->name, $item->getLang());
       // print_r($file);

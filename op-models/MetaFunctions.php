@@ -67,6 +67,7 @@ trait MetaFunctions {
     });
   }
   static function scopeWhereLang($q, $op, $val = null) {
+    if (!op_wpml_enabled()) return;
     $q->whereMeta('op_lang*', $op, $val);
   }
   static function scopeWhereId($q, $op, $val = null) {
