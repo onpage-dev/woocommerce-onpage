@@ -664,6 +664,11 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     op_record("completed $res->label");
   }
 
+  op_record("Importing relations...");
+  op_import_snapshot_relations($schema, $schema_json, $all_items);
+  op_record("done");
+
+
   op_record('Deleting old categories...');
   $disabled_count = op_disable_old_categories($all_items);
   op_record("deleted $disabled_count categories");
@@ -1040,8 +1045,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     $current_meta_raw = $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
       ->where(function ($q) use ($all_meta) {
         $q->whereIn('meta_key', array_values(array_unique(array_column($all_meta, 'meta_key'))))
-          ->orWhere('meta_key', 'like', 'op\\_%')
-          ->orWhere('meta_key', 'like', 'oprel\\_%');
+          ->orWhere('meta_key', 'like', 'op\\_%');
       })
       ->orderBy('meta_id')
       ->get()
@@ -1480,6 +1484,75 @@ function op_regenerate_items_slug($items)
 }
 
 
+function op_import_snapshot_relations($schema, $json, array $all_items)
+{
+  $langs = op_locales();
+  $resources = collect($schema->resources)->keyBy('id');
+  foreach ($schema->resources as $res_i => $res) {
+    $data = $json->resources[$res_i]->data;
+    $meta = [];
+    $updated_wp_ids = [];
+
+    $php_class = $res->php_class;
+    /** @var \OpLib\MetaFunctions */
+    $php_class = new $php_class;
+
+    $php_metaclass = $php_class::$meta_class;
+    $php_metaclass = new $php_metaclass;
+
+    $base_tablemeta_ref = $php_class::$meta_ref;
+
+    $fid_to_relation_langs = [];
+
+    foreach ($data as $thing) {
+      // Things have only the null lang
+      foreach ($all_items[$res->id][$thing->id] as $lang => $wp_id) {
+        $updated_wp_ids[] = $wp_id;
+        foreach ($thing->rel_ids as $fid => $tids) {
+          $field = $res->id_to_field[$fid];
+          $target_res = $resources[$field->rel_res_id];
+          // thing => non thing = duplicate relations by lang (null -> en, null -> it, ...)
+          // thing => thing = no duplication (null -> null)
+          // non thing => non thing = no duplication (en -> en)
+          // non thing => thing = no duplication (en -> null)
+          if (!isset($fid_to_relation_langs["$fid-$lang"])) {
+            $relation_langs = null;
+            if ($res->is_thing && !$target_res->is_thing) {
+              $relation_langs = $langs;
+            } elseif ($res->is_thing && $target_res->is_thing) {
+              $relation_langs = [null];
+            } elseif (!$res->is_thing && !$target_res->is_thing) {
+              $relation_langs = [$lang];
+            } elseif (!$res->is_thing && $target_res->is_thing) {
+              $relation_langs = [null];
+            }
+            $fid_to_relation_langs["$fid-$lang"] = $relation_langs;
+          }
+          $relation_langs = $fid_to_relation_langs["$fid-$lang"];
+          foreach ($tids as $rel_tid) {
+            foreach ($relation_langs as $rel_lang) {
+              $rel_wp_id = $all_items[$target_res->id][$rel_tid][$rel_lang];
+              $meta[] = [
+                $base_tablemeta_ref => $wp_id,
+                'meta_key' => 'oprel_' . $field->name,
+                'meta_value' => $rel_wp_id,
+              ];
+            }
+          }
+        }
+      }
+    }
+
+    foreach (array_chunk($updated_wp_ids, 10000) as $chunk) {
+      $php_metaclass
+        ->whereIn($base_tablemeta_ref, $chunk)
+        ->where('meta_key', 'like', 'oprel\\_%')
+        ->delete();
+    }
+    $php_metaclass->insert($meta);
+  }
+}
+
 
 function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false, &$extract_field = null)
 {
@@ -1538,24 +1611,6 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
         $base_tablemeta_ref => $object_id,
         'meta_key' => 'op_' . $f->name . ($lang ? "_$lang" : ''),
         'meta_value' => is_scalar($value) ? $value : json_encode($value),
-      ];
-    }
-  }
-
-  foreach ($thing->rel_ids as $rel_id => $tids) {
-    $f = $field_map[$rel_id];
-    if (empty($tids)) {
-      $meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'oprel_' . $f->name,
-        'meta_value' => null,
-      ];
-    }
-    foreach ($tids as $rel_tid) {
-      $meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'oprel_' . $f->name,
-        'meta_value' => $rel_tid,
       ];
     }
   }
