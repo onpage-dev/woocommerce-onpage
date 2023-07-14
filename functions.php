@@ -672,6 +672,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
   op_setopt('last_import_token', $token_to_import);
   do_action('op_import_completed');
+  op_record('import complete');
 }
 
 function op_import_gallery($schema) {
@@ -1083,7 +1084,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         if (!$preferred_slug) {
           $regen_slug_items[$res->id][$thing->id][$lang] = $object_id;
         }
-        // op_record("- created");
+        
+        // Delete all relations with parents
+        if ($php_class->isPost()) {
+          // DB::table('term_relationships')->where('object_id', $object_id)->delete();
+          wp_set_object_terms($object_id, 'simple', 'product_type');
+          // op_record("- wp_set_object_terms");
+        }
       }
       $object_ids["{$thing->id}-$lang"] = $object_id;
       $all_items[$res->id][$thing->id][$lang] = $object_id;
@@ -1102,12 +1109,6 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         // op_record("- updated tax");
       }
 
-      // Delete all relations with parents
-      if ($php_class->isPost()) {
-        // DB::table('term_relationships')->where('object_id', $object_id)->delete();
-        wp_set_object_terms($object_id, 'simple', 'product_type');
-        // op_record("- wp_set_object_terms");
-      }
 
       // Calculate base meta
       $base_meta = [];
@@ -1152,10 +1153,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         ];
       }
 
-      // op_record("- merging meta");
-      $all_meta = array_merge($all_meta, $base_meta);
-      // op_record("- merged: ".count($all_meta));
-      $all_meta = array_merge($all_meta, op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
+      array_push($all_meta, ...$base_meta);
+      array_push($all_meta, ...op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
 
       // If this is the primary language
       if ($icl_type) {
