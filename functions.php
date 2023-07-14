@@ -1038,7 +1038,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     // Download existing meta
     op_debug();
     $current_meta_raw = $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
-      ->whereIn('meta_key', array_values(array_unique(array_column($all_meta, 'meta_key'))))
+      ->where(function ($q) use ($all_meta) {
+        $q->whereIn('meta_key', array_values(array_unique(array_column($all_meta, 'meta_key'))))
+          ->orWhere('meta_key', 'like', 'op\\_%')
+          ->orWhere('meta_key', 'like', 'oprel\\_%');
+      })
       ->orderBy('meta_id')
       ->get()
       ->toArray();
@@ -1291,31 +1295,27 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Calculate base meta
       $base_meta = [];
       // These fields are immutable and only created during the first import
-      if (!$object) {
-        $base_meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_id*',
-          'meta_value' => $thing->id,
-        ];
-        $base_meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_res*',
-          'meta_value' => $res->id,
-        ];
-        $base_meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_lang*',
-          'meta_value' => $lang,
-        ];
-      }
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_id*',
+        'meta_value' => $thing->id,
+      ];
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_res*',
+        'meta_value' => $res->id,
+      ];
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_lang*',
+        'meta_value' => $lang,
+      ];
 
-      if ($thing->default_folder_id) {
-        $base_meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => 'op_default_folder_id*',
-          'meta_value' => $thing->default_folder_id,
-        ];
-      }
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'op_default_folder_id*',
+        'meta_value' => $thing->default_folder_id ? $thing->default_folder_id : null,
+      ];
 
       $base_meta[] = [
         $base_tablemeta_ref => $object_id,
@@ -1323,13 +1323,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'meta_value' => $imported_at,
       ];
 
-      if ($preferred_image) {
-        $base_meta[] = [
-          $base_tablemeta_ref => $object_id,
-          'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-          'meta_value' => json_encode($preferred_image),
-        ];
-      }
+      $base_meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
+        'meta_value' => $preferred_image ? json_encode($preferred_image) : null,
+      ];
 
       op_array_append($all_meta, $base_meta);
       op_array_append($all_meta, op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
