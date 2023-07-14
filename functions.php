@@ -1,11 +1,11 @@
 <?php
-if (!defined( 'ABSPATH' )) exit;
+if (!defined('ABSPATH')) exit;
 
 // error_reporting(E_ALL ^ E_NOTICE);
 // ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
 // error_reporting(E_ALL);
 
-require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 // use Illuminate\Database\Capsule\Manager as DB;
 
 use OpLib\Post;
@@ -21,13 +21,16 @@ $___op_conf = (object)[
   'op_fallback_langs' => [],
 ];
 
-function op_debug() {
+function op_debug()
+{
   error_reporting(E_ALL ^ E_NOTICE);
-  ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
+  ini_set('display_errors', 1);
+  ini_set('display_startup_errors', 1);
   error_reporting(E_ALL);
 }
 
-function op_download_json($url) {
+function op_download_json($url)
+{
   $ch = curl_init();
   curl_setopt($ch, CURLOPT_URL, $url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -35,18 +38,20 @@ function op_download_json($url) {
   $result = curl_exec($ch);
   $err = curl_errno($ch);
   if ($err) {
-      throw new \Exception("Cannot download file, curl error [$err]");
+    throw new \Exception("Cannot download file, curl error [$err]");
   }
   $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
   return op_is_successfull_status($status) && $result ? json_decode($result) : null;
 }
 
-function op_is_successfull_status($status) {
+function op_is_successfull_status($status)
+{
   return in_array($status, [200, 201]);
 }
 
-function op_initdb() {
+function op_initdb()
+{
   global $table_prefix;
   // print_r(DB::table('options')
   // ->where('option_name', 'like', 'op\\_ions%')->get());
@@ -56,9 +61,9 @@ function op_initdb() {
     $query = DB::table('options')
       ->where('option_name', 'like', 'op\\_%')
       ->where('option_name', 'not like', 'op\\_ions%');
-    $new_opts = $query->get()->map(function($opt) {
+    $new_opts = $query->get()->map(function ($opt) {
       return [
-        'option_name' => 'on-page-'.substr($opt->option_name, 3),
+        'option_name' => 'on-page-' . substr($opt->option_name, 3),
         'option_value' => $opt->option_value,
         'autoload' => $opt->autoload,
       ];
@@ -72,11 +77,13 @@ function op_initdb() {
     $orig_mode = DB::select('SELECT @@sql_mode as mode')[0]->mode;
     DB::statement("SET sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'");
     try {
-      @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD COLUMN `op_order` FLOAT NULL;");
-    } catch (\Exception $e) { }
+      @DB::statement("ALTER TABLE `" . OP_WP_PREFIX . "terms` ADD COLUMN `op_order` FLOAT NULL;");
+    } catch (\Exception $e) {
+    }
     try {
-      @DB::statement("ALTER TABLE `".OP_WP_PREFIX."terms` ADD INDEX `op_order` (`op_order`)");
-    } catch (\Exception $e) { }
+      @DB::statement("ALTER TABLE `" . OP_WP_PREFIX . "terms` ADD INDEX `op_order` (`op_order`)");
+    } catch (\Exception $e) {
+    }
 
 
 
@@ -88,16 +95,16 @@ function op_initdb() {
     op_debug();
     foreach (\OpLib\Post::all() as $item) {
       if (!$item->getMeta('op_lang*')) {
-          $item->meta()->create([
-              'meta_key'   => 'op_lang*',
-              'meta_value' => op_wpml_default() ?: op_locale() ?: 'it',
-          ]);
+        $item->meta()->create([
+          'meta_key'   => 'op_lang*',
+          'meta_value' => op_wpml_default() ?: op_locale() ?: 'it',
+        ]);
       }
       if (!$item->getMeta('op_res*')) {
         $item->meta()->create([
           'meta_key' => 'op_res*',
           'meta_value' => $item->op_res,
-          ]);
+        ]);
       }
       if (!$item->getMeta('op_id*')) {
         $item->meta()->create([
@@ -117,7 +124,7 @@ function op_initdb() {
         $item->meta()->create([
           'meta_key' => 'op_res*',
           'meta_value' => $item->op_res,
-          ]);
+        ]);
       }
       if (!$item->getMeta('op_id*')) {
         $item->meta()->create([
@@ -130,13 +137,13 @@ function op_initdb() {
   }
   if (op_settings()->migration < 60) {
     $statements = [];
-      $statements[] = "SET NAMES utf8";
-      $statements[] = "SET time_zone = '+00:00'";
-      $statements[] = "SET foreign_key_checks = 0";
-      $statements[] = "SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO'";
+    $statements[] = "SET NAMES utf8";
+    $statements[] = "SET time_zone = '+00:00'";
+    $statements[] = "SET foreign_key_checks = 0";
+    $statements[] = "SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO'";
 
 
-      $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_things` (
+    $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_things` (
         `id` int(11) NOT NULL,
         `resource_id` int(11) NOT NULL,
         `op_order` float NOT NULL,
@@ -144,7 +151,7 @@ function op_initdb() {
         KEY `resource_id_op_order` (`resource_id`,`op_order`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
 
-      $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_thingmeta` (
+    $statements[] = "CREATE TABLE IF NOT EXISTS `{$table_prefix}op_thingmeta` (
         `meta_id` int(11) NOT NULL AUTO_INCREMENT,
         `thing_id` int(11) NOT NULL,
         `meta_key` varchar(50) NOT NULL,
@@ -156,25 +163,27 @@ function op_initdb() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;";
 
 
-      foreach ($statements as $st) {
-        DB::statement($st);
-      }
-      op_setopt('migration', 60);
-      
+    foreach ($statements as $st) {
+      DB::statement($st);
+    }
+    op_setopt('migration', 60);
   }
 }
 
-function op_setopt($opt, $value) {
+function op_setopt($opt, $value)
+{
   $settings = op_settings();
   $settings->$opt = $value;
   op_settings($settings);
 }
 
-function op_getopt($opt, $default = null) {
+function op_getopt($opt, $default = null)
+{
   return isset(op_settings()->$opt) ? op_settings()->$opt : $default;
 }
 
-function op_post($field) {
+function op_post($field)
+{
   static $req_json;
   if (!$req_json) {
     $req_json = json_decode(file_get_contents('php://input'), true);
@@ -182,7 +191,8 @@ function op_post($field) {
   return @$req_json[$field];
 }
 
-function op_settings($settings = null, $flush_cache = false) {
+function op_settings($settings = null, $flush_cache = false)
+{
   static $cached_settings = null;
   if ($flush_cache) $cached_settings = null;
   if (!empty($settings)) {
@@ -190,8 +200,6 @@ function op_settings($settings = null, $flush_cache = false) {
     foreach ((array) $settings as $key => $value) {
       update_option("on-page-$key", json_encode($value));
     }
-
-
   } elseif ($cached_settings) {
     return $cached_settings;
   }
@@ -205,7 +213,8 @@ function op_settings($settings = null, $flush_cache = false) {
   return $ret;
 }
 
-function op_latest_snapshot_token(object $sett = null) {
+function op_latest_snapshot_token(object $sett = null)
+{
   if (!$sett) $sett = op_settings();
   $info = op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
   if (!@$info->token) {
@@ -214,7 +223,8 @@ function op_latest_snapshot_token(object $sett = null) {
   return $info->token;
 }
 
-function op_download_snapshot(string $token) {
+function op_download_snapshot(string $token)
+{
   $sett = op_settings();
 
   // op_record('start import');
@@ -223,42 +233,50 @@ function op_download_snapshot(string $token) {
   return $db;
 }
 
-function op_save_snapshot_file($db){
-  $name = date('Y-m-d H:i:s')."-snapshot.json";
+function op_save_snapshot_file($db)
+{
+  $name = date('Y-m-d H:i:s') . "-snapshot.json";
   file_put_contents(op_dir("snapshots/$name"), json_encode($db));
 }
 
-function op_dir($dir) {
-  return __DIR__."/$dir";
+function op_dir($dir)
+{
+  return __DIR__ . "/$dir";
 }
 
-function op_del_old_snapshots() {
+function op_del_old_snapshots()
+{
   foreach (array_slice(op_get_snapshots_list(), 3) as $i => $name) {
     @unlink(op_dir("snapshots/$name"));
   }
 }
 
-function op_get_snapshots_list(){
+function op_get_snapshots_list()
+{
   return array_reverse(array_map('basename', glob(op_dir("/snapshots/*.json"))));
 }
 
 
 
-function op_get_saved_snapshot($file_name){
-  $path= op_dir("snapshots/$file_name");
-  if(is_file($path)){
+function op_get_saved_snapshot($file_name)
+{
+  $path = op_dir("snapshots/$file_name");
+  if (is_file($path)) {
     return json_decode(file_get_contents($path));
   }
 }
 
-function op_write_json($name, $json) {
-  return file_put_contents(wp_upload_dir()['basedir']."/on-page-$name.json", json_encode($json));
+function op_write_json($name, $json)
+{
+  return file_put_contents(wp_upload_dir()['basedir'] . "/on-page-$name.json", json_encode($json));
 }
-function op_read_json($name) {
-  return @json_decode(file_get_contents(wp_upload_dir()['basedir']."/on-page-$name.json"));
+function op_read_json($name)
+{
+  return @json_decode(file_get_contents(wp_upload_dir()['basedir'] . "/on-page-$name.json"));
 }
 
-function op_label($res, string $lang = null) {
+function op_label($res, string $lang = null)
+{
   if (!is_object($res) || !isset($res->labels)) {
     throw new Exception('First parameter for op_label must be resource or field or folder');
   }
@@ -267,7 +285,8 @@ function op_label($res, string $lang = null) {
     if (isset($res->labels->$lang)) return $res->labels->$lang;
   }
 }
-function op_description($res, string $lang = null) {
+function op_description($res, string $lang = null)
+{
   if (!is_object($res) || !isset($res->descriptions)) {
     throw new Exception('First parameter for op_label must be resource or field');
   }
@@ -277,21 +296,25 @@ function op_description($res, string $lang = null) {
   }
 }
 
-function op_lang() {
+function op_lang()
+{
   return op_locale_to_lang(op_locale());
 }
 
-function op_langs() {
+function op_langs()
+{
   $s = op_schema();
   if (!$s) return [];
   return $s->langs;
 }
 
-function op_set_fallback_lang(string $missing, array $fallback) {
+function op_set_fallback_lang(string $missing, array $fallback)
+{
   global $___op_conf;
   $___op_conf->op_fallback_langs[$missing] = $fallback;
 }
-function op_fallback_langs($lang = null) {
+function op_fallback_langs($lang = null)
+{
   global $___op_conf;
   if (!$lang) $lang = op_locale_to_lang(op_locale());
   $fallback_langs = [$lang];
@@ -305,17 +328,20 @@ function op_fallback_langs($lang = null) {
   }
   return $fallback_langs;
 }
-function op_ignore_user_scopes(bool $set = null) {
+function op_ignore_user_scopes(bool $set = null)
+{
   static $safe = false;
   if (!is_null($set)) {
     $safe = $set;
   }
   return $safe;
 }
-function op_stored_schema() {
+function op_stored_schema()
+{
   return op_read_json('schema') ?? op_getopt('schema');
 }
-function op_schema(object $set = null) {
+function op_schema(object $set = null)
+{
   static $schema = null;
   if ($set) {
     $set = clone $set;
@@ -365,19 +391,21 @@ function op_schema(object $set = null) {
   return $schema;
 }
 
-function op_err($msg, $data = []) {
+function op_err($msg, $data = [])
+{
   $data = (array) $data;
   $data['error'] = $msg;
   op_ret($data);
 }
 
-function op_ret($data) {
+function op_ret($data)
+{
   if (is_object($data)) $data = (array) $data;
   if (@$data['error']) {
     http_response_code(400);
   }
 
-  if ( defined( 'WP_CLI' ) && WP_CLI ) {
+  if (defined('WP_CLI') && WP_CLI) {
     WP_CLI::line(print_r($data));
     exit;
   }
@@ -386,7 +414,8 @@ function op_ret($data) {
   exit;
 }
 
-function op_record($label, $end = false) {
+function op_record($label, $end = false)
+{
   static $tRecordStart;
   static $tStartQ;
   static $steps;
@@ -395,13 +424,13 @@ function op_record($label, $end = false) {
   $tS = microtime(true);
   $tElapsedSecs = $tS - $tRecordStart;
   $tElapsedSecsQ = $tS - $tStartQ;
-  $ram = str_pad(number_format(memory_get_usage(true)/1024/1024, 1), 6, " ", STR_PAD_LEFT);
+  $ram = str_pad(number_format(memory_get_usage(true) / 1024 / 1024, 1), 6, " ", STR_PAD_LEFT);
   $sElapsedSecs = str_pad(number_format($tElapsedSecs, 3), 8, " ", STR_PAD_LEFT);
   $sElapsedSecsQ = str_pad(number_format($tElapsedSecsQ, 3), 8, " ", STR_PAD_LEFT);
   $tStartQ = $tS;
   $message = "$sElapsedSecs $sElapsedSecsQ  {$ram}MB $label";
   $steps[] = $message;
-  if ( defined( 'WP_CLI' ) && WP_CLI ) {
+  if (defined('WP_CLI') && WP_CLI) {
     WP_CLI::line($message);
   }
   if (count($steps) == 1) {
@@ -411,7 +440,8 @@ function op_record($label, $end = false) {
   return $steps;
 }
 
-function op_cache(string $id, $callback) {
+function op_cache(string $id, $callback)
+{
   static $cached = [];
   if (!isset($cached[$id])) {
     $cached[$id] = $callback();
@@ -419,7 +449,8 @@ function op_cache(string $id, $callback) {
   return $cached[$id];
 }
 
-function op_page($name = null, $file = null) {
+function op_page($name = null, $file = null)
+{
   static $pages = [];
   if ($file) {
     $pages[$name] = $file;
@@ -427,7 +458,8 @@ function op_page($name = null, $file = null) {
   return $pages;
 }
 
-function op_e($string) {
+function op_e($string)
+{
   if (is_array($string)) {
     return array_map('op_e', $string);
   } else {
@@ -435,27 +467,31 @@ function op_e($string) {
   }
 }
 
-function op_snake_to_camel($str) {
+function op_snake_to_camel($str)
+{
   $str = explode('_', $str);
   $ret = '';
   foreach ($str as $s) {
-    $ret.= strtoupper(@$s[0]).substr($s, 1);
+    $ret .= strtoupper(@$s[0]) . substr($s, 1);
   }
   return $ret;
 }
 
-function op_wpml_enabled() {
+function op_wpml_enabled()
+{
   return !!op_wpml_default();
 }
 
-function op_wpml_default() {
+function op_wpml_default()
+{
   static $ret = -1;
   if ($ret === -1) {
     $ret = apply_filters('wpml_default_language', NULL);
   }
   return $ret;
 }
-function op_wpml_langs() :? array {
+function op_wpml_langs(): ?array
+{
   if (!op_wpml_enabled()) return null;
   $icl_deflang = op_wpml_default();
   $wpml_langs = [];
@@ -470,15 +506,17 @@ function op_wpml_langs() :? array {
   return array_values(array_unique($wpml_langs));
 }
 
-function op_locales() {
-  $langs = [ op_wpml_default() ?: op_locale()?: 'it' ];
+function op_locales()
+{
+  $langs = [op_wpml_default() ?: op_locale() ?: 'it'];
   if ($other_langs = op_wpml_langs()) {
     $langs = array_merge($langs, $other_langs);
   }
   return array_values(array_unique($langs));
 }
 
-function op_slug(string $title, $base_class = null, string $old_slug = null) {
+function op_slug(string $title, $base_class = null, string $old_slug = null)
+{
   $slug = $title;
   // This is very important because this function depends on what locale you pass to it
   // For example "ä" becomes "e" if you pass "en_US" and "ae" if you pass "de_DE"
@@ -487,23 +525,24 @@ function op_slug(string $title, $base_class = null, string $old_slug = null) {
 
   if (!$base_class) return $slug;
   $suffix = '';
-  while ($old_slug != $slug.$suffix && $base_class->slugExists($slug.$suffix)) {
+  while ($old_slug != $slug . $suffix && $base_class->slugExists($slug . $suffix)) {
     if (!$suffix) {
       $suffix = 2;
     } else {
       $suffix++;
     }
   }
-  return $slug.$suffix;
+  return $slug . $suffix;
 }
 
-function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot=null, bool $force_import = false, bool $regen_snapshot = false) {
+function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot = null, bool $force_import = false, bool $regen_snapshot = false)
+{
   op_record("Starting import");
-  op_record("Server time: ".date('Y-m-d H:i:s'));
+  op_record("Server time: " . date('Y-m-d H:i:s'));
 
   if (function_exists('sem_get')) {
     $semaphore = sem_get(333666333, 1, 0666, true);
-    if(!$semaphore) {
+    if (!$semaphore) {
       op_err('Could not create semaphore, please verify sem_get() is enabled or contact support');
     }
     $semaphore_acquired = sem_acquire($semaphore, true);
@@ -516,7 +555,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
-    do_action( 'wpml_switch_language', op_wpml_default() );
+    do_action('wpml_switch_language', op_wpml_default());
   }
 
   // Regenerate the snapshot
@@ -526,12 +565,12 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
     op_record('done');
   }
-  
+
   if (!op_getopt('maintain_user_prods_and_cats')) {
     op_remove_corrupted();
   }
 
-  ini_set('memory_limit','2G');
+  ini_set('memory_limit', '2G');
   set_time_limit(600);
   ini_set('max_execution_time', '600');
   $token_to_import = null;
@@ -620,13 +659,10 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   $langs = op_locales();
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
-    op_record("Importing $res->label (".count($data)." items)...");
+    op_record("Importing $res->label (" . count($data) . " items)...");
     op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $regen_slug_items, $schema_json);
     op_record("completed $res->label");
   }
-  op_record("Importing relations...");
-  op_import_snapshot_relations($schema, $schema_json, $all_items);
-  op_record("done");
 
   op_record('Deleting old categories...');
   $disabled_count = op_disable_old_categories($all_items);
@@ -654,7 +690,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('Importing relations...');
   op_link_imported_data($schema);
   op_record('done');
-  
+
   op_import_gallery($schema);
 
   wc_update_product_lookup_tables();
@@ -675,10 +711,11 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('import complete');
 }
 
-function op_import_gallery($schema) {
+function op_import_gallery($schema)
+{
   foreach ($schema->resources as $res) {
     if ($res->op_type != 'post') continue;
-    
+
     $image_field_id = op_getopt("res-{$res->id}-image");
     $field = $res->id_to_field[$image_field_id] ?? null;
     if (!$field || $field->type != 'image') continue;
@@ -703,7 +740,8 @@ function op_import_gallery($schema) {
   }
 }
 
-function op_delete_orphan_meta() {
+function op_delete_orphan_meta()
+{
   global $table_prefix;
   return [
     'postmeta' => (int) DB::statement("delete FROM `{$table_prefix}postmeta` where not exists(select 1 from `{$table_prefix}posts` where ID=post_id)"),
@@ -711,7 +749,8 @@ function op_delete_orphan_meta() {
   ];
 }
 
-function op_disable_old_products(array $imported_items) :int {
+function op_disable_old_products(array $imported_items): int
+{
   $posts_to_remove = OpLib\Post::pluck('ID')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
@@ -731,9 +770,10 @@ function op_disable_old_products(array $imported_items) :int {
   }
   return $posts_to_remove->count();
 }
-function op_disable_old_categories(array $imported_items) :int {
+function op_disable_old_categories(array $imported_items): int
+{
   $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
-  
+
   foreach (op_get_static_terms() as $wp_id) {
     $tax_to_remove->forget($wp_id);
   }
@@ -752,7 +792,8 @@ function op_disable_old_categories(array $imported_items) :int {
   return $tax_to_remove->count();
 }
 
-function op_get_static_terms() {
+function op_get_static_terms()
+{
 
   $static_parents = apply_filters('op_import_relations', null) ?: [];
   $all_ids = [];
@@ -769,7 +810,8 @@ function op_get_static_terms() {
   }
   return $all_ids;
 }
-function op_delete_old_things(array $imported_items) :int {
+function op_delete_old_things(array $imported_items): int
+{
   $things_to_remove = OpLib\Thing::get()->keyBy('id');
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
@@ -786,23 +828,24 @@ function op_delete_old_things(array $imported_items) :int {
   return $things_to_remove->count();
 }
 
-function op_link_imported_data($schema) {
+function op_link_imported_data($schema)
+{
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
   $id_to_parent = DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->pluck('parent', 'term_id');
   $id_to_parent_post = DB::table('term_taxonomy')
-    ->join(OP_WP_PREFIX.'term_relationships', OP_WP_PREFIX.'term_relationships.term_taxonomy_id', '=', OP_WP_PREFIX.'term_taxonomy.term_taxonomy_id')
+    ->join(OP_WP_PREFIX . 'term_relationships', OP_WP_PREFIX . 'term_relationships.term_taxonomy_id', '=', OP_WP_PREFIX . 'term_taxonomy.term_taxonomy_id')
     ->where('taxonomy', 'product_cat')
     ->pluck('term_id', 'object_id');
 
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
-    do_action( 'wpml_switch_language', op_wpml_default() );
+    do_action('wpml_switch_language', op_wpml_default());
   }
 
   foreach ($relations as $resource_name => $parent_relation) {
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
-    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations; available resources: ".collect($schema->resources)->pluck('name')->implode(', '));
+    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations; available resources: " . collect($schema->resources)->pluck('name')->implode(', '));
     $class = op_name_to_class($res->name);
 
     // Static parent -> static category id
@@ -814,13 +857,12 @@ function op_link_imported_data($schema) {
         }
 
         if ($res->op_type == 'post') {
-          $ret = wp_set_post_categories( $child_term->id, $parent_relation );
+          $ret = wp_set_post_categories($child_term->id, $parent_relation);
 
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret]);
           }
-        }
-        else if ($res->op_type == 'term') {
+        } else if ($res->op_type == 'term') {
 
           // Call wp_update_term
           $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -836,17 +878,17 @@ function op_link_imported_data($schema) {
       // Parent relation is a relation name
       $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
       if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
-  
+
       $terms = $class::with($parent_relation)->get();
-  
+
       foreach ($terms as $child_term) {
         foreach ($child_term->$parent_relation as $parent_term) {
           if ($res->op_type == 'post') {
             if (($id_to_parent_post[$child_term->id] ?? null) == $parent_term->id) {
               continue;
             }
-            $ret = wp_set_post_terms( $child_term->id, [$parent_term->id], 'product_cat' );
-  
+            $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
+
             if ($ret instanceof \WP_Error) {
               op_err("Error while setting Product parent", ['wp_err' => $ret]);
             }
@@ -870,16 +912,17 @@ function op_link_imported_data($schema) {
 
   if (op_wpml_enabled()) {
     $sync_helper = wpml_get_hierarchy_sync_helper('post');
-    $sync_helper->sync_element_hierarchy( 'product' );
+    $sync_helper->sync_element_hierarchy('product');
     $sync_helper = wpml_get_hierarchy_sync_helper('term');
-    $sync_helper->sync_element_hierarchy( 'product_cat' );
+    $sync_helper->sync_element_hierarchy('product_cat');
   }
 
   // Reset category count
   delete_option("product_cat_children");
 }
 
-function set_op_locale_to_lang(array $set = null) {
+function set_op_locale_to_lang(array $set = null)
+{
   static $locales = [];
   if ($set) {
     $locales = [];
@@ -890,7 +933,8 @@ function set_op_locale_to_lang(array $set = null) {
   return $locales;
 }
 
-function op_locale_to_lang(string $locale) {
+function op_locale_to_lang(string $locale)
+{
   $locale = strtolower(str_replace('-', '_', $locale));
 
   $locales = set_op_locale_to_lang();
@@ -903,19 +947,20 @@ function op_locale_to_lang(string $locale) {
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json) {
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json)
+{
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
   $php_class = new $php_class;
-  
+
   $php_metaclass = $res->php_metaclass;
   $php_metaclass = new $php_metaclass;
 
 
   $lab_id = op_getopt("res-{$res->id}-name");
   $lab = collect($res->fields)->firstWhere('id', $lab_id)
-     ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
-     
+    ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
+
 
   $lab_img = $php_class->isThing() ? null : collect($res->fields)->where('type', 'image')->first();
   $base_table = $php_class->getTableWithoutPrefix();
@@ -946,9 +991,130 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
   $icl_trid = op_wpml_enabled() ? DB::table('icl_translations')->max('trid') + 2 : 0;
 
+
+  // This function writes several arrays to the database in chunks
+  $sync = function () use (
+    $icl_type,
+    $php_metaclass,
+    $base_tablemeta_ref,
+    &$all_icl_object_ids,
+    &$icl_translations,
+    &$all_meta,
+    &$object_ids
+  ) {
+    $meta_count = count($all_meta);
+    $times = [];
+    $time_start = microtime(true);
+    $time = microtime(true);
+
+    if ($icl_type) {
+      DB::table('icl_translations')
+        ->where('element_type', $icl_type)
+        ->whereIn('element_id', $all_icl_object_ids)
+        ->delete();
+      $all_icl_object_ids = [];
+
+      $times['delete_icl'] = number_format(microtime(true) - $time, 2);
+      $time = microtime(true);
+
+      foreach (array_chunk($icl_translations, 2000) as $chunk) {
+        DB::table('icl_translations')->insert($chunk);
+      }
+      $icl_translations = [];
+
+
+      $times['insert_icl'] = number_format(microtime(true) - $time, 2);
+      $time = microtime(true);
+    }
+
+    // Delete old meta values
+    $non_op_meta_keys = collect($all_meta)->pluck('meta_key')->unique()->filter(function ($key) {
+      return substr($key, 0, 3) !== 'op_';
+    })->values()->all();
+
+    $times['prepare_meta'] = number_format(microtime(true) - $time, 2);
+    $time = microtime(true);
+
+    // Download existing meta
+    op_debug();
+    $current_meta_raw = $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
+      ->whereIn('meta_key', array_values(array_unique(array_column($all_meta, 'meta_key'))))
+      ->orderBy('meta_id')
+      ->get()
+      ->toArray();
+
+
+    $times['download_meta'] = number_format(microtime(true) - $time, 2);
+    $time = microtime(true);
+
+
+    // Insert new meta
+    $wanted_meta = [];
+    $to_delete = []; // id of meta values to be deleted
+    $to_insert = []; // list of new meta tags
+
+    $current_meta = [];
+    foreach ($current_meta_raw as $v) {
+      if (is_null($v['meta_value'])) continue;
+      $current_meta[$v[$base_tablemeta_ref]][$v['meta_key']][] = $v;
+      $to_delete[$v['meta_id']] = true;
+    }
+
+    foreach ($all_meta as $v) {
+      if (is_null($v['meta_value'])) continue;
+      $wanted_meta[$v[$base_tablemeta_ref]][$v['meta_key']][] = $v;
+    }
+
+    $times['index_meta'] = number_format(microtime(true) - $time, 2);
+    $time = microtime(true);
+
+    foreach ($wanted_meta as $object_id => $post_metas) {
+      foreach ($post_metas as $meta_key => $meta_values) {
+        $curr = @$current_meta[$object_id][$meta_key] ?? [];
+        $cur_data = implode('-|-', array_column($curr, 'meta_value'));
+        $new_data = implode('-|-', array_column($meta_values, 'meta_value'));
+        if ($cur_data == $new_data) {
+          foreach ($curr as $mv) {
+            unset($to_delete[$mv['meta_id']]);
+          }
+        } else {
+          op_array_append($to_insert, $meta_values);
+        }
+      }
+    }
+
+    $times['diff_meta'] = number_format(microtime(true) - $time, 2);
+    $time = microtime(true);
+
+    $times['delete_count'] = count($to_delete);
+    $times['insert_count'] = count($to_insert);
+
+    $php_metaclass
+      ->whereIn('meta_id', array_keys($to_delete))
+      ->delete();
+
+    $times['delete_meta'] = number_format(microtime(true) - $time, 2);
+    $time = microtime(true);
+
+    foreach (array_chunk($to_insert, 5000) as $chunk) {
+      $php_metaclass->insert($chunk);
+    }
+    $all_meta = [];
+    $object_ids = [];
+
+    $times['insert_meta'] = number_format(microtime(true) - $time, 2);
+
+    $time = number_format(microtime(true) - $time_start, 3) . 's';
+    // op_record("data written to db (time: $time; ".count($to_insert)." inserts / ".count($to_delete)." deletions)");
+    // op_record("data written to db ($meta_count meta) ".json_encode($times));
+  };
+
+
+
   foreach ($res_data as $thing_i => $thing) {
-    if ($thing_i && $thing_i%100 == 0) {
-      op_record("- $thing_i/".count($res_data));
+    if (count($all_meta) > 50000) {
+      op_record("- $thing_i/" . count($res_data));
+      $sync();
     }
     $icl_primary_id = null;
     $icl_trid++;
@@ -957,8 +1123,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     foreach ($php_class->isThing() ? [null] : $langs as $lang) {
       // op_record("- lang $lang");
       $is_primary = !$icl_primary_id;
-      $lab_img_field = $lab_img ? $lab_img->id.($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
-      $lab_field = $lab ? $lab->id.($lab->is_translatable ? "_".op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
+      $lab_img_field = $lab_img ? $lab_img->id . ($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
+      $lab_field = $lab ? $lab->id . ($lab->is_translatable ? "_" . op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
 
       $label = @$thing->fields->$lab_field;
       if (is_null($label)) $label = 'unnamed';
@@ -969,7 +1135,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $preferred_description = implode(
         '<br/>',
         array_map(
-          function($d) use (&$extract_field) { if (!is_null($d) && !is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          function ($d) use (&$extract_field) {
+            if (!is_null($d) && !is_scalar($d)) $d = json_encode($d);
+            if ($extract_field->type != 'html') {
+              $d = htmlentities($d);
+            }
+            return $d;
+          },
           op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
@@ -977,7 +1149,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $preferred_excerpt = implode(
         '<br/>',
         array_map(
-          function($d) use (&$extract_field) { if (!is_null($d) && !is_scalar($d)) $d = json_encode($d); if ($extract_field->type != 'html') {$d = htmlentities($d);} return $d; },
+          function ($d) use (&$extract_field) {
+            if (!is_null($d) && !is_scalar($d)) $d = json_encode($d);
+            if ($extract_field->type != 'html') {
+              $d = htmlentities($d);
+            }
+            return $d;
+          },
           op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
         )
       );
@@ -990,7 +1168,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       if (strlen($preferred_slug)) {
         $preferred_slug = op_slug($preferred_slug);
       }
-      
+
       $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
 
       // Prepare data
@@ -1050,7 +1228,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'op_order' => $thing_i,
         ];
       }
-         
+
       // op_record("- ready to upsert");
       // Create or update the object
       if ($object) {
@@ -1077,14 +1255,14 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
         // Check for errors
         if (!$object_id) {
-          op_err("Cannot insert into $base_table: ".DB::instance()->db->last_error, [
+          op_err("Cannot insert into $base_table: " . DB::instance()->db->last_error, [
             'data' => $data,
           ]);
         }
         if (!$preferred_slug) {
           $regen_slug_items[$res->id][$thing->id][$lang] = $object_id;
         }
-        
+
         // Delete all relations with parents
         if ($php_class->isPost()) {
           // DB::table('term_relationships')->where('object_id', $object_id)->delete();
@@ -1130,7 +1308,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'meta_value' => $lang,
         ];
       }
-      
+
       if ($thing->default_folder_id) {
         $base_meta[] = [
           $base_tablemeta_ref => $object_id,
@@ -1153,8 +1331,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         ];
       }
 
-      array_push($all_meta, ...$base_meta);
-      array_push($all_meta, ...op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
+      op_array_append($all_meta, $base_meta);
+      op_array_append($all_meta, op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
 
       // If this is the primary language
       if ($icl_type) {
@@ -1193,65 +1371,64 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     } // end langs cycle
   } // end $thing->data cycle
 
-
-  if ($icl_type) {
-    DB::table('icl_translations')
-      ->where('element_type', $icl_type)
-      ->whereIn('element_id', $all_icl_object_ids)
-      ->delete();
-    foreach (array_chunk($icl_translations, 2000) as $chunk) {
-      DB::table('icl_translations')->insert($chunk);
-    }
-  }
-
-  // Delete old meta values
-  $non_op_meta_keys = collect($all_meta)->pluck('meta_key')->unique()->filter(function($key) {return substr($key, 0, 3) !== 'op_';})->values()->all();
-  $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
-    ->whereNotIn('meta_key', ['op_lang*', 'op_id*', 'op_res*'])
-    ->where(function($q) use ($non_op_meta_keys) {
-      $q->where('meta_key', 'like', 'op\\_%')
-        ->orWhereIn('meta_key', $non_op_meta_keys);
-    })->delete();
-
-  // Insert new meta
-  $all_meta = array_filter($all_meta, function($meta) {
-    return !is_null($meta['meta_value']);
-  });
-  foreach (array_chunk($all_meta, 2000) as $chunk) {
-    $php_metaclass->insert($chunk);
-  }
+  $sync();
 }
 
-function op_remove_corrupted() {
+function op_array_append(array &$array, array $values)
+{
+  foreach ($values as $v) {
+    $array[] = $v;
+  }
+  return $array;
+}
+
+function op_remove_corrupted()
+{
   $deleted_posts = OpLib\Post::withoutGlobalScopes()
     ->where('post_type', 'product')
-    ->where(function($q) {
-      $q->whereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_id*'); });
-      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
-      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
+    ->where(function ($q) {
+      $q->whereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_id*');
+      });
+      $q->orWhereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_res*');
+      });
+      $q->orWhereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_lang*');
+      });
     })
     ->delete();
   if ($deleted_posts) op_record("Deleted corrupted posts: $deleted_posts");
-  
+
   $deleted_terms = OpLib\Term::withoutGlobalScopes()
     ->whereNotIn('term_id', op_get_static_terms())
-    ->whereHas('taxonomies', function($tax_query) { $tax_query->where('taxonomy', 'product_cat'); })
-    ->where(function($q) {
-      $q->whereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_id*'); });
-      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_res*'); });
-      $q->orWhereDoesntHave('meta', function($meta_query) { $meta_query->where('meta_key', 'op_lang*'); });
+    ->whereHas('taxonomies', function ($tax_query) {
+      $tax_query->where('taxonomy', 'product_cat');
+    })
+    ->where(function ($q) {
+      $q->whereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_id*');
+      });
+      $q->orWhereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_res*');
+      });
+      $q->orWhereDoesntHave('meta', function ($meta_query) {
+        $meta_query->where('meta_key', 'op_lang*');
+      });
     })
     ->delete();
   if ($deleted_terms) op_record("Deleted corrupted terms: $deleted_terms");
 }
 
 
-function op_name_to_class(string $res_name) {
+function op_name_to_class(string $res_name)
+{
   $camel_name = op_snake_to_camel($res_name);
   return "\\Op\\$camel_name";
 }
 
-function op_regenerate_import_slug(array $items) {
+function op_regenerate_import_slug(array $items)
+{
   foreach ($items as $res_id => $new_res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type == 'thing') continue;
@@ -1266,24 +1443,26 @@ function op_regenerate_import_slug(array $items) {
 
     $class = op_name_to_class($res->name);
     foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
-        $items = $class::unlocalized()->withoutGlobalScope('post_status_publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
-        op_regenerate_items_slug($items);
+      $items = $class::unlocalized()->withoutGlobalScope('post_status_publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
+      op_regenerate_items_slug($items);
     }
   }
 }
 
-function op_regenerate_all_slugs() {
+function op_regenerate_all_slugs()
+{
   foreach (op_schema()->resources as $res) {
     // if ($res->name != 'categorie') continue;
     $class = op_name_to_class($res->name);
     op_record("regenerating slugs for $class");
-    $class::unlocalized()->chunk(200, function($items) {
+    $class::unlocalized()->chunk(200, function ($items) {
       op_regenerate_items_slug($items);
     });
   }
 }
 
-function op_regenerate_items_slug($items) {
+function op_regenerate_items_slug($items)
+{
 
   $start_locale = op_locale();
   foreach ($items as $new_item) {
@@ -1300,74 +1479,6 @@ function op_regenerate_items_slug($items) {
     $new_item->setSlug($new_slug);
   }
   op_locale($start_locale);
-}
-
-function op_import_snapshot_relations($schema, $json, array $all_items) {
-  $langs = op_locales();
-  $resources = collect($schema->resources)->keyBy('id');
-  foreach ($schema->resources as $res_i => $res) {
-    $data = $json->resources[$res_i]->data;
-    $meta = [];
-    $updated_wp_ids = [];
-
-    $php_class = $res->php_class;
-    /** @var \OpLib\MetaFunctions */
-    $php_class = new $php_class;
-  
-    $php_metaclass = $php_class::$meta_class;
-    $php_metaclass = new $php_metaclass;
-    
-    $base_tablemeta_ref = $php_class::$meta_ref;
-
-    $fid_to_relation_langs = [];
-
-    foreach ($data as $thing) {
-      // Things have only the null lang
-      foreach ($all_items[$res->id][$thing->id] as $lang => $wp_id) {
-        $updated_wp_ids[] = $wp_id;
-        foreach ($thing->rel_ids as $fid => $tids) {
-          $field = $res->id_to_field[$fid];
-          $target_res = $resources[$field->rel_res_id];
-          // thing => non thing = duplicate relations by lang (null -> en, null -> it, ...)
-          // thing => thing = no duplication (null -> null)
-          // non thing => non thing = no duplication (en -> en)
-          // non thing => thing = no duplication (en -> null)
-          if (!isset($fid_to_relation_langs["$fid-$lang"])) {
-            $relation_langs = null;
-            if ($res->is_thing && !$target_res->is_thing) {
-              $relation_langs = $langs;
-            } elseif ($res->is_thing && $target_res->is_thing) {
-              $relation_langs = [null];
-            } elseif (!$res->is_thing && !$target_res->is_thing) {
-              $relation_langs = [$lang];
-            } elseif (!$res->is_thing && $target_res->is_thing) {
-              $relation_langs = [null];
-            }
-            $fid_to_relation_langs["$fid-$lang"] = $relation_langs;
-          }
-          $relation_langs = $fid_to_relation_langs["$fid-$lang"];
-          foreach ($tids as $rel_tid) {
-            foreach ($relation_langs as $rel_lang) {
-              $rel_wp_id = $all_items[$target_res->id][$rel_tid][$rel_lang];
-              $meta[] = [
-                $base_tablemeta_ref => $wp_id,
-                'meta_key' => 'oprel_'.$field->name,
-                'meta_value' => $rel_wp_id,
-              ];
-            }
-          }
-        }
-      }
-    }
-
-    foreach (array_chunk($updated_wp_ids, 10000) as $chunk) {
-      $php_metaclass
-        ->whereIn($base_tablemeta_ref, $chunk)
-        ->where('meta_key', 'like', 'oprel\\_%')
-        ->delete();
-    }
-    $php_metaclass->insert($meta);
-  }
 }
 
 
@@ -1413,7 +1524,8 @@ function op_extract_value_from_raw_thing(object $schema_json, object $res, objec
   }
 }
 
-function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref) {
+function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $field_map, $base_tablemeta_ref)
+{
   $meta = [];
   // Fields
   foreach ($thing->fields as $field_hc_name => $values) {
@@ -1421,20 +1533,40 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     $f = $field_map[$e[0]];
     $lang = @$e[1];
     if (!$f->is_multiple) {
-      $values = [ $values ];
+      $values = [$values];
     }
     foreach ($values as $value) {
       $meta[] = [
         $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_'.$f->name.($lang ? "_$lang" : ''),
+        'meta_key' => 'op_' . $f->name . ($lang ? "_$lang" : ''),
         'meta_value' => is_scalar($value) ? $value : json_encode($value),
+      ];
+    }
+  }
+
+  foreach ($thing->rel_ids as $rel_id => $tids) {
+    $f = $field_map[$rel_id];
+    if (empty($tids)) {
+      $meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'oprel_' . $f->name,
+        'meta_value' => null,
+      ];
+    }
+    foreach ($tids as $rel_tid) {
+      $meta[] = [
+        $base_tablemeta_ref => $object_id,
+        'meta_key' => 'oprel_' . $f->name,
+        'meta_value' => $rel_tid,
       ];
     }
   }
 
   // Append the price and other woocommerce metadata
   if ($res->is_product) {
-    $yes_no = function($v) { return $v ? 'yes' : 'no';  };
+    $yes_no = function ($v) {
+      return $v ? 'yes' : 'no';
+    };
     $meta_map = [
       '_regular_price' => [
         'option' => 'price',
@@ -1479,7 +1611,9 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
       ],
       '_stock_status' => [
         'option' => 'stock_status', // instock|outofstock|onbackorder
-        'mapper' => function($v) { return $v ? 'instock' : 'outofstock'; },
+        'mapper' => function ($v) {
+          return $v ? 'instock' : 'outofstock';
+        },
       ],
       '_virtual' => [
         'option' => 'virtual', // yes|no
@@ -1499,7 +1633,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
 
       // User wants to set this option from on page
       $values[$meta_name] = null; // null = delete meta
-      
+
       // Get the otpion value from on page
       $val = op_extract_value_from_raw_thing($schema_json, $res, $thing, $op_fid, $op_fid2);
       if (is_null($val)) continue;
@@ -1530,51 +1664,54 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     $values['_price'] = @$values['_sale_price'] && $sale_period_active ? @$values['_sale_price'] : @$values['_regular_price'];
 
     foreach ($values as $meta_key => $value) {
-      $meta[] = [ 'post_id' => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key ];
+      $meta[] = ['post_id' => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key];
     }
   }
 
   return $meta;
 }
 
-function op_gen_model(object $schema, object $res) {
+function op_gen_model(object $schema, object $res)
+{
   $camel_name = op_snake_to_camel($res->name);
   $extends = $res->php_class;
 
   $extends_lc = strtolower(basename(str_replace('\\', '/', $extends)));
 
   $code = "<?php\nnamespace Op; \n";
-  $code.= "class $camel_name extends \\{$extends} {\n";
-  $code.= "  public static function boot() {
+  $code .= "class $camel_name extends \\{$extends} {\n";
+  $code .= "  public static function boot() {
     parent::boot();
     self::addGlobalScope('_op-lang', function(\$q) {
       \$q->localized();
     });
   }\n";
-  $code.= "  public static function getResource() {
+  $code .= "  public static function getResource() {
     return op_schema()->name_to_res['{$res->name}'];
   }\n";
 
   foreach ($res->fields as $f) {
     if ($f->type == 'relation') {
       $rel_class = op_snake_to_camel($f->rel_res->name);
-      $code.= "  function {$f->name}() {\n";
-      $code.= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')";
-      $code.= "    ->wherePivot('meta_key', 'oprel_{$f->name}')\n";
-      $code.= "    ->orderBy('meta_id');\n";
-      $code.= "  }\n";
+      $code .= "  function {$f->name}() {\n";
+      $code .= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')";
+      $code .= "    ->wherePivot('meta_key', 'oprel_{$f->name}')\n";
+      $code .= "    ->orderBy('meta_id');\n";
+      $code .= "  }\n";
     }
   }
-  $code.= "}\n";
-  $file = __DIR__."/db-models/$camel_name.php";
+  $code .= "}\n";
+  $file = __DIR__ . "/db-models/$camel_name.php";
   file_put_contents($file, $code);
 }
 
-function op_link(string $path) {
-  return plugins_url('', $path).'/'.basename($path);
+function op_link(string $path)
+{
+  return plugins_url('', $path) . '/' . basename($path);
 }
 
-function op_file_remote_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
+function op_file_remote_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false)
+{
 
   $pi = pathinfo($file->name);
   $filename = $pi['filename'];
@@ -1603,7 +1740,8 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
   return [$op_name, $filename, op_http_file_url($token, $filename, $inline)];
 }
 
-function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false) {
+function op_file_url(object $file, int $w = null, int $h = null, bool $contain = null, bool $inline = false)
+{
   [$op_name, $filename, $op_url] = op_file_remote_url($file, $w, $h, $contain, $inline);
   $is_thumb = $w || $h;
 
@@ -1624,47 +1762,51 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
   }
 
 
-  $target_url = "$target_folder/". rawurlencode($filename);
+  $target_url = "$target_folder/" . rawurlencode($filename);
 
   return op_link($target_url);
 }
 
-function op_import_log_path() {
+function op_import_log_path()
+{
   $path = op_file_path('import-log.txt');
   if (!is_file($path)) touch($path);
   return $path;
 }
 
-function op_preferred_image_format() {
+function op_preferred_image_format()
+{
   return (defined('OP_THUMBNAIL_FORMAT') && OP_THUMBNAIL_FORMAT) ? OP_THUMBNAIL_FORMAT : 'png';
 }
 
-function op_http_file_url(string $token, string $name = null, bool $inline = null) {
+function op_http_file_url(string $token, string $name = null, bool $inline = null)
+{
   $url = 'https://' . op_getopt('company') . '.onpage.it/api/storage/' . $token;
   if ($name) {
-    $url.= '/'.urlencode($name);
+    $url .= '/' . urlencode($name);
   }
   if (!$inline) {
-    $url.= '?download=1';
+    $url .= '?download=1';
   }
   return $url;
 }
 
 
-function op_list_files(bool $return_map = false) : array {
+function op_list_files(bool $return_map = false): array
+{
   return [];
   $files = [];
   foreach (op_schema()->resources as $res) {
     $class = op_name_to_class($res->name);
     $class = $class::$meta_class;
     $meta_col = $class::$relation_field;
-    $res_files_query = $class::whereHas('parent', function($q) use ($res) {
+    $res_files_query = $class::whereHas('parent', function ($q) use ($res) {
       $q->whereRes($res->id);
     });
 
     $media_fields = [];
     foreach (collect($res->fields)->whereIn('type', ['file', 'image']) as $field) {
-      $langs = $field->is_translatable ? op_schema()->langs : [ null ];
+      $langs = $field->is_translatable ? op_schema()->langs : [null];
       foreach ($langs as $lang) {
         $media_fields[] = op_field_to_meta_key($field, $lang);
       }
@@ -1674,12 +1816,14 @@ function op_list_files(bool $return_map = false) : array {
     $res_files_query->whereIn('meta_key', $media_fields);
 
     $res_files = $res_files_query->get()
-    ->pluck('meta_value', $meta_col)
-    ->map(function($el) {
-      return @json_decode($el);
-    })
-    ->filter(function($x) { return $x && @$x->token; })
-    ->all();
+      ->pluck('meta_value', $meta_col)
+      ->map(function ($el) {
+        return @json_decode($el);
+      })
+      ->filter(function ($x) {
+        return $x && @$x->token;
+      })
+      ->all();
     foreach ($res_files as $object_id => $file) {
       if (!isset($files[$file->token])) {
         $files[$file->token] = (object) [
@@ -1700,29 +1844,32 @@ function op_list_files(bool $return_map = false) : array {
   return $files;
 }
 
-function op_basename($path) {
+function op_basename($path)
+{
   // php basename truncates long file names
-    if (preg_match('@^.*[\\\\/]([^\\\\/]+)$@s', $path, $matches)) {
-        return $matches[1];
-    } else if (preg_match('@^([^\\\\/]+)$@s', $path, $matches)) {
-        return $matches[1];
-    }
-    return '';
+  if (preg_match('@^.*[\\\\/]([^\\\\/]+)$@s', $path, $matches)) {
+    return $matches[1];
+  } else if (preg_match('@^([^\\\\/]+)$@s', $path, $matches)) {
+    return $matches[1];
+  }
+  return '';
 }
 
-function op_list_old_files() {
+function op_list_old_files()
+{
   $db_files = op_list_files(true);
 
   $glob_ls = op_file_path('*');
   $local_files = array_diff(glob($glob_ls), glob($glob_ls, GLOB_ONLYDIR));
   $local_files = collect($local_files)->map('op_basename')->toArray();
-  $files_to_drop = array_filter($local_files, function($token) use ($db_files) {
+  $files_to_drop = array_filter($local_files, function ($token) use ($db_files) {
     return !isset($db_files[$token]);
   });
   return array_values($files_to_drop);
 }
 
-function op_drop_old_files() {
+function op_drop_old_files()
+{
   $old_files = op_list_old_files();
   foreach ($old_files as $token) {
     foreach (glob(op_file_path("cache/{$token}*")) as $path) {
@@ -1732,25 +1879,28 @@ function op_drop_old_files() {
   }
 }
 
-function op_file_path(string $token = '') {
-  return __DIR__."/storage/$token";
+function op_file_path(string $token = '')
+{
+  return __DIR__ . "/storage/$token";
 }
 
-function op_import_files(array $files) {
+function op_import_files(array $files)
+{
   $ret = [];
   foreach ($files as $file) {
     $ret[$file->info->token] = op_import_file($file);
   }
   return $ret;
 }
-function op_download_file(string $url, string $final_path) : int {
-  $tmp_path = sys_get_temp_dir()."/".rand(1000000, 9999999);
+function op_download_file(string $url, string $final_path): int
+{
+  $tmp_path = sys_get_temp_dir() . "/" . rand(1000000, 9999999);
   set_time_limit(0);
   $max_tries = 5;
   while (true) {
     $fp = fopen($tmp_path, 'w');
     $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60*10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60 * 10);
     curl_setopt($ch, CURLOPT_FILE, $fp);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_exec($ch);
@@ -1784,38 +1934,42 @@ function op_download_file(string $url, string $final_path) : int {
   ];
   return $ret['bytes'];
 }
-function op_import_file(object $file) {
+function op_import_file(object $file)
+{
   $token = $file->info->token;
   $final_path = op_file_path($token);
-  $url = op_endpoint()."/storage/$token";
+  $url = op_endpoint() . "/storage/$token";
   return op_download_file($url, $final_path);
 }
 
 
 
-function op_endpoint() {
-  return "https://".op_getopt('company').'.onpage.it/api';
+function op_endpoint()
+{
+  return "https://" . op_getopt('company') . '.onpage.it/api';
 }
 
-function op_resize($src_path, $dest_path, $params = []) {
-  $image = wp_get_image_editor( $src_path ); // Return an implementation that extends WP_Image_Editor
-  if (is_wp_error( $image )) return false;
+function op_resize($src_path, $dest_path, $params = [])
+{
+  $image = wp_get_image_editor($src_path); // Return an implementation that extends WP_Image_Editor
+  if (is_wp_error($image)) return false;
   if (@$params['width'] || @$params['height']) {
-    $image->resize( @$params['width'], @$params['height'], !!@$params['crop'] );
+    $image->resize(@$params['width'], @$params['height'], !!@$params['crop']);
   }
-  $image->save( $dest_path );
+  $image->save($dest_path);
   if (!is_file($dest_path)) {
     return op_resize_fallback($src_path, $dest_path, $params);
   }
   return true;
 }
 
-function op_upgrade() {
-  $zip_path = __DIR__.'/storage/upgrade.zip';
+function op_upgrade()
+{
+  $zip_path = __DIR__ . '/storage/upgrade.zip';
   $source = 'https://github.com/onpage-dev/woocommerce-onpage/raw/master/woocommerce-onpage.zip';
   $ok = op_download_file($source, $zip_path);
   if (!$ok) op_err('Cannot download update from github');
-  require_once(ABSPATH .'/wp-admin/includes/file.php');
+  require_once(ABSPATH . '/wp-admin/includes/file.php');
   WP_Filesystem();
   $ret = unzip_file($zip_path, __DIR__);
   if ($ret !== true) {
@@ -1825,9 +1979,10 @@ function op_upgrade() {
   }
 }
 
-function op_set_post_image($post_id, $path, $filename){
+function op_set_post_image($post_id, $path, $filename)
+{
   $upload_dir = wp_upload_dir();
-  if(wp_mkdir_p($upload_dir['path'])) {
+  if (wp_mkdir_p($upload_dir['path'])) {
     $file = $upload_dir['path'] . '/' . $filename;
   } else {
     $file = $upload_dir['basedir'] . '/' . $filename;
@@ -1835,21 +1990,22 @@ function op_set_post_image($post_id, $path, $filename){
   op_download_file($path, $file);
 
 
-  $wp_filetype = wp_check_filetype($filename, null );
+  $wp_filetype = wp_check_filetype($filename, null);
   $attachment = array(
     'post_mime_type' => $wp_filetype['type'],
     'post_title' => sanitize_file_name($filename),
     'post_content' => '',
     'post_status' => 'inherit'
   );
-  $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
+  $attach_id = wp_insert_attachment($attachment, $file, $post_id);
   require_once(ABSPATH . 'wp-admin/includes/image.php');
-  $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
-  $res1 = wp_update_attachment_metadata( $attach_id, $attach_data );
-  $res2 = set_post_thumbnail( $post_id, $attach_id );
+  $attach_data = wp_generate_attachment_metadata($attach_id, $file);
+  $res1 = wp_update_attachment_metadata($attach_id, $attach_data);
+  $res2 = set_post_thumbnail($post_id, $attach_id);
 }
 
-function op_request(string $name = null) {
+function op_request(string $name = null)
+{
   static $req = null;
   if (!$req) {
     $data = file_get_contents('php://input');
@@ -1860,7 +2016,8 @@ function op_request(string $name = null) {
   return $ret;
 }
 
-function op_locale($set = null) {
+function op_locale($set = null)
+{
   static $locale = null;
   if ($set) {
     $locale = $set;
@@ -1871,7 +2028,8 @@ function op_locale($set = null) {
   return $locale;
 }
 
-function op_category($key, $value) {
+function op_category($key, $value)
+{
   $item = OpLib\Term::where($key, $value)->first();
   if (!$item) return null;
 
@@ -1879,7 +2037,8 @@ function op_category($key, $value) {
   return $class::find($item->id);
 }
 
-function op_product($key, $value) {
+function op_product($key, $value)
+{
   $item = OpLib\Post::where($key, $value)->first();
   if (!$item) return null;
 
@@ -1887,22 +2046,25 @@ function op_product($key, $value) {
   return $class::find($item->id);
 }
 
-function op_prod_res(WC_Product $product) {
+function op_prod_res(WC_Product $product)
+{
   $id = $product->get_meta('op_res*');
   if (!$id) return;
   return @op_schema()->id_to_res[$id];
 }
 
-function op_field_to_meta_key($field, $lang = null) {
+function op_field_to_meta_key($field, $lang = null)
+{
   $key = "op_{$field->name}";
   if ($field->is_translatable) {
     if (!$lang) $lang = op_locale_to_lang(op_locale());
-    $key.= "_$lang";
+    $key .= "_$lang";
   }
   return $key;
 }
 
-function op_prod_value(WC_Product $product, $field_name, $lang = null) {
+function op_prod_value(WC_Product $product, $field_name, $lang = null)
+{
 
   $res = op_prod_res($product);
   if (!$res) return;
@@ -1914,19 +2076,20 @@ function op_prod_value(WC_Product $product, $field_name, $lang = null) {
 
   $metas = array_values($product->get_meta($key, false));
 
-  $values = array_map(function(WC_Meta_Data $meta) {
+  $values = array_map(function (WC_Meta_Data $meta) {
     return $meta->get_data()['value'];
   }, $metas);
   return $field->is_multiple ? $values : @$values[0];
 }
 
-function op_prod_file(WC_Product $product, $field, $lang = null) {
+function op_prod_file(WC_Product $product, $field, $lang = null)
+{
   $value = op_prod_value($product, $field, $lang);
   if (is_null($value)) return;
 
   $_m = is_array($value);
   if (!$_m) $value = [$value];
-  $value = array_map(function($json) {
+  $value = array_map(function ($json) {
     $v = @json_decode($json);
     if (!$v) throw new \Exception("cannot parse $json");
     return new OpLib\File($v);
@@ -1936,25 +2099,26 @@ function op_prod_file(WC_Product $product, $field, $lang = null) {
 
 
 
-function op_resize_fallback($src_path, $dest_path, $params = []) {
+function op_resize_fallback($src_path, $dest_path, $params = [])
+{
   /**
-  * Images scaling.
-  * @param string  $src_path Path to initial image.
-  * @param string $dest_path Path to save new image.
-  * @param array $params [optional] Must be an associative array of params
-  * $params['width'] int New image width.
-  * $params['height'] int New image height.
-  * $params['constraint'] array.$params['constraint']['width'], $params['constraint'][height]
-  * If specified the $width and $height params will be ignored.
-  * New image will be resized to specified value either by width or height.
-  * $params['aspect_ratio'] bool If false new image will be stretched to specified values.
-  * If true aspect ratio will be preserved an empty space filled with color $params['rgb']
-  * It has no sense for $params['constraint'].
-  * $params['crop'] bool If true new image will be cropped to fit specified dimensions. It has no sense for $params['constraint'].
-  * $params['rgb'] Hex code of background color. Default 0xFFFFFF.
-  * $params['quality'] int New image quality (0 - 100). Default 100.
-  * @return bool True on success.
-  */
+   * Images scaling.
+   * @param string  $src_path Path to initial image.
+   * @param string $dest_path Path to save new image.
+   * @param array $params [optional] Must be an associative array of params
+   * $params['width'] int New image width.
+   * $params['height'] int New image height.
+   * $params['constraint'] array.$params['constraint']['width'], $params['constraint'][height]
+   * If specified the $width and $height params will be ignored.
+   * New image will be resized to specified value either by width or height.
+   * $params['aspect_ratio'] bool If false new image will be stretched to specified values.
+   * If true aspect ratio will be preserved an empty space filled with color $params['rgb']
+   * It has no sense for $params['constraint'].
+   * $params['crop'] bool If true new image will be cropped to fit specified dimensions. It has no sense for $params['constraint'].
+   * $params['rgb'] Hex code of background color. Default 0xFFFFFF.
+   * $params['quality'] int New image quality (0 - 100). Default 100.
+   * @return bool True on success.
+   */
   $width = !empty($params['width']) ? $params['width'] : null;
   $height = !empty($params['height']) ? $params['height'] : null;
   $constraint = !empty($params['constraint']) ? $params['constraint'] : false;
@@ -2010,12 +2174,12 @@ function op_resize_fallback($src_path, $dest_path, $params = []) {
   $output_format = ($ext == 'jpg') ? 'jpeg' : $ext;
 
   $format = strtolower(substr($img_info['mime'], strpos($img_info['mime'], '/') + 1));
-  $icfunc = 'imagecreatefrom'.$format;
+  $icfunc = 'imagecreatefrom' . $format;
 
-  $iresfunc = 'image'.$output_format;
+  $iresfunc = 'image' . $output_format;
 
   if (!function_exists($icfunc)) {
-    die('error: install gd library - no function: '.$icfunc);
+    die('error: install gd library - no function: ' . $icfunc);
     return false;
   }
 
@@ -2069,9 +2233,10 @@ function op_resize_fallback($src_path, $dest_path, $params = []) {
 }
 
 
-function op_reset_data(callable $post_scope = null, callable $term_scope = null) {
+function op_reset_data(callable $post_scope = null, callable $term_scope = null)
+{
   $wpml_enabled = op_wpml_enabled();
-  ini_set('memory_limit','1G');
+  ini_set('memory_limit', '1G');
   set_time_limit(30);
   try {
     // Delete products
@@ -2109,7 +2274,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
         ->limit(2000);
 
       if ($term_scope) {
-        $query->whereHas('term', function($query) use ($term_scope) {
+        $query->whereHas('term', function ($query) use ($term_scope) {
           $query->unfiltered();
           $term_scope($query);
         });
@@ -2117,12 +2282,11 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
       $taxonomies = $query->get();
 
       if ($taxonomies->isEmpty()) break;
-      op_record("Terms to delete: ".$taxonomies->pluck('term_id')->implode('-'));
+      op_record("Terms to delete: " . $taxonomies->pluck('term_id')->implode('-'));
       op_delete_taxonomies_and_terms($taxonomies);
     }
 
     OpLib\Thing::query()->delete();
-
   } catch (\Throwable $e) {
     op_err("Something went wrong: {$e->getMessage()}", [
       'exception' => $e,
@@ -2130,7 +2294,8 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
   }
 }
 
-function op_delete_taxonomies_and_terms($taxonomies) {
+function op_delete_taxonomies_and_terms($taxonomies)
+{
   if (op_wpml_enabled()) {
     DB::table('icl_translations')
       ->where('element_type', 'tax_product_cat')
@@ -2151,13 +2316,14 @@ function op_delete_taxonomies_and_terms($taxonomies) {
     ->delete();
 }
 
-function op_set_product_featured_image(OpLib\File $op_file, int $post_id  ){
+function op_set_product_featured_image(OpLib\File $op_file, int $post_id)
+{
   static $attach_to_id = null;
   static $postid_to_attach_id = null;
   static $full_folder = null;
   static $custom_folder_name = 'onpage';
   if (is_null($attach_to_id)) {
-    $full_folder = wp_upload_dir()['basedir']."/$custom_folder_name";  
+    $full_folder = wp_upload_dir()['basedir'] . "/$custom_folder_name";
     wp_mkdir_p($full_folder);
     $attach_to_id = DB::table('posts')
       ->where('post_type', 'attachment')
@@ -2171,7 +2337,7 @@ function op_set_product_featured_image(OpLib\File $op_file, int $post_id  ){
       ->all();
   }
 
-  $full_token = basename($op_file->token).'.1980x.'.op_preferred_image_format();
+  $full_token = basename($op_file->token) . '.1980x.' . op_preferred_image_format();
   $attach_key = "op_image_$full_token";
 
   $file = $full_folder . '/' . $attach_key;
@@ -2184,25 +2350,24 @@ function op_set_product_featured_image(OpLib\File $op_file, int $post_id  ){
 
     $wp_filetype = wp_check_filetype($attach_key, null);
     $attachment = array(
-        'post_mime_type' => $wp_filetype['type'],
-        'post_title' => $attach_key,
-        'post_content' => '',
-        'post_status' => 'open',
+      'post_mime_type' => $wp_filetype['type'],
+      'post_title' => $attach_key,
+      'post_content' => '',
+      'post_status' => 'open',
     );
 
     // op_record('insert attachemnt...');
-    $attach_id = wp_insert_attachment( $attachment, $file );
-    
+    $attach_id = wp_insert_attachment($attachment, $file);
+
     // op_record('setting post attachemnt...');
     require_once(ABSPATH . 'wp-admin/includes/image.php');
-    $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
-    wp_update_attachment_metadata( $attach_id, $attach_data );
-    
+    $attach_data = wp_generate_attachment_metadata($attach_id, $file);
+    wp_update_attachment_metadata($attach_id, $attach_data);
+
     $attach_to_id[$attach_key] = $attach_id;
-    
   }
   $attach_id = $attach_to_id[$attach_key];
   // op_record('set thumb '.$attach_id."   ".$post_id);
-  set_post_thumbnail( $post_id, $attach_id );
+  set_post_thumbnail($post_id, $attach_id);
   // op_record('done...');
 }
