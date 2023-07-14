@@ -444,6 +444,8 @@
       <br>
       <input v-if="!is_updating" type="button" class="button button-primary" value="Update plugin" @click="updatePlugin()">
       <i v-else>Upgrading...</i>
+      <br>
+      <br>
       <b class="color: #9e0000">ATTENTION:</b> Mimimum PHP version: 7.4
     </div>
     <div class="op-panel-box ">
