@@ -243,6 +243,12 @@ $res = op_schema()->name_to_res['colors'];
 
 // Find field by name
 $field = $res->name_to_field['description'];
+
+// Access field folders in a resource
+foreach ($res->field_folders as $folder) {
+  echo op_label($folder);
+  foreach ($folder->fields as $field) echo op_label($field);
+}
 ```
 
 
