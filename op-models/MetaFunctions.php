@@ -201,6 +201,8 @@ trait MetaFunctions {
 		  return $item->val(implode('.', $path), $lang);
 	  }
 
+    if (substr($name, 0, 1) == '_') return $this->{substr($name, 1)};
+
     $field = @$this->resource->name_to_field[$name];
     if (!$field) return;
 
