@@ -887,29 +887,27 @@ function op_link_imported_data($schema)
       $terms = $class::with($parent_relation)->get();
 
       foreach ($terms as $child_term) {
-        foreach ($child_term->$parent_relation as $parent_term) {
-          if ($res->op_type == 'post') {
-            if (($id_to_parent_post[$child_term->id] ?? null) == $parent_term->id) {
-              continue;
-            }
-            $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
-
-            if ($ret instanceof \WP_Error) {
-              op_err("Error while setting Product parent", ['wp_err' => $ret]);
-            }
-          } else if ($res->op_type == 'term') {
-            if (($id_to_parent[$child_term->id] ?? null) == $parent_term->id) {
-              continue;
-            }
-            $ret = wp_update_term($child_term->id, 'product_cat', [
-              'parent' => $parent_term->id,
-              'slug' => $child_term->slug,
-            ]);
-            if ($ret instanceof \WP_Error) {
-              op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
-            }
+        $parent_term = $child_term->$parent_relation->first();
+        if ($res->op_type == 'post') {
+          if (($id_to_parent_post[$child_term->id] ?? null) == $parent_term->id) {
+            continue;
           }
-          break;
+          $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
+
+          if ($ret instanceof \WP_Error) {
+            op_err("Error while setting Product parent", ['wp_err' => $ret]);
+          }
+        } else if ($res->op_type == 'term') {
+          if (($id_to_parent[$child_term->id] ?? null) == $parent_term->id) {
+            continue;
+          }
+          $ret = wp_update_term($child_term->id, 'product_cat', [
+            'parent' => $parent_term->id,
+            'slug' => $child_term->slug,
+          ]);
+          if ($ret instanceof \WP_Error) {
+            op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
+          }
         }
       }
     }
