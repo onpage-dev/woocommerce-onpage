@@ -817,7 +817,7 @@ function op_get_static_terms()
 }
 function op_delete_old_things(array $imported_items): int
 {
-  $things_to_remove = OpLib\Thing::get()->keyBy('id');
+  $things_to_remove = OpLib\Thing::query()->pluck('id')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type != 'thing') continue;
