@@ -92,7 +92,7 @@ function op_initdb()
   }
 
   if (op_settings()->migration < 51) {
-    op_debug();
+    // op_debug();
     foreach (\OpLib\Post::all() as $item) {
       if (!$item->getMeta('op_lang*')) {
         $item->meta()->create([
@@ -534,23 +534,41 @@ function op_slug(string $title, $base_class = null, string $old_slug = null)
   }
   return $slug . $suffix;
 }
+function op_lock(string $lockFile = '/tmp/lockfile.lock')
+{
+  // Open the lock file. Create it if it doesn't exist.
+  $fp = fopen($lockFile, 'c+');
+
+  if ($fp === false) {
+    // Failed to open the file.
+    return null;
+  }
+
+  // Attempt to acquire an exclusive lock without blocking.
+  if (flock($fp, LOCK_EX | LOCK_NB)) {
+    // Return the file pointer resource on success.
+    return $fp;
+  } else {
+    // Could not acquire the lock. Close the file and return null.
+    fclose($fp);
+    return null;
+  }
+}
+function op_unlock(int $lock)
+{
+  flock($lock, LOCK_UN);
+  fclose($lock);
+}
 
 function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot = null, bool $force_import = false, bool $regen_snapshot = false)
 {
   op_record("Starting import");
   op_record("Server time: " . date('Y-m-d H:i:s'));
 
-  if (function_exists('sem_get')) {
-    $semaphore = sem_get(333666333, 1, 0666, true);
-    if (!$semaphore) {
-      op_err('Could not create semaphore, please verify sem_get() is enabled or contact support');
-    }
-    $semaphore_acquired = sem_acquire($semaphore, true);
-    if (!$semaphore_acquired) {
-      op_err('Another import is already in progress, please try later');
-    }
-  } else {
-    op_record('!!! php is not supporting sem_get() so the plugin cannot make sure the import is atomic !!!');
+  // op_debug();
+  $semaphore = op_lock();
+  if (!$semaphore) {
+    op_err('Another import is already in progress, please try later');
   }
 
   if (op_wpml_enabled()) {
@@ -714,6 +732,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_setopt('last_import_token', $token_to_import);
   do_action('op_import_completed');
   op_record('import complete');
+  op_unlock($semaphore);
 }
 
 function op_import_gallery($schema)
@@ -1039,7 +1058,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     $time = microtime(true);
 
     // Download existing meta
-    op_debug();
+    // op_debug();
     $current_meta_raw = $php_metaclass->whereIn($base_tablemeta_ref, $object_ids)
       ->where(function ($q) use ($all_meta) {
         $q->whereIn('meta_key', array_values(array_unique(array_column($all_meta, 'meta_key'))))
