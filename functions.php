@@ -554,7 +554,7 @@ function op_lock(string $lockFile = '/tmp/lockfile.lock')
     return null;
   }
 }
-function op_unlock(int $lock)
+function op_unlock($lock)
 {
   flock($lock, LOCK_UN);
   fclose($lock);
