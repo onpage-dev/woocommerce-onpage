@@ -83,10 +83,10 @@ foreach ($prods as $prod) {
   $file->getAverageColor();
 
   // Get all variant colors
-  $available_colors = $p->getRelatedItems('variants.colors);
+  $available_colors = $p->getRelatedItems('variants.colors');
 
   // Get the product category passing by the subcategory
-  $cat = $p->getRelatedItems('subcategory.category)->first();
+  $cat = $p->getRelatedItems('subcategory.category')->first();
 ```
 
 
