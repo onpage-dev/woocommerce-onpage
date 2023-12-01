@@ -216,12 +216,20 @@ foreach ($prods as $p) {
 ```
 To reduce the number of queries, you can easily preload the related elements (this only produces 2 or 4 queries - depending on whether the relation is `post->post`/`term->term`, or `post->term`/`term->post`):
 ```php
-$prods = Op\Product::with('colors')->get();
+$prods = Op\Product::with(['colors'])->get();
 foreach ($prods as $p) {
   foreach ($p->colors as $p) {
     echo $p->val('name')."<br>";
   }
 }
+
+// You can preload as much data as you need:
+
+$prods = Op\Product::with([
+  'colors',
+  'subcategory.category',
+  'variants.colors',
+])->get();
 ```
 
 ### Schema - Resources & Fields
