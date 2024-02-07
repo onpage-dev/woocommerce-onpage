@@ -1791,7 +1791,8 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
   $op_name = "$file->token";
   $is_thumb = $w || $h;
   if (!$is_thumb) {
-    $ext = $pi['extension'] == 'php' ? 'txt' : $pi['extension'];
+    $ext = $pi['extension'] ?? 'bin';
+    $ext = $ext == 'php' ? 'txt' : $ext;
     $op_name .= '.' . $ext;
     $filename .= '.' . $ext;
     $token = $file->token;
