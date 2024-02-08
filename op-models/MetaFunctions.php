@@ -479,6 +479,7 @@ trait MetaFunctions {
     $meta_class = static::$meta_class;
     $meta_table = (new $meta_class)->getTable();
     $field = @static::getResource()->name_to_field[$field_name];
+    $q->select($q->qualifyColumn('*'));
     $q->leftJoin($meta_table, function (JoinClause $join_q) use ($q, $field, $meta_class, $meta_table) {
       $join_q->whereColumn(
         "{$meta_table}.{$meta_class::$relation_field}",
