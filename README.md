@@ -375,7 +375,7 @@ set_op_locale_to_lang([
 ```php
 <?php
 foreach (Op\Category::all() as $cat): ?>
-  <a href="<?= $cat->link() ?>">
+  <a href="<?= $cat->permalink() ?>">
     <?= $cat->val('name') ?>
   </a>
 <?php endforeach; ?>
