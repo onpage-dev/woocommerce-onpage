@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7543f8e6a32459ae43cd82d3df7002df",
+    "content-hash": "63d710e8d138c74fa6c4c7e95a5f8cec",
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -165,41 +165,6 @@
                 }
             ],
             "time": "2024-01-15T18:05:13+00:00"
-        },
-        {
-            "name": "gufoe/wp-eloquent",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "./wp-eloquent",
-                "reference": "9f31ccd5fa2f278436b700421f1ab602c9f99a65"
-            },
-            "require": {
-                "illuminate/database": "^8"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "WpEloquent\\": "src/"
-                }
-            },
-            "authors": [
-                {
-                    "name": "Giacomo Rizzi",
-                    "email": "gcmrzz@gmail.com"
-                }
-            ],
-            "description": "Eloquent ORM for WordPress",
-            "keywords": [
-                "eloquent",
-                "orm",
-                "plugin",
-                "sql",
-                "wordpress"
-            ],
-            "transport-options": {
-                "relative": true
-            }
         },
         {
             "name": "illuminate/collections",
@@ -1849,9 +1814,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "gufoe/wp-eloquent": 20
-    },
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": [],

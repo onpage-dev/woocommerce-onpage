@@ -5,6 +5,10 @@ if (!defined('OP_PLUGIN')) die(400);
 
 class File {
   private $json;
+  public $name;
+  public $ext;
+  public $token;
+
   public function __construct(object $file) {
     $this->json = $file;
     $this->name = $file->name;

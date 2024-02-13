@@ -11,4 +11,5 @@ zip -9 \
 --exclude './storage/*' \
 --exclude './theme-example/*' \
 --exclude './log.txt' \
+--exclude './wp-eloquent/vendor/*' \
 -r woocommerce-onpage.zip .

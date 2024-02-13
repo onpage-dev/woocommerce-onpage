@@ -2,18 +2,24 @@
     "name": "jake/woocommerce-onpace",
     "authors": [
         {
-            "name": "Giacomo rizzi",
-            "email": "gufoes@gmail.com"
+            "name": "On Page",
+            "email": "dev@onpage.it"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "OpLib\\": "op-models/",
+            "Op\\": "db-models/"
+        }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "./wp-eloquent/"
         }
     ],
     "require": {
-        "tareq1988/wp-eloquent": "dev-master",
-        "tightenco/collect": "^7.0"
-    },
-    "autoload": {
-        "psr-4": {
-          "OpLib\\": "op-models/",
-          "Op\\": "db-models/"
-        }
+        "illuminate/collections": "^8",
+        "gufoe/wp-eloquent": "@dev"
     }
 }

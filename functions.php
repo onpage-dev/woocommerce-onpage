@@ -9,7 +9,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 // use Illuminate\Database\Capsule\Manager as DB;
 
 use OpLib\Post;
-use \WeDevs\ORM\Eloquent\Facades\DB;
+use \WpEloquent\Eloquent\Facades\DB;
 
 
 global $wpdb;
