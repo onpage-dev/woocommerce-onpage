@@ -198,14 +198,6 @@
       <table class="form-table">
         <tbody>
           <tr>
-            <th><label>Company name (e.g. dinside)</label></th>
-            <td>
-              <input class="regular-text code" v-model="settings_form.company">
-              <br>
-              <i style="margin-top: 4px" v-if="settings_form.company">Your domain is <a :href="`https://${settings_form.company}.onpage.it`" target="_blank">{{ `${settings_form.company}.onpage.it` }}</a></i>
-            </td>
-          </tr>
-          <tr>
             <th><label>Snapshot token</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.token" type="password">
@@ -691,7 +683,7 @@
         return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)
       },
       connection_string() {
-        return (this.settings.company || '') + (this.settings.token || '')
+        return 'app' + (this.settings.token || '')
       },
       non_imported_files() {
         return (this.files || []).filter(x => !x.is_imported)
