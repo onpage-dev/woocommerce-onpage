@@ -188,18 +188,18 @@ trait MetaFunctions {
     return $slug;
   }
 
-  public function val($name, $lang = null) {
-	  $path = explode('.', $name);
-	  $name = array_pop($path);
-	  if (count($path)) {
-		  $relation = array_shift($path);
-		  $items = $this->$relation;
-		  if (is_null($items)) throw new \Exception("Relation not found: {$this->resource->label}.$relation");
-		  $item = $items->first();
-		  if (!$item) return null;
-		  $path[] = $name;
-		  return $item->val(implode('.', $path), $lang);
-	  }
+  public function solveVal($name, $lang = null, $return_single_value = true) {
+    $path = explode('.', $name);
+    $name = array_pop($path);
+    if (count($path)) {
+      $relation = array_shift($path);
+      $items = $this->$relation;
+      if (is_null($items)) throw new \Exception("Relation not found: {$this->resource->label}.$relation");
+      $item = $items->first();
+      if (!$item) return null;
+      $path[] = $name;
+      return $item->val(implode('.', $path), $lang);
+    }
 
     if (substr($name, 0, 1) == '_') return $this->{substr($name, 1)};
 
@@ -226,9 +226,18 @@ trait MetaFunctions {
         $values = $values->map('json_decode');
       }
       if ($values->isEmpty()) continue;
-      return $field->is_multiple ? $values->all() : $values->first();
+      if ($return_single_value) return $values->first();
+      return $field->is_multiple ? $values->all() : [$values->first()];
     }
-    return $field->is_multiple ? [] : null;
+    return $return_single_value ? null : [];
+  }
+
+  public function val($name, $lang = null) {
+    return $this->solveVal($name, $lang, true);
+  }
+
+  public function values($name, $lang = null) {
+    return $this->solveVal($name, $lang, false);
   }
 
   function getValues(string $lang = null) {
