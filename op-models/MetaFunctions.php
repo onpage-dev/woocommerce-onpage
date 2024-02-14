@@ -230,7 +230,7 @@ trait MetaFunctions {
         $values = $values->map('json_decode');
       }
       if ($values->isEmpty()) continue;
-      return $field->is_multiple ? collect([$values->all()]) : collect([$values->first()]);
+      return $field->is_multiple ? collect(...[$values->all()]) : collect([$values->first()]);
     }
     return collect();
   }
