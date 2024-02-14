@@ -16,6 +16,10 @@
     border-left-width: 2px;
   }
 
+  .op-button {
+    max-width: 100px;
+  }
+
   #op-app h1 {
     color: #56bd48;
   }
@@ -327,15 +331,30 @@
           </select>
         </div>
 
+        <h1>Resources</h1>
+        <div>
+          <button @click="addResource">Add resource</button>
+          <div v-for="(input, index) in settings_form.resources" :key="index">
+            <input type="text" v-model="input.resource">
+            <select placeholder="Default: Active" style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
+              <option value="post">Prodotto</option>
+              <option value="term">Categoria</option>
+            </select>
+            <button @click="removeResource(index)" class="op-button button button-primary" >Remove</button>
+          </div>
+          <button @click="addResource" class="op-button button button-primary">Add resource</button>
+        </div>
+
         <h1>Relations</h1>
         <div>
-          <button @click="addRelation">Add relation</button>
           <div v-for="(input, index) in settings_form.relations" :key="index">
             <input type="text" v-model="input.from">
             <input type="text" v-model="input.to">
-            <button @click="removeRelation(index)">Remove</button>
+            <button @click="removeRelation(index)" class="op-button button button-primary" >Remove</button>
           </div>
+          <button @click="addRelation" class="op-button button button-primary">Add relation</button>
         </div>
+
 
         <div v-if="settings_form.disable_product_status_update">
           Default product status for NEW products:
@@ -894,6 +913,21 @@
         if (!f) return
         for (const r of this.next_schema.resources)
           if (r.id == f.rel_res_id) return r
+      },
+      addResource() {
+        if (!this.settings_form.resources) {
+          this.$set(this.settings_form, 'resources', []);
+        }
+        this.settings_form.resources.push({
+          type: 'post',
+          resource: ''
+        });
+      },
+      setResourceType(index, value) {
+        this.settings_form.resources[index].type = value
+      },
+      removeResource(index) {
+        this.settings_form.resources.splice(index, 1);
       },
       addRelation() {
         if (!this.settings_form.relations) {
