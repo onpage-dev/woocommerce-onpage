@@ -188,27 +188,32 @@ trait MetaFunctions {
     return $slug;
   }
 
+
   public function solveVal($name, $lang = null) {
     $path = explode('.', $name);
     $name = array_pop($path);
+
     if (count($path)) {
       $relation = array_shift($path);
       $items = $this->$relation;
       if (is_null($items)) throw new \Exception("Relation not found: {$this->resource->label}.$relation");
       $item = $items->all();
-      if (!$item) return null;
+      if (!$item) return collect();
       $path[] = $name;
       $return_array = collect();
-      foreach ($item as $item_item) {
-        $return_array = $return_array->merge(...$item_item->solveVal(implode('.', $path), $lang) ?? []);
+      foreach ($item as $item_value) {
+        $solved_item = $item_value->solveVal(implode('.', $path), $lang);
+        if(!$solved_item->isEmpty()) {
+          $return_array = $return_array->merge(...$solved_item);
+        }
       }
       return $return_array;
     }
 
-    if (substr($name, 0, 1) == '_') return $this->{substr($name, 1)};
+    if (substr($name, 0, 1) == '_') return collect([$this->{substr($name, 1)}]);
 
     $field = @$this->resource->name_to_field[$name];
-    if (!$field) return;
+    if (!$field) return collect();
 
 
     // This array contains all the languages in which we will look for a possible translation
@@ -224,7 +229,7 @@ trait MetaFunctions {
     // Parse all the available languages and return first available value
     foreach ($fallback_langs as $lang) {
       $meta_key = op_field_to_meta_key($field, $lang);
-      if (!$meta_key) return null;
+      if (!$meta_key) return collect();
       $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
       if ($field->type == 'dim1' || $field->type == 'dim2' || $field->type == 'dim3') {
         $values = $values->map('json_decode');
