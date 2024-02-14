@@ -897,7 +897,7 @@
       },
       addRelation() {
         if (!this.settings_form.relations) {
-          this.$set(this.settings_form, 'relations', []); // funziona
+          this.$set(this.settings_form, 'relations', []);
         }
         this.settings_form.relations.push({
           from: '',

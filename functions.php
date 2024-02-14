@@ -639,6 +639,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
       }
     }
 
+    add_filter('op_resource_types', function () {
+      $resources = [];
+      foreach (op_getopt('resources', []) as $resource) {
+        $resources[$resource->resource] = $resource->type;
+      }
+      return $resources;
+    });
+
     // This is the newer hook which defines how to import resources
     $overwrite_things = apply_filters('op_resource_types', null);
     if (is_array($overwrite_things)) {
@@ -723,6 +731,15 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Importing relations...');
+
+  add_action('op_import_relations', function () {
+    $relations = [];
+    foreach (op_getopt('relations', []) as $relation) {
+      $relations[$relation->from] = $relation->to;
+    }
+    return $relations;
+  });
+
   op_link_imported_data($schema);
   op_record('done');
 
