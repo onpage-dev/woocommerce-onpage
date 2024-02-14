@@ -956,6 +956,8 @@
       },
       setRelationFrom(index, value) {
         this.settings_form.relations[index].from = value
+        let first_relation = this.available_relations_from_resource(value)[0]
+        this.setRelationTo(index, first_relation.name)
       },
       setRelationTo(index, value) {
         this.settings_form.relations[index].to = value
