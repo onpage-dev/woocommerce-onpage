@@ -1830,7 +1830,7 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
-    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+    if (op_getopt('disable_original_file_import', false)) {
       return $op_url;
     }
   }

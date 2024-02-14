@@ -310,7 +310,13 @@
           (products in the "draft" or "trash" status will not be automatically re-published).
         </label>
 
-
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
+          Disable original file import.
+          <br />
+          This option will not store media files into the website cache, instead will use On Page as a CDN.
+        </label>
+        
         <div>
           Thumbnails format:
           <br />
