@@ -316,7 +316,7 @@
           <br />
           This option will not store media files into the website cache, instead will use On Page as a CDN.
         </label>
-        
+
         <div>
           Thumbnails format:
           <br />
@@ -325,6 +325,16 @@
             <option value="png">png</option>
             <option value="jpg">jpg</option>
           </select>
+        </div>
+
+        <h1>Relations</h1>
+        <div>
+          <button @click="addRelation">Add relation</button>
+          <div v-for="(input, index) in settings_form.relations" :key="index">
+            <input type="text" v-model="input.from">
+            <input type="text" v-model="input.to">
+            <button @click="removeRelation(index)">Remove</button>
+          </div>
         </div>
 
         <div v-if="settings_form.disable_product_status_update">
@@ -885,6 +895,18 @@
         for (const r of this.next_schema.resources)
           if (r.id == f.rel_res_id) return r
       },
+      addRelation() {
+        if (!this.settings_form.relations) {
+          this.$set(this.settings_form, 'relations', []); // funziona
+        }
+        this.settings_form.relations.push({
+          from: '',
+          to: ''
+        });
+      },
+      removeRelation(index) {
+        this.settings_form.relations.splice(index, 1);
+      }
     },
 
     watch: {
