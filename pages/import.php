@@ -333,24 +333,33 @@
 
         <h1>Resources</h1>
         <div>
-          <button @click="addResource">Add resource</button>
           <div v-for="(input, index) in settings_form.resources" :key="index">
-            <input type="text" v-model="input.resource">
-            <select placeholder="Default: Active" style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
+
+            <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
+              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+            </select>
+
+            <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
               <option value="post">Prodotto</option>
               <option value="term">Categoria</option>
             </select>
-            <button @click="removeResource(index)" class="op-button button button-primary" >Remove</button>
+            <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
           </div>
           <button @click="addResource" class="op-button button button-primary">Add resource</button>
         </div>
 
         <h1>Relations</h1>
         <div>
-          <div v-for="(input, index) in settings_form.relations" :key="index">
-            <input type="text" v-model="input.from">
-            <input type="text" v-model="input.to">
-            <button @click="removeRelation(index)" class="op-button button button-primary" >Remove</button>
+          <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index">
+            <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
+              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+            </select>
+
+            <select style="width: 20rem" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
+              <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
+            </select>
+
+            <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
           </div>
           <button @click="addRelation" class="op-button button button-primary">Add relation</button>
         </div>
@@ -359,7 +368,7 @@
         <div v-if="settings_form.disable_product_status_update">
           Default product status for NEW products:
           <br />
-          <select placeholder="Default: Active" style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
+          <select style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
             <option :value="null">Default: publish</option>
             <option value="publish">Publish</option>
             <option value="draft">Draft</option>
@@ -717,6 +726,16 @@
       ],
     },
     computed: {
+      available_resources() {
+        return this.schema.resources
+      },
+      available_relations() {
+        let arr = []
+        this.settings_form.relations.forEach((rel, index) => {
+          arr.push(this.available_relations_from_resource(rel.from))
+        });
+        return arr
+      },
       product_resources() {
         return this.server_config?.product_resources ?? []
       },
@@ -762,6 +781,9 @@
           .finally(res => {
             this.is_saving = false
           })
+      },
+      available_relations_from_resource(resource_name) {
+        return this.schema.resources.find(rs => rs.name == resource_name)?.fields.filter(field => field.type == 'relation')
       },
       startImport(file_name) {
         this.is_importing = true
@@ -923,11 +945,20 @@
           resource: ''
         });
       },
+      setResource(index, value) {
+        this.settings_form.resources[index].resource = value
+      },
       setResourceType(index, value) {
         this.settings_form.resources[index].type = value
       },
       removeResource(index) {
         this.settings_form.resources.splice(index, 1);
+      },
+      setRelationFrom(index, value) {
+        this.settings_form.relations[index].from = value
+      },
+      setRelationTo(index, value) {
+        this.settings_form.relations[index].to = value
       },
       addRelation() {
         if (!this.settings_form.relations) {
