@@ -275,6 +275,18 @@ function op_read_json($name)
   return @json_decode(file_get_contents(wp_upload_dir()['basedir'] . "/on-page-$name.json"));
 }
 
+function op_page_item()
+{
+  $term = get_queried_object();
+  if (is_product()) {
+    return op_product('ID', $term->ID);
+  }
+  if (is_product_category()) {
+    return op_category('term_id', $term->term_id);
+  }
+  return null;
+}
+
 function op_label($res, string $lang = null)
 {
   if (!is_object($res) || !isset($res->labels)) {
