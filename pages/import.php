@@ -310,6 +310,17 @@
           (products in the "draft" or "trash" status will not be automatically re-published).
         </label>
 
+
+        <div>
+          Thumbnails format:
+          <br />
+          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
+            <option :value="null">webp</option>
+            <option value="png">png</option>
+            <option value="jpg">jpg</option>
+          </select>
+        </div>
+
         <div v-if="settings_form.disable_product_status_update">
           Default product status for NEW products:
           <br />
