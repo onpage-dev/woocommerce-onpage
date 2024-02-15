@@ -216,7 +216,7 @@ function op_settings($settings = null, $flush_cache = false)
 function op_latest_snapshot_token(object $sett = null)
 {
   if (!$sett) $sett = op_settings();
-  $info = op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
+  $info = op_download_json("https://app.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
   if (!@$info->token) {
     op_ret(['error' => 'No snapshot present, generate it on OnPage']);
   }
@@ -228,7 +228,7 @@ function op_download_snapshot(string $token)
   $sett = op_settings();
 
   // op_record('start import');
-  $db = op_download_json("https://{$sett->company}.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
+  $db = op_download_json("https://app.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
   // op_record('download completed');
   return $db;
 }
@@ -592,7 +592,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   if ($regen_snapshot) {
     op_record('Generating a fresh snapshot...');
     $sett = op_settings();
-    op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
+    op_download_json("https://app.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
     op_record('done');
   }
 
