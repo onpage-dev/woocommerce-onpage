@@ -333,7 +333,7 @@
 
         <h1>Resources</h1>
         <div>
-          <div v-for="(input, index) in settings_form.resources" :key="index">
+          <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
 
             <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
               <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
@@ -345,23 +345,23 @@
             </select>
             <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
           </div>
-          <button @click="addResource" class="op-button button button-primary">Add resource</button>
+          <button @click="addResource" style="margin-top: 10px" class="op-button button button-primary">Add resource</button>
         </div>
 
         <h1>Relations</h1>
         <div>
-          <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index">
+          <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
             <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
               <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
             </select>
 
-            <select style="width: 20rem" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
+            <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
               <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
             </select>
 
             <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
           </div>
-          <button @click="addRelation" class="op-button button button-primary">Add relation</button>
+          <button @click="addRelation"  style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
         </div>
 
 
@@ -734,6 +734,7 @@
         this.settings_form.relations.forEach((rel, index) => {
           arr.push(this.available_relations_from_resource(rel.from))
         });
+        console.log(arr)
         return arr
       },
       product_resources() {
