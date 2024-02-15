@@ -727,7 +727,7 @@
     },
     computed: {
       available_resources() {
-        return this.schema.resources
+        return this.next_schema.resources
       },
       available_relations() {
         let arr = []
@@ -753,12 +753,7 @@
       },
       non_imported_files() {
         return (this.files || []).filter(x => !x.is_imported)
-      },
-      // ordered_res: function (){
-      //   return this.schema.resources.sort(function(a, b){
-
-      //     return a.name[0] -b.name[0]}) 
-      // }
+      }
     },
     created() {
       this.refreshSchema()
@@ -784,7 +779,7 @@
           })
       },
       available_relations_from_resource(resource_name) {
-        return this.schema.resources.find(rs => rs.name == resource_name)?.fields.filter(field => field.type == 'relation')
+        return this.next_schema.resources.find(rs => rs.name == resource_name)?.fields.filter(field => field.type == 'relation')
       },
       startImport(file_name) {
         this.is_importing = true
