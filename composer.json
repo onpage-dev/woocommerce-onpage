@@ -21,5 +21,10 @@
     "require": {
         "illuminate/collections": "^8",
         "gufoe/wp-eloquent": "@dev"
+    },
+    "config": {
+        "platform": {
+            "php": "7.4"
+        }
     }
 }
