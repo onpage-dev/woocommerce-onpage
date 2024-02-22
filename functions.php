@@ -562,6 +562,7 @@ function op_unlock($lock)
 
 function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot = null, bool $force_import = false, bool $regen_snapshot = false)
 {
+  op_ignore_user_scopes(true);
   op_record("Starting import");
   op_record("Server time: " . date('Y-m-d H:i:s'));
 
@@ -1566,7 +1567,9 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
         ->where('meta_key', 'like', 'oprel\\_%')
         ->delete();
     }
-    $php_metaclass->insert($meta);
+    foreach (array_chunk($meta, 5000) as $chunk) {
+      $php_metaclass->insert($chunk);
+    }
   }
 }
 

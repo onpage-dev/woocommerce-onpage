@@ -141,6 +141,7 @@ add_filter('admin_menu', function () {
     'administrator',
     'onpage-importer',
     function () {
+      op_ignore_user_scopes(true);
       require __DIR__ . '/pages/import.php';
     }
   );
