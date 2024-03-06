@@ -1,4 +1,5 @@
 # On Page Woocommerce Plugin
+![On Page Woocommerce Plugin](image.png "On Page Woocommerce Plugin")
 
 # Intro
 This plugin is used to import a project snapshot into your woocommerce website. It uses the wordpress tables so you can use it the way you are used to. __All field data is saved into the object meta table.__
