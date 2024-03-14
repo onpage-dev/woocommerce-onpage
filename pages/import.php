@@ -16,6 +16,10 @@
     border-left-width: 2px;
   }
 
+  .op-button {
+    max-width: 100px;
+  }
+
   #op-app h1 {
     color: #56bd48;
   }
@@ -198,14 +202,6 @@
       <table class="form-table">
         <tbody>
           <tr>
-            <th><label>Company name (e.g. dinside)</label></th>
-            <td>
-              <input class="regular-text code" v-model="settings_form.company">
-              <br>
-              <i style="margin-top: 4px" v-if="settings_form.company">Your domain is <a :href="`https://${settings_form.company}.onpage.it`" target="_blank">{{ `${settings_form.company}.onpage.it` }}</a></i>
-            </td>
-          </tr>
-          <tr>
             <th><label>Snapshot token</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.token" type="password">
@@ -318,10 +314,61 @@
           (products in the "draft" or "trash" status will not be automatically re-published).
         </label>
 
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
+          Disable original file import.
+          <br />
+          This option will not store media files into the website cache, instead will use On Page as a CDN.
+        </label>
+
+        <div>
+          Thumbnails format:
+          <br />
+          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
+            <option :value="null">webp</option>
+            <option value="png">png</option>
+            <option value="jpg">jpg</option>
+          </select>
+        </div>
+
+        <h1>Resources</h1>
+        <div>
+          <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
+
+            <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
+              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+            </select>
+
+            <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
+              <option value="post">Prodotto</option>
+              <option value="term">Categoria</option>
+            </select>
+            <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
+          </div>
+          <button @click="addResource" style="margin-top: 10px" class="op-button button button-primary">Add resource</button>
+        </div>
+
+        <h1>Relations</h1>
+        <div>
+          <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
+            <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
+              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+            </select>
+
+            <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
+              <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
+            </select>
+
+            <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
+          </div>
+          <button @click="addRelation"  style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
+        </div>
+
+
         <div v-if="settings_form.disable_product_status_update">
           Default product status for NEW products:
           <br />
-          <select placeholder="Default: Active" style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
+          <select style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
             <option :value="null">Default: publish</option>
             <option value="publish">Publish</option>
             <option value="draft">Draft</option>
@@ -679,6 +726,17 @@
       ],
     },
     computed: {
+      available_resources() {
+        return this.next_schema.resources
+      },
+      available_relations() {
+        let arr = []
+        this.settings_form.relations.forEach((rel, index) => {
+          arr.push(this.available_relations_from_resource(rel.from))
+        });
+        console.log(arr)
+        return arr
+      },
       product_resources() {
         return this.server_config?.product_resources ?? []
       },
@@ -691,16 +749,11 @@
         return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)
       },
       connection_string() {
-        return (this.settings.company || '') + (this.settings.token || '')
+        return 'app' + (this.settings.token || '')
       },
       non_imported_files() {
         return (this.files || []).filter(x => !x.is_imported)
-      },
-      // ordered_res: function (){
-      //   return this.schema.resources.sort(function(a, b){
-
-      //     return a.name[0] -b.name[0]}) 
-      // }
+      }
     },
     created() {
       this.refreshSchema()
@@ -724,6 +777,9 @@
           .finally(res => {
             this.is_saving = false
           })
+      },
+      available_relations_from_resource(resource_name) {
+        return this.next_schema.resources.find(rs => rs.name == resource_name)?.fields.filter(field => field.type == 'relation')
       },
       startImport(file_name) {
         this.is_importing = true
@@ -876,6 +932,44 @@
         for (const r of this.next_schema.resources)
           if (r.id == f.rel_res_id) return r
       },
+      addResource() {
+        if (!this.settings_form.resources) {
+          this.$set(this.settings_form, 'resources', []);
+        }
+        this.settings_form.resources.push({
+          type: 'post',
+          resource: ''
+        });
+      },
+      setResource(index, value) {
+        this.settings_form.resources[index].resource = value
+      },
+      setResourceType(index, value) {
+        this.settings_form.resources[index].type = value
+      },
+      removeResource(index) {
+        this.settings_form.resources.splice(index, 1);
+      },
+      setRelationFrom(index, value) {
+        this.settings_form.relations[index].from = value
+        let first_relation = this.available_relations_from_resource(value)[0]
+        this.setRelationTo(index, first_relation.name)
+      },
+      setRelationTo(index, value) {
+        this.settings_form.relations[index].to = value
+      },
+      addRelation() {
+        if (!this.settings_form.relations) {
+          this.$set(this.settings_form, 'relations', []);
+        }
+        this.settings_form.relations.push({
+          from: '',
+          to: ''
+        });
+      },
+      removeRelation(index) {
+        this.settings_form.relations.splice(index, 1);
+      }
     },
 
     watch: {

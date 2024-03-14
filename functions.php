@@ -216,7 +216,7 @@ function op_settings($settings = null, $flush_cache = false)
 function op_latest_snapshot_token(object $sett = null)
 {
   if (!$sett) $sett = op_settings();
-  $info = op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
+  $info = op_download_json("https://app.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
   if (!@$info->token) {
     op_ret(['error' => 'No snapshot present, generate it on OnPage']);
   }
@@ -228,7 +228,7 @@ function op_download_snapshot(string $token)
   $sett = op_settings();
 
   // op_record('start import');
-  $db = op_download_json("https://{$sett->company}.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
+  $db = op_download_json("https://app.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
   // op_record('download completed');
   return $db;
 }
@@ -273,6 +273,18 @@ function op_write_json($name, $json)
 function op_read_json($name)
 {
   return @json_decode(file_get_contents(wp_upload_dir()['basedir'] . "/on-page-$name.json"));
+}
+
+function op_page_item()
+{
+  $term = get_queried_object();
+  if (is_product()) {
+    return op_product('ID', $term->ID);
+  }
+  if (is_product_category()) {
+    return op_category('term_id', $term->term_id);
+  }
+  return null;
 }
 
 function op_label($res, string $lang = null)
@@ -581,7 +593,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   if ($regen_snapshot) {
     op_record('Generating a fresh snapshot...');
     $sett = op_settings();
-    op_download_json("https://{$sett->company}.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
+    op_download_json("https://app.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
     op_record('done');
   }
 
@@ -627,6 +639,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
         $res->is_product = in_array($res->name, $overwrite_products);
       }
     }
+
+    add_filter('op_resource_types', function () {
+      $resources = [];
+      foreach (op_getopt('resources', []) as $resource) {
+        $resources[$resource->resource] = $resource->type;
+      }
+      return $resources;
+    });
 
     // This is the newer hook which defines how to import resources
     $overwrite_things = apply_filters('op_resource_types', null);
@@ -712,6 +732,15 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Importing relations...');
+
+  add_action('op_import_relations', function () {
+    $relations = [];
+    foreach (op_getopt('relations', []) as $relation) {
+      $relations[$relation->from] = $relation->to;
+    }
+    return $relations;
+  });
+
   op_link_imported_data($schema);
   op_record('done');
 
@@ -1821,7 +1850,7 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
-    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+    if (op_getopt('disable_original_file_import', false)) {
       return $op_url;
     }
   }
@@ -1850,7 +1879,7 @@ function op_import_log_path()
 
 function op_preferred_image_format()
 {
-  return (defined('OP_THUMBNAIL_FORMAT') && OP_THUMBNAIL_FORMAT) ? OP_THUMBNAIL_FORMAT : 'png';
+  return op_getopt('thumbnail-format', 'webp');
 }
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null)
