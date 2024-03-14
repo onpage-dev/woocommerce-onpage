@@ -22,5 +22,10 @@
   "require": {
     "illuminate/database": "^8",
     "illuminate/pagination": "^8"
+  },
+  "config": {
+    "platform": {
+      "php": "7.4"
+    }
   }
 }
