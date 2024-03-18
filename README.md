@@ -15,16 +15,9 @@ You can view the models generated for your project in the plugin import page. Fo
 Before importing the data, you should specify how to import each resource (in your `functions.php`).
 Resources that are not listed here will still be imported in a custom `op_things` table (which makes them invisible to wordpress, and faster to import).
 You should only list those resources that will have their own page.
-For example, if you plan to have a page for each "Category" and one for each "Product", you can do it as follows (the format is "resource alias" => "import method").
-```
-add_filter('op_resource_types', function() {
-  return [
-    'product' => 'post', // "post" = woocommerce product
-    'category' => 'term', // "term" = woocommerce category
-    // all other resources will be imported in a hidden plugin table with high performance
-  ];
-});
-```
+For example, if you plan to have a page for each "Category" and one for each "Product", you can do it as follows.
+
+![On Page Woocommerce Plugin - Resources](resources.png "On Page Woocommerce Plugin - Resources")
 
 
 ## Selecting data
@@ -122,10 +115,7 @@ Files and thumbnails will not be downloaded during the import process, instead t
 So, when you do something like `$prod->file('main_image')->link()` or `$prod->file('main_image')->thumb(200)` for the first time, the file will be downloaded in the plugin folder, so the page may take a while to load. Later calls will be instantaneous because the file has already been downloaded.
 
 While this is very handful, original files can be very heavy to store on your server.
-You can change the behaviour and use On Page as a CDN, so the `->link()` function will return the url from the On Page servers directly, without storing anything on your server:
-```php
-define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
-```
+You can change the behaviour and use On Page as a CDN, so the `->link()` function will return the url from the On Page servers directly, without storing anything on your server, by checking the option in the Setup panel.
 
 Note: in this scenario, `$file->thumb(...)` will still ask On Page to generate the thumbnail, and the thumbnail will be saved in the plugin folder.
 
@@ -136,10 +126,7 @@ If you use multiple CDN, you can specify the CDN name like so: `$p->file('info_f
 
 ### Thumbnail settings
 Thumbnails will by default use the original file format,
-but you can force png, jpg, or webp using the `OP_THUMBNAIL_FORMAT` constant, like so:
-```php
-define('OP_THUMBNAIL_FORMAT', 'webp');
-```
+but you can force png, jpg, or webp choosing the new format from the setup panel.
 
 ### 
 You can use the `pluckField` method to get the field from the query.
@@ -335,18 +322,9 @@ add_filter('on_page_product_resources', function() {
 ## Importing relations
 
 Wordpress relations (e.g. linking products with categories) is not be imported by default.
-You can specify, for each resource, wich relation to set the term parent.
+You can specify, for each resource, wich relation to set the term parent, from the Relations menu in the Import Settings panel.
 
-
-```php
-add_action('op_import_relations', function() {
-    return [
-        // On Page resource name => // On Page parent relation name
-        'products' => 'subcategories',
-        'subcategories' => 'categories',
-    ];
-});
-```
+![On Page Woocommerce Plugin - Relations](relations.png "On Page Woocommerce Plugin - Relations")
 
 # Advanced language options
 
