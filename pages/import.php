@@ -198,12 +198,12 @@
   </div>
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
-  <h1>Import settings</h1>
+    <h1>Import settings</h1>
 
-  <form @submit.prevent="saveSettings">
+    <form @submit.prevent="saveSettings">
 
-    <div style="display: flex; flex-direction: column; gap: 1rem">
-    <label>
+      <div style="display: flex; flex-direction: column; gap: 1rem">
+        <label>
           <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
           Maintain user created categories and products
         </label>
@@ -231,7 +231,7 @@
             <option value="jpg">jpg</option>
           </select>
         </div>
-          </div>
+      </div>
 
       <table class="form-table">
         <tbody>
@@ -356,7 +356,7 @@
         <div>
           <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
             <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
-              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+              <option v-for="(resource, index) in available_resources_for_relations" :key="index" :value="resource.name">{{ resource.name }}</option>
             </select>
 
             <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
@@ -365,7 +365,7 @@
 
             <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
           </div>
-          <button @click="addRelation"  style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
+          <button @click="addRelation" style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
         </div>
 
 
@@ -732,6 +732,11 @@
     computed: {
       available_resources() {
         return this.next_schema.resources
+      },
+      available_resources_for_relations() {
+        const resources_names = this.settings_form.resources.map(resource => resource.resource)
+        const filtered_resources = this.next_schema.resources.filter(resource => resources_names.includes(resource.name))
+        return filtered_resources
       },
       available_relations() {
         let arr = []
