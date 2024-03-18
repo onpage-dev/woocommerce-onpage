@@ -198,7 +198,41 @@
   </div>
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
-    <form @submit.prevent="saveSettings">
+  <h1>Import settings</h1>
+
+  <form @submit.prevent="saveSettings">
+
+    <div style="display: flex; flex-direction: column; gap: 1rem">
+    <label>
+          <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
+          Maintain user created categories and products
+        </label>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_product_status_update" />
+          Disable product publishing when UPDATING existing products.
+          <br />
+          (products in the "draft" or "trash" status will not be automatically re-published).
+        </label>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
+          Disable original file import.
+          <br />
+          This option will not store media files into the website cache, instead will use On Page as a CDN.
+        </label>
+
+        <div>
+          Thumbnails format:
+          <br />
+          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
+            <option :value="null">webp</option>
+            <option value="png">png</option>
+            <option value="jpg">jpg</option>
+          </select>
+        </div>
+          </div>
+
       <table class="form-table">
         <tbody>
           <tr>
@@ -298,39 +332,9 @@
   </div>
 
   <div class="op-panel-box " v-if="next_schema" v-show="panel_active=='import-settings'">
-    <h1>Import settings</h1>
     <form @submit.prevent="saveSettings">
 
       <div style="display: flex; flex-direction: column; gap: 1rem">
-        <label>
-          <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
-          Maintain user created categories and products
-        </label>
-
-        <label>
-          <input type="checkbox" v-model="settings_form.disable_product_status_update" />
-          Disable product publishing when UPDATING existing products.
-          <br />
-          (products in the "draft" or "trash" status will not be automatically re-published).
-        </label>
-
-        <label>
-          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
-          Disable original file import.
-          <br />
-          This option will not store media files into the website cache, instead will use On Page as a CDN.
-        </label>
-
-        <div>
-          Thumbnails format:
-          <br />
-          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
-            <option :value="null">webp</option>
-            <option value="png">png</option>
-            <option value="jpg">jpg</option>
-          </select>
-        </div>
-
         <h1>Resources</h1>
         <div>
           <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
