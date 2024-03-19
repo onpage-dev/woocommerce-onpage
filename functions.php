@@ -534,8 +534,11 @@ function op_slug(string $title, $base_class = null, string $old_slug = null)
   }
   return $slug . $suffix;
 }
-function op_lock(string $lockFile = '/tmp/lockfile.lock')
+
+function op_lock(string $lockFile = null)
 {
+  if (!$lockFile) $lockFile = __DIR__."/import.lock";
+
   // Open the lock file. Create it if it doesn't exist.
   $fp = fopen($lockFile, 'c+');
 
