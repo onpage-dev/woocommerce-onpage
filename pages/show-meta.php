@@ -18,7 +18,7 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
   </div>
   <table>
     <tbody>
-      <?php foreach (collect($item->resource->fields)->sortBy(function($f) { if ($f->type == 'relation') return 9999+$f->order; else return 1+$f->order; }) as $f): ?>
+      <?php foreach (collect($item->resource->fields)->sortBy(function($f) { if ($f->type === 'relation') return 9999+$f->order; else return 1+$f->order; }) as $f): ?>
         <?php $values = $f->is_multiple ? $item->val($f->name) : [$item->val($f->name)]; ?>
         <tr>
            <td>
@@ -34,11 +34,11 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
            </td>
            <td>
              <div style="overflow-y: auto; max-height: 220px;">
-               <?php if ($f->type == 'file' || $f->type == 'image'): ?>
+               <?php if ($f->type === 'file' || $f->type === 'image'): ?>
                  <?php $files = $f->is_multiple ? $item->file($f->name) : array_filter([$item->file($f->name)]); ?>
                  <?php foreach ($files as $file): ?>
                    <a target="_blank" href="<?= $file->link() ?>" class="op-file">
-                     <?php if ($f->type == 'image'): ?>
+                     <?php if ($f->type === 'image'): ?>
                        <img src="<?= op_e($file->thumb(null, 150)) ?>"
                        style="border: 1px solid #ddd"/>
                        <br>
@@ -46,11 +46,11 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
                      <?= op_e($file->name) ?>
                    </a>
                  <?php endforeach ?>
-               <?php elseif ($f->type == 'html'): ?>
+               <?php elseif ($f->type === 'html'): ?>
                  <?php foreach ($values as $v): ?>
                    <?= $v ?>
                  <?php endforeach ?>
-               <?php elseif ($f->type == 'relation'): ?>
+               <?php elseif ($f->type === 'relation'): ?>
                  <?= $item->{$f->name}()->count() ?> items
                <?php else: ?>
                  <?php foreach ($values as $v): ?>

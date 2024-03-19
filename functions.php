@@ -382,7 +382,7 @@ function op_schema(object $set = null)
     // Fields: res, rel_res, rel_field
     foreach ($schema->id_to_field as $field) {
       $field->res = $schema->id_to_res[$field->resource_id];
-      if ($field->type == 'relation') {
+      if ($field->type === 'relation') {
         $field->rel_res = $schema->id_to_res[$field->rel_res_id];
         $field->rel_field = $schema->id_to_field[$field->rel_field_id];
       }
@@ -433,7 +433,7 @@ function op_record($label, $end = false)
   if (defined('WP_CLI') && WP_CLI) {
     WP_CLI::line($message);
   }
-  if (count($steps) == 1) {
+  if (count($steps) === 1) {
     @unlink(op_import_log_path());
   }
   file_put_contents(op_import_log_path(), "$message\n", FILE_APPEND);
@@ -499,7 +499,7 @@ function op_wpml_langs(): ?array
     array_keys(apply_filters('wpml_active_languages', null)),
     apply_filters('wpml_setting', [], 'hidden_languages'),
   ) as $lang) {
-    if ($lang != $icl_deflang) {
+    if ($lang !== $icl_deflang) {
       $wpml_langs[] = $lang;
     }
   }
@@ -525,7 +525,7 @@ function op_slug(string $title, $base_class = null, string $old_slug = null)
 
   if (!$base_class) return $slug;
   $suffix = '';
-  while ($old_slug != $slug . $suffix && $base_class->slugExists($slug . $suffix)) {
+  while ($old_slug !== $slug . $suffix && $base_class->slugExists($slug . $suffix)) {
     if (!$suffix) {
       $suffix = 2;
     } else {
@@ -599,7 +599,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   } else {
     $token_to_import = op_latest_snapshot_token();
 
-    $data_changed = $token_to_import != op_getopt('last_import_token');
+    $data_changed = $token_to_import !== op_getopt('last_import_token');
 
 
     if (!$data_changed) {
@@ -640,8 +640,8 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
           }
         }
 
-        $res->is_thing = $type == 'thing';
-        $res->is_product = $type == 'post';
+        $res->is_thing = $type === 'thing';
+        $res->is_product = $type === 'post';
       }
     }
 
@@ -739,11 +739,11 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 function op_import_gallery($schema)
 {
   foreach ($schema->resources as $res) {
-    if ($res->op_type != 'post') continue;
+    if ($res->op_type !== 'post') continue;
 
     $image_field_id = op_getopt("res-{$res->id}-image");
     $field = $res->id_to_field[$image_field_id] ?? null;
-    if (!$field || $field->type != 'image') continue;
+    if (!$field || $field->type !== 'image') continue;
 
     op_record("Importing images for $res->label ($field->name)...");
 
@@ -779,7 +779,7 @@ function op_disable_old_products(array $imported_items): int
   $posts_to_remove = OpLib\Post::pluck('ID')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->op_type != 'post') continue;
+    if ($res->op_type !== 'post') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
         $posts_to_remove->forget($wp_id);
@@ -805,7 +805,7 @@ function op_disable_old_categories(array $imported_items): int
 
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->op_type != 'term') continue;
+    if ($res->op_type !== 'term') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
         $tax_to_remove->forget($wp_id);
@@ -840,7 +840,7 @@ function op_delete_old_things(array $imported_items): int
   $things_to_remove = OpLib\Thing::query()->pluck('id')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->op_type != 'thing') continue;
+    if ($res->op_type !== 'thing') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
       foreach ($new_item_langs as $lang => $wp_id) {
         $things_to_remove->forget($wp_id);
@@ -881,13 +881,13 @@ function op_link_imported_data($schema)
           $parent_relation = apply_filters('wpml_object_id', $parent_relation, 'product_cat', true, op_wpml_default());
         }
 
-        if ($res->op_type == 'post') {
+        if ($res->op_type === 'post') {
           $ret = wp_set_post_categories($child_term->id, $parent_relation);
 
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret]);
           }
-        } else if ($res->op_type == 'term') {
+        } else if ($res->op_type === 'term') {
 
           // Call wp_update_term
           $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -908,8 +908,8 @@ function op_link_imported_data($schema)
 
       foreach ($terms as $child_term) {
         $parent_term = $child_term->$parent_relation->first();
-        if ($res->op_type == 'post') {
-          if (($id_to_parent_post[$child_term->id] ?? null) == $parent_term->id) {
+        if ($res->op_type === 'post') {
+          if (($id_to_parent_post[$child_term->id] ?? null) === $parent_term->id) {
             continue;
           }
           $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
@@ -917,8 +917,8 @@ function op_link_imported_data($schema)
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret]);
           }
-        } else if ($res->op_type == 'term') {
-          if (($id_to_parent[$child_term->id] ?? null) == $parent_term->id) {
+        } else if ($res->op_type === 'term') {
+          if (($id_to_parent[$child_term->id] ?? null) === $parent_term->id) {
             continue;
           }
           $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -1163,7 +1163,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         array_map(
           function ($d) use (&$extract_field) {
             if (!is_null($d) && !is_scalar($d)) $d = json_encode($d);
-            if ($extract_field->type != 'html') {
+            if ($extract_field->type !== 'html') {
               $d = htmlentities($d);
             }
             return $d;
@@ -1177,7 +1177,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         array_map(
           function ($d) use (&$extract_field) {
             if (!is_null($d) && !is_scalar($d)) $d = json_encode($d);
-            if ($extract_field->type != 'html') {
+            if ($extract_field->type !== 'html') {
               $d = htmlentities($d);
             }
             return $d;
@@ -1219,7 +1219,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             $status = op_getopt('disable_product_status_update_default_status') ?: 'publish';
           }
         }
-        if ($status == 'trash') {
+        if ($status === 'trash') {
           $status = 'draft';
         }
         $data = [
@@ -1261,7 +1261,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         $object_id = $object->$base_table_key;
         $data_to_update = [];
         foreach ($data as $column => $new_value) {
-          if ($object->$column != $new_value) {
+          if ($object->$column !== $new_value) {
             $data_to_update[$column] = $new_value;
           }
         }
@@ -1451,7 +1451,7 @@ function op_regenerate_import_slug(array $items)
 {
   foreach ($items as $res_id => $new_res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
-    if ($res->op_type == 'thing') continue;
+    if ($res->op_type === 'thing') continue;
 
 
     $wp_ids = [];
@@ -1472,7 +1472,7 @@ function op_regenerate_import_slug(array $items)
 function op_regenerate_all_slugs()
 {
   foreach (op_schema()->resources as $res) {
-    // if ($res->name != 'categorie') continue;
+    // if ($res->name !== 'categorie') continue;
     $class = op_name_to_class($res->name);
     op_record("regenerating slugs for $class");
     $class::unlocalized()->chunk(200, function ($items) {
@@ -1578,14 +1578,14 @@ function op_extract_value_from_raw_thing(object $schema_json, object $res, objec
 {
   $ret = $as_list ? [] : null;
 
-  if (!$op_fid1 || $op_fid1 == 'empty') return $ret;
+  if (!$op_fid1 || $op_fid1 === 'empty') return $ret;
 
   $f = collect($res->fields)->firstWhere('id', $op_fid1);
   if (!$f) return $ret;
 
   $source_thing = $thing;
 
-  if ($f->type == 'relation') {
+  if ($f->type === 'relation') {
 
     $rel_thing_id = @$thing->rel_ids->{$f->id}[0];
     if (!$rel_thing_id) return $ret;
@@ -1764,7 +1764,7 @@ function op_gen_model(object $schema, object $res)
   }\n";
 
   foreach ($res->fields as $f) {
-    if ($f->type == 'relation') {
+    if ($f->type === 'relation') {
       $rel_class = op_snake_to_camel($f->rel_res->name);
       $code .= "  function {$f->name}() {\n";
       $code .= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')";
@@ -1795,7 +1795,7 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
   $is_thumb = $w || $h;
   if (!$is_thumb) {
     $ext = $pi['extension'] ?? 'bin';
-    $ext = $ext == 'php' ? 'txt' : $ext;
+    $ext = $ext === 'php' ? 'txt' : $ext;
     $op_name .= '.' . $ext;
     $filename .= '.' . $ext;
     $token = $file->token;
@@ -2245,7 +2245,7 @@ function op_resize_fallback($src_path, $dest_path, $params = [])
     // die('xx: wrong format');
     return false;
   }
-  $output_format = ($ext == 'jpg') ? 'jpeg' : $ext;
+  $output_format = ($ext === 'jpg') ? 'jpeg' : $ext;
 
   $format = strtolower(substr($img_info['mime'], strpos($img_info['mime'], '/') + 1));
   $icfunc = 'imagecreatefrom' . $format;
@@ -2288,7 +2288,7 @@ function op_resize_fallback($src_path, $dest_path, $params = [])
 
   $isrc = $icfunc($src_path);
   $idest = imagecreatetruecolor($width, $height);
-  if (($format == 'png' || $format == 'gif') && $output_format == $format) {
+  if (($format === 'png' || $format === 'gif') && $output_format === $format) {
     imagealphablending($idest, false);
     imagesavealpha($idest, true);
     imagefill($idest, 0, 0, IMG_COLOR_TRANSPARENT);

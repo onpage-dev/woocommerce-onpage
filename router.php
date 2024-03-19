@@ -23,7 +23,7 @@ add_filter('init', function () {
     $pieces = explode('/', $uri);
     $pieces = array_filter($pieces);
     $pieces = array_values($pieces);
-    if (@$pieces[0] != $shop_url) {
+    if (@$pieces[0] !== $shop_url) {
         return;
     }
     array_shift($pieces);
@@ -33,7 +33,7 @@ add_filter('init', function () {
         $page = explode('/', $page);
         $page = array_filter($page);
         $page = array_values($page);
-        if (count($page) == count($pieces)) {
+        if (count($page) === count($pieces)) {
             op_use_page($action, $page, $pieces);
         }
     }
@@ -75,7 +75,7 @@ function op_build_page_path(array $page, array $pieces = []) {
     $path = [];
     foreach ($page as $i => $step) {
         $rels = explode('.', $step);
-        if ($i == 0) {
+        if ($i === 0) {
             $class_name = array_shift($rels);
             $class_name = "\\Op\\$class_name";
             $res = @$class_name::getResource();
@@ -144,12 +144,12 @@ function op_link_to($item) {
         $page = array_values($page);
         $path = op_build_page_path($page);
         $path = array_reverse($path);
-        if (@$path[0]['res']->id == $item->resource->id) {
+        if (@$path[0]['res']->id === $item->resource->id) {
             $link = [];
             foreach ($path as $i => $block) {
                 if (array_key_exists('slug', $block)) {
                     $link[] = $item->getSlug();
-                    if (count($page) == count($link)) {
+                    if (count($page) === count($link)) {
                         $link[] = trim(op_settings()->shop_url, '/');
                         $link[] = trim(get_site_url(), '/');
                         $link = array_reverse($link);
