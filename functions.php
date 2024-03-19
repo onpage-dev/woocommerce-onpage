@@ -1099,7 +1099,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         $curr = @$current_meta[$object_id][$meta_key] ?? [];
         $cur_data = implode('-|-', array_column($curr, 'meta_value'));
         $new_data = implode('-|-', array_column($meta_values, 'meta_value'));
-        if ($cur_data == $new_data) {
+        if ($cur_data === $new_data) {
           foreach ($curr as $mv) {
             unset($to_delete[$mv['meta_id']]);
           }
