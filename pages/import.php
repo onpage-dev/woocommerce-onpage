@@ -388,12 +388,12 @@
 
       <hr />
 
-      <div v-for="res in Object.values(next_schema.resources)" v-if="!thing_resources.includes(res.name)">
+      <div v-for="res in Object.values(selected_resources)">
         <br>
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
           <tbody>
-            <tr v-for="property in generic_fields.concat(product_resources.includes(res.name) ? product_fields : [])">
+            <tr v-for="property in generic_fields.concat(selected_product_resources.includes(res.name) ? product_fields : [])">
               <td>{{ property.label }}</td>
               <td>
                 <div style="display: flex; flex-direction: row; gap: 1rem">
@@ -730,6 +730,10 @@
       ],
     },
     computed: {
+      selected_resources() {
+        const selected_resources = this.settings_form.resources.map(res => res.resource);
+        return this.next_schema.resources.filter(res => selected_resources.includes(res.name))
+      },
       available_resources() {
         return this.next_schema.resources
       },
@@ -745,6 +749,9 @@
         });
         console.log(arr)
         return arr
+      },
+      selected_product_resources() {
+        return this.settings_form.resources.filter(res => res.type == "post").map(res => res.resource);
       },
       product_resources() {
         return this.server_config?.product_resources ?? []
