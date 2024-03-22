@@ -1884,7 +1884,7 @@ function op_preferred_image_format()
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null)
 {
-  $url = 'https://' . op_getopt('company') . '.onpage.it/api/storage/' . $token;
+  $url = 'https://app.onpage.it/api/storage/' . $token;
   if ($name) {
     $url .= '/' . urlencode($name);
   }
