@@ -40,6 +40,10 @@
     color: #BF616A !important;
   }
 
+  #op-app div.danger {
+    color: #BF616A !important;
+  }
+
   #op-app .button:disabled {
     opacity: .5;
   }
@@ -220,6 +224,13 @@
           Disable original file import.
           <br />
           This option will not store media files into the website cache, instead will use On Page as a CDN.
+          <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) {
+              echo 'The setting OP_DISABLE_ORIGINAL_FILE_IMPORT has been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+          </div>
         </label>
 
         <div>
@@ -230,6 +241,13 @@
             <option value="png">png</option>
             <option value="jpg">jpg</option>
           </select>
+          <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_THUMBNAIL_FORMAT')) {
+              echo 'The setting OP_THUMBNAIL_FORMAT has been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+          </div>
         </div>
       </div>
 
@@ -336,6 +354,13 @@
 
       <div style="display: flex; flex-direction: column; gap: 1rem">
         <h1>Resources</h1>
+        <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_resource_types', null) ?: [])) {
+              echo 'Relations defined in the op_resource_types function have been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+        </div>
         <div>
           <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
 
@@ -353,6 +378,13 @@
         </div>
 
         <h1>Relations</h1>
+        <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_import_relations', null) ?: [])) {
+              echo 'Relations defined in the op_import_relations function have been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+        </div>
         <div>
           <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
             <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
