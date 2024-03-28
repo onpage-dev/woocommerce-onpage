@@ -50,6 +50,50 @@ function op_is_successfull_status($status)
   return in_array($status, [200, 201]);
 }
 
+function op_check_migration()
+{
+  if (!DB::table('options')->where('option_name', 'on-page-migrated-to-1.2')->exists()) {
+    op_setopt('migrated-to-1.2', false);
+  }
+  $migrated = DB::table('options')->where('option_name', 'on-page-migrated-to-1.2')->first();
+
+  if ($migrated->option_value == 'false') {
+    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+      op_setopt('disable_original_file_import', true);
+    }
+
+    if (defined('OP_THUMBNAIL_FORMAT') && OP_THUMBNAIL_FORMAT) {
+      op_setopt('thumbnail-format', OP_THUMBNAIL_FORMAT);
+    }
+
+    $resources = apply_filters('op_resource_types', null) ?: [];
+    if (count($resources)) {
+      $migrated_resources = [];
+      foreach ($resources as $resource => $type) {
+        $migrated_resources[] = (object) [
+          "type" => $type,
+          "resource" => $resource
+        ];
+      }
+      op_setopt('resources', $migrated_resources);
+    }
+
+    $relations = apply_filters('op_import_relations', null) ?: [];
+    if (count($relations)) {
+      $migrated_relations = [];
+      foreach ($relations as $relation_from => $relation_to) {
+        $migrated_relations[] = (object) [
+          "from" => $relation_from,
+          "to" => $relation_to
+        ];
+      }
+      op_setopt('relations', $migrated_relations);
+    }
+
+    op_setopt('migrated-to-1.2', true);
+  }
+}
+
 function op_initdb()
 {
   global $table_prefix;
