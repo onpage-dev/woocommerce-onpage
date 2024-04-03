@@ -1171,7 +1171,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             }
             return $d;
           },
-          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-description"), op_getopt("res-{$res->id}-description-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field) ?? []
         )
       );
       $extract_field = null;
@@ -1185,7 +1185,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             }
             return $d;
           },
-          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field)
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-excerpt"), op_getopt("res-{$res->id}-excerpt-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field) ?? []
         )
       );
 
