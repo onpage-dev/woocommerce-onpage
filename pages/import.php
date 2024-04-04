@@ -777,7 +777,7 @@
         return this.next_schema.resources
       },
       available_resources_for_relations() {
-        const resources_names = this.settings_form.resources.map(resource => resource.resource)
+        const resources_names = this.settings_form.resources.filter(resource => resource.type == "term").map(resource => resource.resource)
         const filtered_resources = this.next_schema.resources.filter(resource => resources_names.includes(resource.name))
         return filtered_resources
       },
