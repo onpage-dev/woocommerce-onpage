@@ -355,67 +355,72 @@
       <hr />
 
       <div style="display: flex; flex-direction: column; gap: 1rem">
-        <h1>Resources</h1>
-        <div class="danger">
-          <?php
-          if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_resource_types', null) ?: [])) {
-            echo 'Relations defined in the op_resource_types function have been migrated, you can remove it from your theme functions file.';
-          }
-          ?>
+
+        <div>
+          <h1>Resources</h1>
+          <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_resource_types', null) ?: [])) {
+              echo 'Relations defined in the op_resource_types function have been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+          </div>
+          <div>
+            <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
+
+              <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
+                <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+              </select>
+
+              <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
+                <option value="post">Prodotto</option>
+                <option value="term">Categoria</option>
+              </select>
+              <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
+            </div>
+            <button @click="addResource" style="margin-top: 10px" class="op-button button button-primary">Add resource</button>
+          </div>
+        </div>
+
+        <div>
+          <h1>Relations</h1>
+          <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_import_relations', null) ?: [])) {
+              echo 'Relations defined in the op_import_relations function have been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+          </div>
+          <div>
+            <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
+              <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
+                <option v-for="(resource, index) in available_resources_for_relations" :key="index" :value="resource.name">{{ resource.name }}</option>
+              </select>
+
+              <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
+                <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
+              </select>
+
+              <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
+            </div>
+            <button @click="addRelation" style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
+          </div>
         </div>
         <div>
-          <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
-
-            <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
-              <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+          <div v-if="settings_form.disable_product_status_update">
+            Default product status for NEW products:
+            <br />
+            <select style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
+              <option :value="null">Default: publish</option>
+              <option value="publish">Publish</option>
+              <option value="draft">Draft</option>
             </select>
-
-            <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
-              <option value="post">Prodotto</option>
-              <option value="term">Categoria</option>
-            </select>
-            <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
           </div>
-          <button @click="addResource" style="margin-top: 10px" class="op-button button button-primary">Add resource</button>
-        </div>
-
-        <h1>Relations</h1>
-        <div class="danger">
-          <?php
-          if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_import_relations', null) ?: [])) {
-            echo 'Relations defined in the op_import_relations function have been migrated, you can remove it from your theme functions file.';
-          }
-          ?>
-        </div>
-        <div>
-          <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
-            <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
-              <option v-for="(resource, index) in available_resources_for_relations" :key="index" :value="resource.name">{{ resource.name }}</option>
-            </select>
-
-            <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
-              <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
-            </select>
-
-            <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
-          </div>
-          <button @click="addRelation" style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
-        </div>
-
-
-        <div v-if="settings_form.disable_product_status_update">
-          Default product status for NEW products:
-          <br />
-          <select style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
-            <option :value="null">Default: publish</option>
-            <option value="publish">Publish</option>
-            <option value="draft">Draft</option>
-          </select>
-        </div>
-        <div class="submit">
-          <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
-          <div v-if="is_saving">
-            Saving...
+          <div class="submit">
+            <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+            <div v-if="is_saving">
+              Saving...
+            </div>
           </div>
         </div>
       </div>
