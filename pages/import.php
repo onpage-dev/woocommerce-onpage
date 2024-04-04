@@ -369,7 +369,7 @@
             <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
 
               <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
-                <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.name }}</option>
+                <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.label }} ({{ resource.name}})</option>
               </select>
 
               <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
@@ -394,11 +394,11 @@
           <div>
             <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
               <select style="width: 20rem" :value="input.from" @input="setRelationFrom(relations_index, $event.target.value)">
-                <option v-for="(resource, index) in available_resources_for_relations" :key="index" :value="resource.name">{{ resource.name }}</option>
+                <option v-for="(resource, index) in available_resources_for_relations" :key="index" :value="resource.name">{{ resource.label }} ({{ resource.name}})</option>
               </select>
 
               <select style="width: 20rem" :disabled="(!available_relations[relations_index] || !available_relations[relations_index].length)" :value="input.to" @input="setRelationTo(relations_index, $event.target.value)">
-                <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.name }}</option>
+                <option v-for="(relation, index) in available_relations[relations_index]" :key="index" :value="relation.name">{{ relation.label }} ({{ relation.name}})</option>
               </select>
 
               <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
