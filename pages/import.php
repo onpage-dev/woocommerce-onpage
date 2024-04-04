@@ -1001,9 +1001,15 @@
       },
       setResourceType(index, value) {
         this.settings_form.resources[index].type = value
+        this.checkRelations()
+      },
+      checkRelations() {
+        const categories = this.settings_form.resources.filter(resource => resource.type == "term").map(resource => resource.resource)
+        this.settings_form.relations = this.settings_form.relations.filter(relation => categories.includes(relation.from))
       },
       removeResource(index) {
         this.settings_form.resources.splice(index, 1);
+        this.checkRelations()
       },
       setRelationFrom(index, value) {
         this.settings_form.relations[index].from = value
