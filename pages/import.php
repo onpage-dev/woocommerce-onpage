@@ -202,54 +202,8 @@
   </div>
 
   <div class="op-panel-box " v-show="panel_active=='settings'">
-    <h1>Import settings</h1>
 
     <form @submit.prevent="saveSettings">
-
-      <div style="display: flex; flex-direction: column; gap: 1rem">
-        <label>
-          <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
-          Maintain user created categories and products
-        </label>
-
-        <label>
-          <input type="checkbox" v-model="settings_form.disable_product_status_update" />
-          Disable product publishing when UPDATING existing products.
-          <br />
-          (products in the "draft" or "trash" status will not be automatically re-published).
-        </label>
-
-        <label>
-          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
-          Disable original file import.
-          <br />
-          This option will not store media files into the website cache, instead will use On Page as a CDN.
-          <div class="danger">
-            <?php
-            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) {
-              echo 'The setting OP_DISABLE_ORIGINAL_FILE_IMPORT has been migrated, you can remove it from your theme functions file.';
-            }
-            ?>
-          </div>
-        </label>
-
-        <div>
-          Thumbnails format:
-          <br />
-          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
-            <option :value="null">webp</option>
-            <option value="png">png</option>
-            <option value="jpg">jpg</option>
-          </select>
-          <div class="danger">
-            <?php
-            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_THUMBNAIL_FORMAT')) {
-              echo 'The setting OP_THUMBNAIL_FORMAT has been migrated, you can remove it from your theme functions file.';
-            }
-            ?>
-          </div>
-        </div>
-      </div>
 
       <table class="form-table">
         <tbody>
@@ -353,13 +307,61 @@
     <form @submit.prevent="saveSettings">
 
       <div style="display: flex; flex-direction: column; gap: 1rem">
-        <h1>Resources</h1>
-        <div class="danger">
+        <h1>General settings</h1>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
+          Maintain user created categories and products
+        </label>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_product_status_update" />
+          Disable product publishing when UPDATING existing products.
+          <br />
+          (products in the "draft" or "trash" status will not be automatically re-published).
+        </label>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
+          Disable original file import.
+          <br />
+          This option will not store media files into the website cache, instead will use On Page as a CDN.
+          <div class="danger">
             <?php
-            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_resource_types', null) ?: [])) {
-              echo 'Relations defined in the op_resource_types function have been migrated, you can remove it from your theme functions file.';
+            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_DISABLE_ORIGINAL_FILE_IMPORT')) {
+              echo 'The setting OP_DISABLE_ORIGINAL_FILE_IMPORT has been migrated, you can remove it from your theme functions file.';
             }
             ?>
+          </div>
+        </label>
+
+        <div>
+          Thumbnails format:
+          <br />
+          <select style="width: 20rem" :value="settings_form[`thumbnail-format`] || null" @input="$set(settings_form, `thumbnail-format`, $event.target.value || null)">
+            <option :value="null">webp</option>
+            <option value="png">png</option>
+            <option value="jpg">jpg</option>
+          </select>
+          <div class="danger">
+            <?php
+            if ((bool)op_getopt('migrated-to-1.2') && defined('OP_THUMBNAIL_FORMAT')) {
+              echo 'The setting OP_THUMBNAIL_FORMAT has been migrated, you can remove it from your theme functions file.';
+            }
+            ?>
+          </div>
+        </div>
+      </div>
+      <hr />
+
+      <div style="display: flex; flex-direction: column; gap: 1rem">
+        <h1>Resources</h1>
+        <div class="danger">
+          <?php
+          if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_resource_types', null) ?: [])) {
+            echo 'Relations defined in the op_resource_types function have been migrated, you can remove it from your theme functions file.';
+          }
+          ?>
         </div>
         <div>
           <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
@@ -379,11 +381,11 @@
 
         <h1>Relations</h1>
         <div class="danger">
-            <?php
-            if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_import_relations', null) ?: [])) {
-              echo 'Relations defined in the op_import_relations function have been migrated, you can remove it from your theme functions file.';
-            }
-            ?>
+          <?php
+          if ((bool)op_getopt('migrated-to-1.2') && count(apply_filters('op_import_relations', null) ?: [])) {
+            echo 'Relations defined in the op_import_relations function have been migrated, you can remove it from your theme functions file.';
+          }
+          ?>
         </div>
         <div>
           <div v-for="(input, relations_index) in settings_form.relations" :key="relations_index" style="display:flex; gap: 10px; margin-top: 10px">
