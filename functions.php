@@ -260,7 +260,7 @@ function op_settings($settings = null, $flush_cache = false)
 function op_latest_snapshot_token(object $sett = null)
 {
   if (!$sett) $sett = op_settings();
-  $info = op_download_json("https://app.onpage.it/api/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
+  $info = op_download_json("https://api.onpage.it/view/{$sett->token}/dist") or op_ret(['error' => 'Cannot access API - check your settings']);
   if (!@$info->token) {
     op_ret(['error' => 'No snapshot present, generate it on OnPage']);
   }
@@ -272,7 +272,7 @@ function op_download_snapshot(string $token)
   $sett = op_settings();
 
   // op_record('start import');
-  $db = op_download_json("https://app.onpage.it/api/storage/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
+  $db = op_download_json("https://storage.onpage.it/{$token}") or op_ret(['error' => 'Cannot download snapshot']);
   // op_record('download completed');
   return $db;
 }
@@ -637,7 +637,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   if ($regen_snapshot) {
     op_record('Generating a fresh snapshot...');
     $sett = op_settings();
-    op_download_json("https://app.onpage.it/api/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
+    op_download_json("https://api.onpage.it/view/{$sett->token}/generate-snapshot") or op_err("Error: canot regenerate snapshot - check your settings\n");
     op_record('done');
   }
 
@@ -1928,7 +1928,7 @@ function op_preferred_image_format()
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null)
 {
-  $url = 'https://app.onpage.it/api/storage/' . $token;
+  $url = 'https://storage.onpage.it/' . $token;
   if ($name) {
     $url .= '/' . urlencode($name);
   }
@@ -2085,16 +2085,11 @@ function op_import_file(object $file)
 {
   $token = $file->info->token;
   $final_path = op_file_path($token);
-  $url = op_endpoint() . "/storage/$token";
+  $url = "https://storage.onpage.it/$token";
   return op_download_file($url, $final_path);
 }
 
 
-
-function op_endpoint()
-{
-  return "https://" . op_getopt('company') . '.onpage.it/api';
-}
 
 function op_resize($src_path, $dest_path, $params = [])
 {
