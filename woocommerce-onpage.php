@@ -46,6 +46,7 @@ add_filter('init', function () {
   }
 
   op_initdb();
+  op_check_migration();
 
   $api = $_REQUEST['op-api'] ?? null;
   if (!$api) return;

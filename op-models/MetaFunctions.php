@@ -268,9 +268,9 @@ trait MetaFunctions {
     return $ret;
   }
 
-  public function file($name, $lang = null) {
+  public function files($name, $lang = null) {
     $value = $this->val($name, $lang);
-    if (is_null($value)) return;
+    if (is_null($value)) return collect();
 
     $_m = is_array($value);
     if (!$_m) $value = [$value];
@@ -279,8 +279,14 @@ trait MetaFunctions {
       if (!$v) throw new \Exception("cannot parse $json");
       return new File($v);
     }, $value);
-    return $_m ? $value : @$value[0];
+    return collect($value);
   }
+
+  public function file($name, $lang = null) {
+    $files = $this->files($name, $lang);
+    return $files->isEmpty() ? null : $files->first();
+  }
+
 
   public function getIdAttribute() : int {
     return $this->attributes[$this->primaryKey];
