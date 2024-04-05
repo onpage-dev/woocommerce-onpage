@@ -373,8 +373,8 @@
               </select>
 
               <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
-                <option value="post">Prodotto</option>
-                <option value="term">Categoria</option>
+                <option value="post">Product</option>
+                <option value="term">Category</option>
               </select>
               <button @click="removeResource(index)" class="op-button button button-primary">Remove</button>
             </div>
