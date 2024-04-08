@@ -367,9 +367,8 @@
           </div>
           <div>
             <div v-for="(input, index) in settings_form.resources" :key="index" style="display:flex; gap: 10px; margin-top: 10px">
-
               <select style="width: 20rem" :value="input.resource" @input="setResource(index, $event.target.value)">
-                <option v-for="(resource, index) in available_resources" :key="index" :value="resource.name">{{ resource.label }} ({{ resource.name}})</option>
+                <option v-for="(resource, index) in not_used_resources_with_selected_one(input)" :key="index" :value="resource.name">{{ resource.label }} ({{ resource.name}})</option>
               </select>
 
               <select style="width: 20rem" :value="input.type" @input="setResourceType(index, $event.target.value)">
@@ -776,15 +775,21 @@
       available_resources() {
         return this.next_schema.resources
       },
+      not_used_resources() {
+        all_resources = this.next_schema.resources
+        used_resources = this.settings_form.resources.map(resource => resource.resource)
+        available_resources = all_resources.filter(res => !used_resources.includes(res.name))
+        return available_resources
+      },
       available_resources_for_relations() {
-        const resources_names = this.settings_form.resources.filter(resource => resource.type == "term").map(resource => resource.resource)
+        const resources_names = this.settings_form.resources.filter(resource => resource.type == "post").map(resource => resource.resource)
         const filtered_resources = this.next_schema.resources.filter(resource => resources_names.includes(resource.name))
         return filtered_resources
       },
       available_relations() {
         let arr = []
         this.settings_form.relations.forEach((rel, index) => {
-          arr.push(this.available_relations_from_resource(rel.from))
+          arr.push(this.available_relations_from_resource(rel.from, rel.to))
         });
         console.log(arr)
         return arr
@@ -821,6 +826,21 @@
       }, 2000)
     },
     methods: {
+      not_used_resources_with_selected_one(selected) {
+        all_resources = this.next_schema.resources
+        used_resources = this.settings_form.resources.map(resource => resource.resource)
+        available_resources = all_resources.filter(res => !used_resources.includes(res.name))
+        if (selected.resource) {
+          to_add = this.next_schema.resources.filter(res => res.name == selected.resource)[0]
+          available_resources.push(to_add)
+        }
+
+        available_resources.sort(function(a, b) {
+          return a.label - b.label;
+        });
+
+        return available_resources
+      },
       saveSettings() {
         this.is_saving = true
         axios.post('?op-api=save-settings', {
@@ -833,8 +853,16 @@
             this.is_saving = false
           })
       },
-      available_relations_from_resource(resource_name) {
-        return this.next_schema.resources.find(rs => rs.name == resource_name)?.fields.filter(field => field.type == 'relation')
+      available_relations_from_resource(resource_name, resource_to) {
+        used_categories_names = this.settings_form.resources.filter(res => res.type == 'term').map(res => res.resource)
+        used_categories_ids = this.next_schema.resources.filter(rs => used_categories_names.includes(rs.name)).map(res => res.id)
+
+        used_relations = this.settings_form.relations.filter(rel => (rel.from == resource_name) && (rel.to !== resource_to)).map(rel => rel.to)
+
+        return this.next_schema.resources.find(rs => rs.name == resource_name)?.fields
+          .filter(field => field.type == 'relation')
+          .filter(field => used_categories_ids.includes(field.rel_res_id))
+          .filter(field => !used_relations.includes(field.name))
       },
       startImport(file_name) {
         this.is_importing = true
@@ -997,6 +1025,7 @@
         });
       },
       setResource(index, value) {
+        this.saveSettings()
         this.settings_form.resources[index].resource = value
       },
       setResourceType(index, value) {
@@ -1010,6 +1039,7 @@
       removeResource(index) {
         this.settings_form.resources.splice(index, 1);
         this.checkRelations()
+        this.saveSettings()
       },
       setRelationFrom(index, value) {
         this.settings_form.relations[index].from = value
