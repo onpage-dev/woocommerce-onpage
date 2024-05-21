@@ -298,10 +298,14 @@ add_action('op_import_completed', function() {
 });
 ```
 
-## Changing the slug generation function
-By default, the slug is generated converting the string to ASCII
-keeping accented letters (es. `à` becomes `a`) and replacing non alphanumeric
-characters with a dash `-`.
+## Slug customization for categories and products
+By default, slugs are generated using the format "ID-NAME-LANG". To customize how the slugs are generated,
+you can use the `op_gen_slug` function as follows.
+NOTE: Slugs for existing items do not get updated unless you tick the "Force slug regeneration" option in the import panel.
+
+In the `op_gen_slug` you can return any string (e.g. "My Product"), and the plugin will convert it to its slug form (e.g. "my-product").
+If `null` is returned, the original slug is used.
+
 ```php
 add_action('op_gen_slug', function($item) {
     
