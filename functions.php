@@ -1499,7 +1499,12 @@ function op_regenerate_items_slug($items)
         'returned_value' => $new_slug,
       ]);
     }
+    do_action('pre_post_update', $new_item->ID, $new_item);
     $new_item->setSlug($new_slug);
+    wp_update_post([
+      'ID' => $new_item->ID,
+      'post_name' => $new_slug,
+    ]);
   }
   op_locale($start_locale);
 }
