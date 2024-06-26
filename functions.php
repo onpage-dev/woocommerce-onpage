@@ -537,7 +537,7 @@ function op_slug(string $title, $base_class = null, string $old_slug = null)
 
 function op_lock(string $lockFile = null)
 {
-  if (!$lockFile) $lockFile = __DIR__."/import.lock";
+  if (!$lockFile) $lockFile = __DIR__ . "/import.lock";
 
   // Open the lock file. Create it if it doesn't exist.
   $fp = fopen($lockFile, 'c+');
@@ -682,7 +682,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (" . count($data) . " items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $regen_slug_items, $schema_json);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $regen_slug_items, $schema_json, $force_slug_regen);
     op_record("completed $res->label");
   }
 
@@ -973,7 +973,7 @@ function op_locale_to_lang(string $locale)
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json)
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json, bool $force_slug_regen = false)
 {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
@@ -1193,9 +1193,29 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Look for the object if it exists already
       $object = @$current_objects["{$thing->id}-{$lang}"];
 
-      $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-slug"), op_getopt("res-{$res->id}-slug-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
-      if (strlen($preferred_slug)) {
-        $preferred_slug = op_slug($preferred_slug);
+      // Maintain current slug if force slug is not set
+      $preferred_slug = null;
+      if ($object && !$force_slug_regen) {
+        if ($php_class->isPost()) {
+          $preferred_slug = $object->post_name;
+        } elseif ($php_class->isTerm()) {
+          $preferred_slug = $object->slug;
+        }
+      }
+
+      // If no slug has been selected yet, generate a new one
+      if (is_null($preferred_slug)) {
+        $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-slug"), op_getopt("res-{$res->id}-slug-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
+        if (is_scalar($preferred_slug) && strlen($preferred_slug)) {
+          $preferred_slug = op_slug($preferred_slug);
+        } else {
+          $preferred_slug = null;
+        }
+      }
+
+      // If no slug has been generated, create a new one
+      if (is_null($preferred_slug)) {
+        $preferred_slug = op_slug("{$thing->id}-$label-$lang");
       }
 
       $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
@@ -1236,7 +1256,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'comment_status' => $object ? $object->comment_status : 'closed',
           'ping_status' => $object ? $object->ping_status : 'closed',
           'post_password' => $object ? $object->post_password : '',
-          'post_name' => $preferred_slug ?: ($object ? $object->post_name : op_slug("{$thing->id}-$label-$lang")),
+          'post_name' => $preferred_slug,
           'to_ping' => '',
           'pinged' => '',
           'post_modified' => $object ? $object->post_modified : $imported_at,
@@ -1252,7 +1272,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       } elseif ($php_class->isTerm()) {
         $data = [
           'name' => $label,
-          'slug' => $preferred_slug ?: ($object ? $object->slug : op_slug("{$thing->id}-$label-$lang")),
+          'slug' => $preferred_slug,
           'term_group' => 0,
           'op_order' => $thing_i,
         ];
