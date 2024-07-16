@@ -1,3 +1,6 @@
+<?php
+// PHP-scoper will include namespace here
+?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.11/vue.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js" charset="utf-8"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.15/lodash.min.js" charset="utf-8"></script>
@@ -361,7 +364,7 @@
 
             <button @click="removeRelation(relations_index)" class="op-button button button-primary">Remove</button>
           </div>
-          <button @click="addRelation"  style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
+          <button @click="addRelation" style="margin-top: 10px" class="op-button button button-primary">Add relation</button>
         </div>
 
 

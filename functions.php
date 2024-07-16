@@ -5,7 +5,11 @@ if (!defined('ABSPATH')) exit;
 // ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
 // error_reporting(E_ALL);
 
-require_once __DIR__ . '/vendor/autoload.php';
+if (file_exists(__DIR__ . '/vendor/scoper-autoload.php')) {
+  require_once __DIR__ . '/vendor/scoper-autoload.php';
+} else {
+  require_once __DIR__ . '/vendor/autoload.php';
+}
 // use Illuminate\Database\Capsule\Manager as DB;
 
 use OpLib\Post;
@@ -20,6 +24,13 @@ define('OP_WP_PREFIX', $wpdb->prefix);
 $___op_conf = (object)[
   'op_fallback_langs' => [],
 ];
+
+
+function op_version()
+{
+  $plugin_data = get_plugin_data(__FILE__);
+  return $plugin_data['Version'];
+}
 
 function op_debug()
 {

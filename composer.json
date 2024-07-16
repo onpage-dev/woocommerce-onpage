@@ -10,21 +10,25 @@
         "psr-4": {
             "OpLib\\": "op-models/",
             "Op\\": "db-models/"
-        }
+        },
+        "files": []
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "./wp-eloquent/"
-        }
-    ],
     "require": {
         "illuminate/collections": "^8",
-        "gufoe/wp-eloquent": "@dev"
+        "gufoe/wp-eloquent": "^1.0"
     },
     "config": {
         "platform": {
             "php": "7.4"
+        }
+    },
+    "extra": {
+        "mozart": {
+            "dep_namespace": "CoenJacobs\\TestProject\\Dependencies\\",
+            "dep_directory": "/src/Dependencies/",
+            "classmap_directory": "/src/classes/dependencies/",
+            "classmap_prefix": "CJTP_",
+            "delete_vendor_directories": false
         }
     }
 }

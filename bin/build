@@ -1,7 +1,12 @@
 #!/bin/sh
 set -e
 rm -f woocommerce-onpage.zip
+
+rm -rf build/ && php php-scoper.phar add-prefix
+
 #php7.4 $(which composer) install
+cd build/
+composer dumpautoload
 zip -9 \
 --exclude '*.git*' \
 --exclude './woocommerce-onpage.zip' \
@@ -12,4 +17,6 @@ zip -9 \
 --exclude './theme-example/*' \
 --exclude './log.txt' \
 --exclude './wp-eloquent/vendor/*' \
--r woocommerce-onpage.zip .
+--exclude 'php-scoper.phar' \
+-r ../woocommerce-onpage.zip .
+cd ..
