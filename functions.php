@@ -2541,3 +2541,24 @@ function op_set_product_featured_image(OpLib\File $op_file, int $post_id)
   set_post_thumbnail($post_id, $attach_id);
   // op_record('done...');
 }
+
+
+function op_resolve_field_path(int $resource_id, string $path)
+{
+  $path = explode('.', $path, 2);
+  $first = array_shift($path);
+  $next_path = array_shift($path);
+  $res = op_schema()->id_to_res[$resource_id] ?? null;
+  if (!$res) throw new Error("Resource not found: $resource_id");
+  $field = $res->name_to_field[$first] ?? null;
+  if (!$field) throw new Error("Field not found in resource $res->name: $first");
+  if (!$next_path) {
+    return [$field];
+  } else {
+    if ($field->type != 'relation') throw new Error("Invalid field path, $field->name is not a relation: " . $path);
+    return [
+      $field,
+      ...op_resolve_field_path($field->rel_res_id, $next_path),
+    ];
+  }
+}

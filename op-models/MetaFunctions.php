@@ -248,6 +248,12 @@ trait MetaFunctions {
     return $this->solveVal($name, $lang);
   }
 
+  public function content($name, $lang = null) {
+    $field = last(op_resolve_field_path($this->getResource()->id, $name));
+    if ($field->is_multiple) return $this->values($name);
+    else return $this->val($name);
+  }
+
   function getValues(string $lang = null) {
     $ret = [];
     foreach ($this->resource->fields as $field) {
