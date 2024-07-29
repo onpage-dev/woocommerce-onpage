@@ -436,8 +436,9 @@
               <td>
                 <div style="display: flex; flex-direction: row; gap: 1rem">
                   <select style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}`, $event.target.value || null)">
-                    <option :value="null">-- not set --</option>
+                    <option :value="null">{{ property.none_label ??  '-- not set --' }}</option>
                     <option v-if="property.can_be_empty" value="empty">-- empty --</option>
+                    <option v-for="opt in property.custom_fields" :value="opt.value">{{ opt.label }}</option>
                     <optgroup label="Fields">
                       <option v-for="field in Object.values(res.fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                     </optgroup>
@@ -764,6 +765,20 @@
           default: 'none',
           note: 'WARNING: importing images in the Wordpress Gallery will greatly slow down the import process and is generally not needed',
           types: ['image'],
+        },
+        {
+          name: 'sorting',
+          label: 'Sorting',
+          default: 'none',
+          none_label: 'Same as On Page (default)',
+          note: 'By default, sorting will reflect the On Page ordering, but you can use any numeric field to set the order or maintain the wordpress custom sorting',
+          types: ['int'],
+          custom_fields: [
+            {
+              label: 'Maintain wordpress sorting',
+              value: '_wp_sorting',
+            }
+          ]
         },
       ],
     },

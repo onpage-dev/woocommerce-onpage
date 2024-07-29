@@ -1318,6 +1318,16 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         if ($status === 'trash') {
           $status = 'draft';
         }
+
+        $menu_order = $thing_i;
+        $menu_order_preference = op_getopt("res-{$res->id}-sorting");
+        if ($menu_order_preference == '_wp_sorting') {
+          $menu_order = null;
+        } elseif ($menu_order_preference) {
+          $menu_order = op_extract_value_from_raw_thing($schema_json, $res, $thing, $menu_order_preference, null, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
+          if (is_array($menu_order)) $menu_order = $menu_order[0] ?? null;
+        }
+
         $data = [
           'post_author' => 1,
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
@@ -1337,11 +1347,11 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'post_content_filtered' => '',
           'post_parent' => 0,
           'guid' => '',
-          'menu_order' => $thing_i,
           'post_type' => 'product',
           'post_mime_type' => '',
           'comment_count' => 0,
         ];
+        if (strlen("$menu_order")) $data['menu_order'] = (int) $menu_order;
       } elseif ($php_class->isTerm()) {
         $data = [
           'name' => $label,
