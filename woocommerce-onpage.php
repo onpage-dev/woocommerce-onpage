@@ -4,7 +4,7 @@
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
  * Description: Import your products from Onpage
- * Version: 1.1.84
+ * Version: 1.1.90
  * Author: OnPage
  * Author URI: https://onpage.it
  * Text Domain: onpage
@@ -180,7 +180,7 @@ add_filter('manage_edit-product_columns', function ($columns) {
   return $columns;
 });
 add_filter('manage_product_posts_custom_column', function ($column, $product_id) {
-  if ($column == 'onpage_info') {
+  if ($column === 'onpage_info') {
     echo '#' . OpLib\PostMeta::where('post_id', $product_id)->where('meta_key', 'op_id*')->pluck('meta_value')->first();
     // echo $product->get_catalog_visibility();
     echo "<br>";
@@ -202,7 +202,7 @@ add_filter('manage_edit-product_cat_columns', function ($columns) {
   return $columns;
 });
 add_filter('manage_product_cat_custom_column', function ($dep, $column, $product_id) {
-  if ($column == 'onpage_info') {
+  if ($column === 'onpage_info') {
     echo '#' . OpLib\TermMeta::where('term_id', $product_id)->where('meta_key', 'op_id*')->pluck('meta_value')->first();
     // echo $product->get_catalog_visibility();
     echo "<br>";

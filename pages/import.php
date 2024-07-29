@@ -442,10 +442,10 @@
                       <option v-for="field in Object.values(res.fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
                     </optgroup>
                     <optgroup label="Relations">
-                      <option v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')" :value="field.id">{{ field.label }}</option>
+                      <option v-for="field in Object.values(res.fields).filter(x => x.type === 'relation')" :value="field.id">{{ field.label }}</option>
                     </optgroup>
                   </select>
-                  <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type == 'relation'" style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}-2`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}-2`, $event.target.value || null)">
+                  <select v-if="fieldById(settings_form[`res-${res.id}-${property.name}`])?.type === 'relation'" style="width: 20rem" :value="settings_form[`res-${res.id}-${property.name}-2`] || null" @input="$set(settings_form, `res-${res.id}-${property.name}-2`, $event.target.value || null)">
                     <option value="">-- not set --</option>
                     <option v-if="property.can_be_empty" value="empty">-- empty --</option>
                     <option v-for="field in Object.values(relatedFieldResource(settings_form[`res-${res.id}-${property.name}`]).fields).filter(x => property.types.includes(x.type))" :value="field.id">{{ field.label }}</option>
@@ -479,9 +479,9 @@
         </div>
 
         <div class="op-card-buttons">
-          <div class="button" v-if="Object.values(res.fields).filter(x => x.type == 'relation').length" @click="field_modal=Object.values(res.fields).filter(x => x.type == 'relation')">
+          <div class="button" v-if="Object.values(res.fields).filter(x => x.type === 'relation').length" @click="field_modal=Object.values(res.fields).filter(x => x.type === 'relation')">
             Relations:
-            {{Object.values(res.fields).filter(x => x.type == 'relation').length}}
+            {{Object.values(res.fields).filter(x => x.type === 'relation').length}}
           </div>
           <!-- <table class="op-card-table">
           <thead>
@@ -491,16 +491,16 @@
             </tr>
           </thead>
           <tbody>
-          <tr v-for="field in Object.values(res.fields).filter(x => x.type == 'relation')">
+          <tr v-for="field in Object.values(res.fields).filter(x => x.type === 'relation')">
             <td>{{ field.label }}</td>
             <td>{{ field.name }}</td>        
           </tr>   
           </tbody>
         </table> -->
 
-          <div class="button" v-if="Object.values(res.fields).filter(x => x.type != 'relation').length" @click="field_modal=Object.values(res.fields).filter(x => x.type != 'relation')">
+          <div class="button" v-if="Object.values(res.fields).filter(x => x.type !== 'relation').length" @click="field_modal=Object.values(res.fields).filter(x => x.type !== 'relation')">
             Fields:
-            {{Object.values(res.fields).filter(x => x.type != 'relation').length}}
+            {{Object.values(res.fields).filter(x => x.type !== 'relation').length}}
           </div>
 
           <!-- <table class="op-card-table">
@@ -512,7 +512,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="field in Object.values(res.fields).filter(x => x.type != 'relation')">
+            <tr v-for="field in Object.values(res.fields).filter(x => x.type !== 'relation')">
               <td>{{ field.label }}</td>
               <td>{{ field.name }}</td>     
               <td>{{ field.type }}</td> 
@@ -586,9 +586,9 @@
     return response
   }, function(err) {
     if (err.response) {
-      if (err.response.status == 400) {
+      if (err.response.status === 400) {
         alert('Error: ' + err.response.data.error)
-      } else if (err.response.status == 500) {
+      } else if (err.response.status === 500) {
         alert(`On Page plugin error ${err.response.status}`)
       } else {
         // nothing
@@ -806,7 +806,7 @@
       form_unsaved() {
         console.log(JSON.stringify(this.settings))
         console.log(JSON.stringify(this.settings_form))
-        return JSON.stringify(this.settings) != JSON.stringify(this.settings_form)
+        return JSON.stringify(this.settings) !== JSON.stringify(this.settings_form)
       },
       connection_string() {
         return 'app' + (this.settings.token || '')
@@ -945,7 +945,7 @@
             files
           }).then(res => {
             for (var token in res.data) {
-              let m = files.find(x => x.info.token == token)
+              let m = files.find(x => x.info.token === token)
               let ok = res.data[token]
               if (ok) {
                 this.$set(m, 'is_imported', true)
@@ -1007,13 +1007,13 @@
       fieldById(id) {
         for (const r of this.next_schema.resources)
           for (const f of r.fields)
-            if (f.id == id) return f
+            if (f.id === id) return f
       },
       relatedFieldResource(id) {
         const f = this.fieldById(id)
         if (!f) return
         for (const r of this.next_schema.resources)
-          if (r.id == f.rel_res_id) return r
+          if (r.id === f.rel_res_id) return r
       },
       addResource() {
         if (!this.settings_form.resources) {

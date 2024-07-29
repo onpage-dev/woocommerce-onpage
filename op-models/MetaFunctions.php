@@ -45,13 +45,13 @@ trait MetaFunctions {
       $value = $operator;
       $operator = '=';
     }
-    if (is_array($value) && $operator != '=') {
+    if (is_array($value) && $operator !== '=') {
       throw new \Exception("Cannot apply operator $operator for array value");
     }
-    if (static::op_type == 'thing' && strpos($key, '*') !== false) {
+    if (static::op_type === 'thing' && strpos($key, '*') !== false) {
       $real_field = null;
-      if ($key == 'op_id*') $real_field = 'id';
-      else if ($key == 'op_res*') $real_field = 'resource_id';
+      if ($key === 'op_id*') $real_field = 'id';
+      else if ($key === 'op_res*') $real_field = 'resource_id';
       if ($real_field) {
         $q->where($real_field, $operator, $value);
       }
@@ -78,13 +78,13 @@ trait MetaFunctions {
   }
 
   static function isThing() {
-    return static::op_type == 'thing';
+    return static::op_type === 'thing';
   }
   static function isPost() {
-    return static::op_type == 'post';
+    return static::op_type === 'post';
   }
   static function isTerm() {
-    return static::op_type == 'term';
+    return static::op_type === 'term';
   }
   static function scopeOwned($q) {
     if (self::isThing()) {
@@ -231,7 +231,7 @@ trait MetaFunctions {
       $meta_key = op_field_to_meta_key($field, $lang);
       if (!$meta_key) return collect();
       $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
-      if ($field->type == 'dim1' || $field->type == 'dim2' || $field->type == 'dim3') {
+      if ($field->type === 'dim1' || $field->type === 'dim2' || $field->type === 'dim3') {
         $values = $values->map('json_decode');
       }
       if ($values->isEmpty()) continue;
@@ -251,7 +251,7 @@ trait MetaFunctions {
   function getValues(string $lang = null) {
     $ret = [];
     foreach ($this->resource->fields as $field) {
-      if ($field->type == 'relation') {
+      if ($field->type === 'relation') {
         $ret[$field->name] = $this->{$field->name}->pluck('id')->all();
       } else {
         $ret[$field->name] = $this->val($field->name, $lang);
@@ -356,10 +356,10 @@ trait MetaFunctions {
     } else {
       $field_name = $path[0];
       $field_type = 'int';
-      if ($field_name == '_wp_id') {
+      if ($field_name === '_wp_id') {
         return $q->where($q->qualifyColumn(self::getPrimaryKey()), $op, $value);
       }
-      if ($field_name != '_id') {
+      if ($field_name !== '_id') {
         $field = self::fieldByName($field_name);
         if (!$field) {
           return;
@@ -369,11 +369,11 @@ trait MetaFunctions {
 
       // Correct clause
       $must_exist = true;
-      if ($field_type == 'bool' && $op == '=' && !$value) {
+      if ($field_type === 'bool' && $op === '=' && !$value) {
         $must_exist = false;
         $value = true;
       }
-      if ($op == 'not in') {
+      if ($op === 'not in') {
         $op = 'in';
         $must_exist = false;
       }
@@ -384,9 +384,9 @@ trait MetaFunctions {
       $q->$method('meta', function($q) use ($field_name, $op, $value) {
         $lang = op_locale_to_lang(op_locale());
         $q->where('meta_key', self::fieldToMetaKey($field_name, $lang));
-        if ($op == 'in') {
+        if ($op === 'in') {
           $q->whereIn('meta_value', $value);
-        } elseif ($op == 'not in') {
+        } elseif ($op === 'not in') {
           $q->whereNotIn('meta_value', $value);
         } else {
           $q->where('meta_value', $op, $value);
