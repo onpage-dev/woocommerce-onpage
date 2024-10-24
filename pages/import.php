@@ -198,14 +198,6 @@
       <table class="form-table">
         <tbody>
           <tr>
-            <th><label>Company name (e.g. dinside)</label></th>
-            <td>
-              <input class="regular-text code" v-model="settings_form.company">
-              <br>
-              <i style="margin-top: 4px" v-if="settings_form.company">Your domain is <a :href="`https://${settings_form.company}.onpage.it`" target="_blank">{{ `${settings_form.company}.onpage.it` }}</a></i>
-            </td>
-          </tr>
-          <tr>
             <th><label>Snapshot token</label></th>
             <td>
               <input class="regular-text code" v-model="settings_form.token" type="password">
@@ -405,8 +397,8 @@
           <tbody>
           <tr v-for="field in Object.values(res.fields).filter(x => x.type === 'relation')">
             <td>{{ field.label }}</td>
-            <td>{{ field.name }}</td>        
-          </tr>   
+            <td>{{ field.name }}</td>
+          </tr>
           </tbody>
         </table> -->
 
@@ -426,9 +418,9 @@
           <tbody>
             <tr v-for="field in Object.values(res.fields).filter(x => x.type !== 'relation')">
               <td>{{ field.label }}</td>
-              <td>{{ field.name }}</td>     
-              <td>{{ field.type }}</td> 
-            </tr>   
+              <td>{{ field.name }}</td>
+              <td>{{ field.type }}</td>
+            </tr>
           </tbody>
         </table> -->
         </div>
@@ -714,7 +706,7 @@
       // ordered_res: function (){
       //   return this.schema.resources.sort(function(a, b){
 
-      //     return a.name[0] -b.name[0]}) 
+      //     return a.name[0] -b.name[0]})
       // }
     },
     created() {
