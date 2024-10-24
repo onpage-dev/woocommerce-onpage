@@ -1575,7 +1575,19 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
 {
   $langs = op_locales();
   $resources = collect($schema->resources)->keyBy('id');
+
+  $times = [];
+  $time = microtime(true);
+  $tick = function ($label) use (&$time, &$times) {
+    $times[$label] = ($times[$label] ?? 0) + microtime(true) - $time;
+    $time = microtime(true);
+  };
+
+  /** @var array<int,array<int,string>> */
+  $maps = [];
+
   foreach ($schema->resources as $res_i => $res) {
+
     $data = $json->resources[$res_i]->data;
     $meta = [];
     $updated_wp_ids = [];
@@ -1591,11 +1603,33 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
 
     $fid_to_relation_langs = [];
 
+    foreach ($json->resources[$res_i]->fields as $f) {
+      if ($f->type !== 'relation') continue;
+      if (isset($maps[$base_tablemeta_ref . $f->name])) continue;
+      $tick('start');
+      $ret = $php_metaclass::query()
+        ->where('meta_key', 'oprel_' . $f->name)
+        ->groupBy($base_tablemeta_ref)
+        ->get([
+          DB::raw("$base_tablemeta_ref as id"),
+          DB::raw('group_concat(meta_value ORDER BY meta_id ASC SEPARATOR \',\') as v'),
+        ]);
+      $tick('mapping db values');
+      $maps[$base_tablemeta_ref.$f->name] = [];
+      foreach ($ret as $v) $maps[$base_tablemeta_ref.$f->name][$v->id] = $v->v;
+      $tick('plucking');
+      // op_record("loaded $f->name from $base_tablemeta_ref");
+    }
+
     foreach ($data as $thing) {
       // Things have only the null lang
       foreach ($all_items[$res->id][$thing->id] as $lang => $wp_id) {
-        $updated_wp_ids[] = $wp_id;
+
+        $item_meta = [];
+        $fast_check = [];
+
         foreach ($thing->rel_ids as $fid => $tids) {
+          $tick('start rel');
           $field = $res->id_to_field[$fid];
           $target_res = $resources[$field->rel_res_id];
           // thing => non thing = duplicate relations by lang (null -> en, null -> it, ...)
@@ -1616,36 +1650,76 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
             $fid_to_relation_langs["$fid-$lang"] = $relation_langs;
           }
           $relation_langs = $fid_to_relation_langs["$fid-$lang"];
+          $tick('end thing start');
+
           foreach ($tids as $rel_tid) {
             foreach ($relation_langs as $rel_lang) {
+              $tick('start cycle');
               $rel_wp_id = $all_items[$target_res->id][$rel_tid][$rel_lang];
-              $meta[] = [
+              $fast_check[$field->id][] = $rel_wp_id;
+              $tick('pushed fast check');
+              $item_meta[] = [
                 $base_tablemeta_ref => $wp_id,
                 'meta_key' => 'oprel_' . $field->name,
                 'meta_value' => $rel_wp_id,
               ];
+              $tick('pushed meta');
             }
           }
+        }
+
+        // Check if any relation has changed
+        $diff = false;
+        foreach ($json->resources[$res_i]->fields as $f) {
+          if ($f->type !== 'relation') continue;
+
+          $tick('diffing');
+          $want = implode(',', $fast_check[$f->id] ?? []);
+          $tick('imploded');
+          $curr = $maps[$base_tablemeta_ref.$f->name][$wp_id] ?? '';
+          $tick('currented');
+          if ($want !== $curr) {
+            $diff = true;
+            // op_record("ID: ".$wp_id);
+            // op_record("WANT: ".$want);
+            // op_record("CURR: ".$curr);
+            // op_record( json_encode($maps[$f->id]));
+            // exit;
+            break;
+          };
+        }
+
+        // If changed, recreate relation
+        if ($diff) {
+          $tick('updating');
+          $updated_wp_ids[] = $wp_id;
+          foreach ($item_meta as $m) $meta[] = $m;
+          $tick('pushed meta');
         }
       }
     }
 
-    op_record_timing("deleting old relations");
+    $tick('deleting');
+
     foreach (array_chunk($updated_wp_ids, 10000) as $chunk) {
       $count = $php_metaclass
         ->whereIn($base_tablemeta_ref, $chunk)
         ->where('meta_key', 'like', 'oprel\\_%')
         ->delete();
-      op_record_timing("done ($count)");
+      op_record_timing("delete ($count)");
     }
+    $tick('deleted');
+
     op_record_timing("inserting new relations");
     foreach (array_chunk($meta, 5000) as $chunk) {
-      $count = $php_metaclass::insert($chunk);
-      op_record_timing("done ($count)");
+      $count = $php_metaclass->insert($chunk);
+      op_record_timing("insert ($count)");
     }
+    $tick('inserted');
   }
+  op_record_timing(print_r($times, 1));
+  op_record_timing("deleting old relations");
 }
-
 
 function op_extract_value_from_raw_thing(object $schema_json, object $res, object $thing, string $op_fid1 = null, string $opfid2 = null, string $lang = null, bool $as_list = false, &$extract_field = null)
 {
