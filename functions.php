@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/vendor/autoload.php';
 // use Illuminate\Database\Capsule\Manager as DB;
 
-use OpLib\Post;
+use OpLib\Model;
 use \WpEloquent\Eloquent\Facades\DB;
 
 
@@ -414,6 +414,12 @@ function op_ret($data)
   exit;
 }
 
+$_GLOBALS['op_enable_timing_log'] = false;
+function op_record_timing($label, $end = false) {
+  global $_GLOBALS;
+  if (!isset($_GLOBALS['op_enable_timing_log'])) return;
+  op_record($label, $end);
+}
 function op_record($label, $end = false)
 {
   static $tRecordStart;
@@ -686,7 +692,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     op_record("completed $res->label");
   }
 
-  op_record("Importing relations...");
+  op_record("Importing On Page relations...");
   op_import_snapshot_relations($schema, $schema_json, $all_items);
   op_record("done");
 
@@ -714,7 +720,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_regenerate_import_slug($force_slug_regen ? $all_items : $regen_slug_items);
   op_record('done');
 
-  op_record('Importing relations...');
+  op_record('Setting Wordpress parent relation...');
   op_link_imported_data($schema);
   op_record('done');
 
@@ -907,12 +913,16 @@ function op_link_imported_data($schema)
       $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
       if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
 
-      $terms = $class::with($parent_relation)->get();
+      $terms = $class::query()->withoutMeta()->with([
+        $parent_relation => function($q) {
+          $q->withoutMeta();
+        }
+      ])->get();
 
       foreach ($terms as $child_term) {
         $parent_term = $child_term->$parent_relation->first();
         if ($res->op_type === 'post') {
-          if (($id_to_parent_post[$child_term->id] ?? null) === $parent_term->id) {
+          if ((int) ($id_to_parent_post[$child_term->id] ?? null) === (int) $parent_term->id) {
             continue;
           }
           $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
@@ -921,7 +931,7 @@ function op_link_imported_data($schema)
             op_err("Error while setting Product parent", ['wp_err' => $ret]);
           }
         } else if ($res->op_type === 'term') {
-          if (($id_to_parent[$child_term->id] ?? null) === $parent_term->id) {
+          if ((int) ($id_to_parent[$child_term->id] ?? null) === (int) $parent_term->id) {
             continue;
           }
           $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -1193,9 +1203,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // Look for the object if it exists already
       $object = @$current_objects["{$thing->id}-{$lang}"];
 
-      // Maintain current slug if force slug is not set
+      // Slug is only set during creation, the correct slug is set in a different function later on during the import phase
       $preferred_slug = null;
-      if ($object && !$force_slug_regen) {
+      if ($object) {
         if ($php_class->isPost()) {
           $preferred_slug = $object->post_name;
         } elseif ($php_class->isTerm()) {
@@ -1203,19 +1213,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         }
       }
 
-      // If no slug has been selected yet, generate a new one
-      if (is_null($preferred_slug)) {
-        $preferred_slug = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-slug"), op_getopt("res-{$res->id}-slug-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
-        if (is_scalar($preferred_slug) && strlen($preferred_slug)) {
-          $preferred_slug = op_slug($preferred_slug);
-        } else {
-          $preferred_slug = null;
-        }
-      }
-
       // If no slug has been generated, create a new one
       if (is_null($preferred_slug)) {
-        $preferred_slug = op_slug("{$thing->id}-$label-$lang");
+        $preferred_slug = op_slug("{$thing->id}-$lang");
       }
 
       $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
@@ -1496,8 +1496,11 @@ function op_regenerate_import_slug(array $items)
 
     $class = op_name_to_class($res->name);
     foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
+      op_record_timing("loading data...");
       $items = $class::unlocalized()->withoutGlobalScope('post_status_publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
-      op_regenerate_items_slug($items);
+      op_record_timing("done ({$items->count()})");
+      op_regenerate_items_slug($res, $items);
+      op_record_timing("done setting slugs ({$items->count()})");
     }
   }
 }
@@ -1508,33 +1511,58 @@ function op_regenerate_all_slugs()
     // if ($res->name !== 'categorie') continue;
     $class = op_name_to_class($res->name);
     op_record("regenerating slugs for $class");
-    $class::unlocalized()->chunk(200, function ($items) {
-      op_regenerate_items_slug($items);
+    $class::unlocalized()->chunk(200, function ($items) use ($res) {
+      op_regenerate_items_slug($res, $items);
     });
   }
 }
 
-function op_regenerate_items_slug($items)
+function op_regenerate_items_slug($res, $items)
 {
 
   $start_locale = op_locale();
+  /** @var Model $new_item */
   foreach ($items as $new_item) {
     op_locale($new_item->getLang());
     $new_slug = apply_filters('op_gen_slug', $new_item);
-    if ($new_slug === $new_item || is_null($new_slug) || !mb_strlen($new_slug)) {
-      continue;
-    }
     if (!is_scalar($new_slug)) {
       op_err("Invalid value returned to hook op_gen_slug: non-scalar", [
         'returned_value' => $new_slug,
       ]);
     }
-    do_action('pre_post_update', $new_item->ID, $new_item);
+
+    // Generate the slug from the UI settings
+    if (is_null($new_slug) || !mb_strlen($new_slug)) {
+      $field = op_getopt("res-{$res->id}-slug");
+      $field2 = op_getopt("res-{$res->id}-slug-2");
+      if ($field2) {
+        $new_slug = $new_item->val($field);
+      } else {
+        $new_slug = $new_item->$field2->first()->val($field);
+      }
+    }
+
+    // Set the default slug (op_id-lang)
+    if (is_null($new_slug) || !mb_strlen($new_slug)) {
+      $new_slug = "{$new_item->op_id}-{$new_item->getLang()}";
+    }
+
+    // Slugify the string (e.g. My Slug -> my-slug)
+    $new_slug = op_slug($new_slug);
+
+    // If slug has not changed, skip the update
+    if ($new_slug === $new_item->getSlug()) {
+      continue;
+    }
+
+    op_record_timing("updating slug...");
+    $post_before = $new_item->asWpPost();
+    if ($new_item->isPost()) do_action('pre_post_update', $new_item->ID, $new_item);
+    op_record_timing("pre-post-update completed");
     $new_item->setSlug($new_slug);
-    wp_update_post([
-      'ID' => $new_item->ID,
-      'post_name' => $new_slug,
-    ]);
+    op_record_timing("set-slug completed");
+    if ($new_item->isPost()) do_action('post_updated', $new_item->id, $new_item->asWpPost(), $post_before);
+    op_record_timing("post-updated completed");
   }
   op_locale($start_locale);
 }
@@ -1599,14 +1627,18 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
       }
     }
 
+    op_record_timing("deleting old relations");
     foreach (array_chunk($updated_wp_ids, 10000) as $chunk) {
-      $php_metaclass
+      $count = $php_metaclass
         ->whereIn($base_tablemeta_ref, $chunk)
         ->where('meta_key', 'like', 'oprel\\_%')
         ->delete();
+      op_record_timing("done ($count)");
     }
+    op_record_timing("inserting new relations");
     foreach (array_chunk($meta, 5000) as $chunk) {
-      $php_metaclass->insert($chunk);
+      $count = $php_metaclass::insert($chunk);
+      op_record_timing("done ($count)");
     }
   }
 }
