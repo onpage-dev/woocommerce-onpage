@@ -46,6 +46,12 @@ class ONPAGE_CLI
     op_reset_data();
     op_record("Deletion completed");
   }
+  public function update($args, $assoc_args)
+  {
+    op_record("Updating plugin...");
+    op_upgrade();
+    op_record("Update completed");
+  }
   public function listmedia($args, $assoc_args)
   {
     print_r(op_list_files());
