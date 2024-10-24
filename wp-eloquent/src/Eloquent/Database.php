@@ -233,7 +233,7 @@ class Database implements ConnectionInterface
      */
     public function insert($query, $bindings = array())
     {
-        return $this->statement($query, $bindings);
+        return $this->affectingStatement($query, $bindings);
     }
 
     /**
