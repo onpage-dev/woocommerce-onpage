@@ -40,6 +40,15 @@ trait MetaFunctions {
   static function scopeUnfiltered($q) {
     $q->withoutGlobalScope('_op-owned');
   }
+
+  static function scopeWithoutMeta($q) {
+    $q->withoutGlobalScope('_op-loadmeta');
+  }
+
+  function asWpPost() {
+    return new \WP_Post((object) $this->attributes);
+  }
+
   static function scopeWhereMeta($q, string $key, $operator, $value = null) {
     if (is_null($value)) {
       $value = $operator;

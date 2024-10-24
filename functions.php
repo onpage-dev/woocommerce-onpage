@@ -417,7 +417,7 @@ function op_ret($data)
 $_GLOBALS['op_enable_timing_log'] = false;
 function op_record_timing($label, $end = false) {
   global $_GLOBALS;
-  if (!isset($_GLOBALS['op_enable_timing_log'])) return;
+  if (!$_GLOBALS['op_enable_timing_log']) return;
   op_record($label, $end);
 }
 function op_record($label, $end = false)
@@ -1525,7 +1525,8 @@ function op_regenerate_items_slug($res, $items)
   foreach ($items as $new_item) {
     op_locale($new_item->getLang());
     $new_slug = apply_filters('op_gen_slug', $new_item);
-    if (!is_scalar($new_slug)) {
+    if ($new_slug === $new_item) $new_slug = null;
+    if (!is_null($new_slug) && !is_scalar($new_slug)) {
       op_err("Invalid value returned to hook op_gen_slug: non-scalar", [
         'returned_value' => $new_slug,
       ]);
@@ -1535,10 +1536,12 @@ function op_regenerate_items_slug($res, $items)
     if (is_null($new_slug) || !mb_strlen($new_slug)) {
       $field = op_getopt("res-{$res->id}-slug");
       $field2 = op_getopt("res-{$res->id}-slug-2");
-      if ($field2) {
+      if (!$field2) {
         $new_slug = $new_item->val($field);
       } else {
-        $new_slug = $new_item->$field2->first()->val($field);
+        $rel = $new_item->$field2;
+        if ($rel) $rel = $rel->first();
+        if ($rel) $new_slug = $rel->val($field);
       }
     }
 

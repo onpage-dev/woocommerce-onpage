@@ -6,10 +6,15 @@ zip -9 \
 --exclude '*.git*' \
 --exclude './woocommerce-onpage.zip' \
 --exclude './bin/*' \
+--exclude './snapshots/*' \
 --exclude './composer.*' \
 --exclude './db-models/*' \
+--exclude './wp-eloquent/*' \
 --exclude './storage/*' \
 --exclude './theme-example/*' \
 --exclude './log.txt' \
 --exclude './wp-eloquent/vendor/*' \
+--exclude './sync-to-remote.sh' \
+--exclude './sync-to-local.sh' \
+--exclude './import.lock' \
 -r woocommerce-onpage.zip .

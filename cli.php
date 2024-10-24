@@ -9,11 +9,17 @@ class ONPAGE_CLI
 
   public function import($args, $assoc_args)
   {
+    global $_GLOBALS;
     if (isset($assoc_args['halp'])) {
       echo "Use --force to force import\n";
       echo "Use --force-slug-regen to trigger slug regeneration\n";
       echo "Use --regen-snapshot to regenerate the snapshot before importing\n";
+      echo "Use --timing to show timing info\n";
       return;
+    }
+    if (@$assoc_args['timing']) {
+      print_r($_GLOBALS);
+      $_GLOBALS['op_enable_timing_log'] = true;
     }
 
     op_record("Beginning import...");
@@ -21,7 +27,7 @@ class ONPAGE_CLI
     op_import_snapshot(
       (bool) @$assoc_args['force-slug-regen'],
       (string) @$assoc_args['file_name'],
-      !isset($assoc_args['force']),
+      isset($assoc_args['force']),
       isset($assoc_args['regen-snapshot'])
     );
     $t2 = microtime(true);
