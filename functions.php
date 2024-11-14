@@ -415,7 +415,8 @@ function op_ret($data)
 }
 
 $_GLOBALS['op_enable_timing_log'] = false;
-function op_record_timing($label, $end = false) {
+function op_record_timing($label, $end = false)
+{
   global $_GLOBALS;
   if (!$_GLOBALS['op_enable_timing_log']) return;
   op_record($label, $end);
@@ -501,10 +502,12 @@ function op_wpml_langs(): ?array
   if (!op_wpml_enabled()) return null;
   $icl_deflang = op_wpml_default();
   $wpml_langs = [];
-  foreach (array_merge(
-    array_keys(apply_filters('wpml_active_languages', null)),
-    apply_filters('wpml_setting', [], 'hidden_languages'),
-  ) as $lang) {
+  foreach (
+    array_merge(
+      array_keys(apply_filters('wpml_active_languages', null)),
+      apply_filters('wpml_setting', [], 'hidden_languages'),
+    ) as $lang
+  ) {
     if ($lang !== $icl_deflang) {
       $wpml_langs[] = $lang;
     }
@@ -726,7 +729,9 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
   op_import_gallery($schema);
 
-  wc_update_product_lookup_tables();
+  if (function_exists('wc_update_product_lookup_tables')) {
+    wc_update_product_lookup_tables();
+  }
   op_record('updating woocommerce product meta');
 
   flush_rewrite_rules();
@@ -914,7 +919,7 @@ function op_link_imported_data($schema)
       if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
 
       $terms = $class::query()->withoutMeta()->with([
-        $parent_relation => function($q) {
+        $parent_relation => function ($q) {
           $q->withoutMeta();
         }
       ])->get();
@@ -993,9 +998,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   $php_metaclass = new $php_metaclass;
 
 
-  $lab_id = op_getopt("res-{$res->id}-name");
-  $lab = collect($res->fields)->firstWhere('id', $lab_id)
-    ?? collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
+  $lab = collect($res->fields)->whereNotIn('type', ['relation', 'file', 'image'])->first();
 
 
   $lab_img = $php_class->isThing() ? null : collect($res->fields)->where('type', 'image')->first();
@@ -1163,12 +1166,32 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // op_record("- lang $lang");
       $is_primary = !$icl_primary_id;
       $lab_img_field = $lab_img ? $lab_img->id . ($lab_img->is_translatable ? "_{$db->langs[0]}" : '') : null;
-      $lab_field = $lab ? $lab->id . ($lab->is_translatable ? "_" . op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
 
-      $label = @$thing->fields->$lab_field;
-      if (is_null($label)) $label = 'unnamed';
-      if (is_array($label)) $label = implode(' - ', $label);
-      if (!is_scalar($label)) $label = json_encode($label);
+
+      // $lab_id = op_getopt("res-{$res->id}-name");
+
+      $extract_field = null;
+      $preferred_name = implode(
+        ' ',
+        array_map(
+          function ($d) use (&$extract_field) {
+            if (!is_null($d) && !is_scalar($d)) $d = json_encode($d);
+            if ($extract_field->type === 'html') {
+              $d = strip_tags($d);
+            }
+            return $d;
+          },
+          op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-name"), op_getopt("res-{$res->id}-name-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0], true, $extract_field) ?? []
+        )
+      );
+
+      if (!strlen($preferred_name)) {
+        $lab_field = $lab ? $lab->id . ($lab->is_translatable ? "_" . op_locale_to_lang($lang ?: $db->langs[0]) : '') : null;
+        $preferred_name = @$thing->fields->$lab_field;
+        if (is_null($preferred_name)) $preferred_name = 'unnamed';
+        if (is_array($preferred_name)) $preferred_name = implode(' - ', $preferred_name);
+        if (!is_scalar($preferred_name)) $preferred_name = json_encode($preferred_name);
+      }
 
       $extract_field = null;
       $preferred_description = implode(
@@ -1260,7 +1283,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
           'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
           'post_content' => $preferred_description ?: ($object ? $object->post_description : ''),
-          'post_title' => $label,
+          'post_title' => $preferred_name,
           'post_status' => $status,
           'post_excerpt' => $preferred_excerpt ?: ($object ? $object->post_excerpt : ''),
           'comment_status' => $object ? $object->comment_status : 'closed',
@@ -1281,7 +1304,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         if (strlen("$menu_order")) $data['menu_order'] = (int) $menu_order;
       } elseif ($php_class->isTerm()) {
         $data = [
-          'name' => $label,
+          'name' => $preferred_name,
           'slug' => $preferred_slug,
           'term_group' => 0,
           'op_order' => $thing_i,
@@ -1615,8 +1638,8 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
           DB::raw('group_concat(meta_value ORDER BY meta_id ASC SEPARATOR \',\') as v'),
         ]);
       $tick('mapping db values');
-      $maps[$base_tablemeta_ref.$f->name] = [];
-      foreach ($ret as $v) $maps[$base_tablemeta_ref.$f->name][$v->id] = $v->v;
+      $maps[$base_tablemeta_ref . $f->name] = [];
+      foreach ($ret as $v) $maps[$base_tablemeta_ref . $f->name][$v->id] = $v->v;
       $tick('plucking');
       // op_record("loaded $f->name from $base_tablemeta_ref");
     }
@@ -1676,7 +1699,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
           $tick('diffing');
           $want = implode(',', $fast_check[$f->id] ?? []);
           $tick('imploded');
-          $curr = $maps[$base_tablemeta_ref.$f->name][$wp_id] ?? '';
+          $curr = $maps[$base_tablemeta_ref . $f->name][$wp_id] ?? '';
           $tick('currented');
           if ($want !== $curr) {
             $diff = true;
