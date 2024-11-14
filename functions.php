@@ -684,14 +684,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
 
   $all_items = []; // [res][id][lang] -> wpid
-  $regen_slug_items = []; // [res][id][lang] -> wpid
+  $new_items = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
 
   $langs = op_locales();
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (" . count($data) . " items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $regen_slug_items, $schema_json, $force_slug_regen);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $schema_json, $force_slug_regen);
     op_record("completed $res->label");
   }
 
@@ -720,7 +720,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Generating slugs...');
-  op_regenerate_import_slug($force_slug_regen ? $all_items : $regen_slug_items);
+  op_regenerate_import_slug($force_slug_regen ? $all_items : $new_items);
   op_record('done');
 
   op_record('Setting Wordpress parent relation...');
@@ -988,7 +988,7 @@ function op_locale_to_lang(string $locale)
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$regen_slug_items, object $schema_json, bool $force_slug_regen = false)
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, object $schema_json, bool $force_slug_regen = false)
 {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
@@ -1341,8 +1341,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
             'data' => $data,
           ]);
         }
-        if (!$preferred_slug) {
-          $regen_slug_items[$res->id][$thing->id][$lang] = $object_id;
+        if (!$object) {
+          $new_items[$res->id][$thing->id][$lang] = $object_id;
         }
 
         // Delete all relations with parents
@@ -1557,16 +1557,27 @@ function op_regenerate_items_slug($res, $items)
 
     // Generate the slug from the UI settings
     if (is_null($new_slug) || !mb_strlen($new_slug)) {
-      $field = op_getopt("res-{$res->id}-slug");
-      $field2 = op_getopt("res-{$res->id}-slug-2");
-      if (!$field2) {
-        $new_slug = $new_item->val($field);
+      $f1 = op_getopt("res-{$res->id}-slug");
+      $f2 = op_getopt("res-{$res->id}-slug-2");
+      $field1 = null;
+      $field2 = null;
+
+      if ($f1) {
+        $field1 = $res->id_to_field[$f1] ?? null;
+        if ($field1 && $field1->type == 'relation' && $f2) {
+          $field2 = $res->id_to_field[$f2] ?? null;
+        }
+      }
+
+      if ($field1) {
+        $new_slug = $new_item->val($field1->name);
       } else {
-        $rel = $new_item->$field2;
+        $rel = $new_item->{$field2->name};
         if ($rel) $rel = $rel->first();
-        if ($rel) $new_slug = $rel->val($field);
+        if ($rel) $new_slug = $rel->val($field1->name);
       }
     }
+
 
     // Set the default slug (op_id-lang)
     if (is_null($new_slug) || !mb_strlen($new_slug)) {
