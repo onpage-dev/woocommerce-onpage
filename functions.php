@@ -405,6 +405,13 @@ function op_ret($data)
     http_response_code(400);
   }
 
+  // Transform the trace into a string because otherwise it may cause json_encode to fail
+  if (is_array(@$data['trace'])) {
+    $data['trace'] = array_map(function ($trace) {
+      return "{$trace['file']}:{$trace['line']}";
+    }, $data['trace']);
+  }
+
   if (defined('WP_CLI') && WP_CLI) {
     WP_CLI::line(print_r($data));
     exit;
