@@ -227,17 +227,40 @@ trait MetaFunctions {
     }
 
     // Parse all the available languages and return first available value
+    $type_mapping = [
+      'bool' => [
+        'default' => false,
+        'mapping_fn' => function ($value) {
+          return (bool) $value;
+        }
+      ],
+      'dim1' => [
+        'default' => null,
+        'mapping_fn' => function ($value) {
+          return json_decode($value);
+        }
+      ],
+    ];
+    $type_mapping['dim2'] = $type_mapping['dim1'];
+    $type_mapping['dim3'] = $type_mapping['dim1'];
+
+    // Get the default value and the mapping function for the field type
+    $default_value = $type_mapping[$field->type]['default'] ?? null;
+    // Get the mapping function for the field type
+    $mapping_fn = $type_mapping[$field->type]['mapping_fn'] ?? null;
+
+    // Parse all the available languages and return first available value
     foreach ($fallback_langs as $lang) {
       $meta_key = op_field_to_meta_key($field, $lang);
       if (!$meta_key) return null;
       $values = @$this->meta->where('meta_key', $meta_key)->pluck('meta_value');
-      if ($field->type === 'dim1' || $field->type === 'dim2' || $field->type === 'dim3') {
-        $values = $values->map('json_decode');
+      if ($mapping_fn) {
+        $values = $values->map($mapping_fn);
       }
       if ($values->isEmpty()) continue;
-      return $field->is_multiple ? $values->all() : $values->first();
+      return $field->is_multiple ? $values->all() : $values->first() ?? $default_value;
     }
-    return $field->is_multiple ? [] : null;
+    return $field->is_multiple ? [] : $default_value;
   }
 
   function getValues(string $lang = null) {

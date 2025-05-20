@@ -1796,6 +1796,15 @@ function op_extract_value_from_raw_thing(object $schema_json, object $res, objec
   $extract_field = $f;
   if ($f->is_translatable) $fid .= "_" . ($lang ?? op_locale_to_lang(op_locale()));
   $val = @$source_thing->fields->$fid;
+  if ($f->type === 'bool') {
+    if ($f->is_multiple) {
+      $val = array_map(function ($v) {
+        return $v ? true : false;
+      }, $val);
+    } else {
+      $val = $val ? true : false;
+    }
+  }
   if ($as_list) {
     return $f->is_multiple ? $val : [$val];
   } else {
@@ -1909,7 +1918,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     }
 
     if (!isset($values['_stock_status']) && isset($values['_stock'])) {
-      $values['_stock_status'] = $values['_stock'] > 0;
+      $values['_stock_status'] = $values['_stock'] > 0 ? 'instock' : 'outofstock';
     }
 
     $sale_period_active = true;
