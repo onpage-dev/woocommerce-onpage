@@ -1547,7 +1547,7 @@ function op_regenerate_all_slugs()
   }
 }
 
-function op_regenerate_items_slug($res, $items)
+function op_regenerate_items_slug($res, $items, bool $trigger_wp_actions = true)
 {
 
   $start_locale = op_locale();
@@ -1601,11 +1601,24 @@ function op_regenerate_items_slug($res, $items)
 
     op_record_timing("updating slug...");
     $post_before = $new_item->asWpPost();
-    if ($new_item->isPost()) do_action('pre_post_update', $new_item->ID, $new_item);
+    if ($trigger_wp_actions && $new_item->isPost()) {
+      $args = ['pre_post_update', $new_item->ID, $post_before];
+      // op_record("Calling ".json_encode($args));
+      do_action(...$args);
+    }
     op_record_timing("pre-post-update completed");
     $new_item->setSlug($new_slug);
+
+    // If enabled, trigger WP actions for slug change (for compatibility with redirection plugins)
+    if ($trigger_wp_actions && $new_item->isPost()) {
+
+      clean_post_cache($new_item->ID);
+
+      $args = ['post_updated', $new_item->id, $new_item->asWpPost(), $post_before];
+      // op_record("Calling ".json_encode($args));
+      do_action(...$args);
+    }
     op_record_timing("set-slug completed");
-    if ($new_item->isPost()) do_action('post_updated', $new_item->id, $new_item->asWpPost(), $post_before);
     op_record_timing("post-updated completed");
   }
   op_locale($start_locale);
