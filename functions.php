@@ -1977,8 +1977,9 @@ function op_gen_model(object $schema, object $res)
     if ($f->type === 'relation') {
       $rel_class = op_snake_to_camel($f->rel_res->name);
       $code .= "  function {$f->name}() {\n";
-      $code .= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')";
+      $code .= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')\n";
       $code .= "    ->wherePivot('meta_key', 'oprel_{$f->name}')\n";
+      $code .= "    ->fromRelation()\n";
       $code .= "    ->orderBy('meta_id');\n";
       $code .= "  }\n";
     }

@@ -37,6 +37,11 @@ trait MetaFunctions {
     });
   }
 
+  static function scopeFromRelation($q) {
+    $q->unowned();
+    $q->unlocalized();
+  }
+
   static function scopeUnfiltered($q) {
     $q->withoutGlobalScope('_op-owned');
   }
