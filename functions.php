@@ -1602,7 +1602,8 @@ function op_regenerate_items_slug($res, $items, bool $trigger_wp_actions = true)
     op_record_timing("updating slug...");
     $post_before = $new_item->asWpPost();
     if ($trigger_wp_actions && $new_item->isPost()) {
-      $args = ['pre_post_update', $new_item->ID, $post_before];
+      // See https://developer.wordpress.org/reference/hooks/pre_post_update/
+      $args = ['pre_post_update', $new_item->ID, $post_before->to_array()];
       // op_record("Calling ".json_encode($args));
       do_action(...$args);
     }
@@ -1614,6 +1615,7 @@ function op_regenerate_items_slug($res, $items, bool $trigger_wp_actions = true)
 
       clean_post_cache($new_item->ID);
 
+      // See https://developer.wordpress.org/reference/hooks/post_updated/
       $args = ['post_updated', $new_item->id, $new_item->asWpPost(), $post_before];
       // op_record("Calling ".json_encode($args));
       do_action(...$args);
