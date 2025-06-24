@@ -37,9 +37,13 @@ trait MetaFunctions {
     });
   }
 
-  static function scopeFromRelation($q) {
-    $q->unowned();
-    $q->unlocalized();
+  static function scopeFromRelation($q, $options = []) {
+    if (isset($options['disable-onpage-scope']) && $options['disable-onpage-scope']) {
+      $q->unowned();
+    }
+    if (isset($options['disable-locale-scope']) && $options['disable-locale-scope']) {
+      $q->unlocalized();
+    }
   }
 
   static function scopeUnfiltered($q) {

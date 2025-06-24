@@ -1977,11 +1977,21 @@ function op_gen_model(object $schema, object $res)
 
   foreach ($res->fields as $f) {
     if ($f->type === 'relation') {
+
+      $src_is_thing = $res->is_thing;
+      $dest_is_thing = $f->rel_res->is_thing;
+      $options = [
+        // If source is type Thing and destination is not, we cannot remove the unlocalized scope. This is because op_things have relations to items in all languages.
+        'disable-locale-scope' => !($src_is_thing && !$dest_is_thing),
+        // We can always disable unowned, because we only link owned elements
+        'disable-onpage-scope' => true,
+      ];
+
       $rel_class = op_snake_to_camel($f->rel_res->name);
       $code .= "  function {$f->name}() {\n";
       $code .= "    return \$this->belongsToMany($rel_class::class, \\{$extends}Meta::class, '{$extends_lc}_id', 'meta_value')\n";
       $code .= "    ->wherePivot('meta_key', 'oprel_{$f->name}')\n";
-      $code .= "    ->fromRelation()\n";
+      $code .= "    ->fromRelation(" . var_export($options, 1) . ")\n";
       $code .= "    ->orderBy('meta_id');\n";
       $code .= "  }\n";
     }
@@ -2651,4 +2661,25 @@ function op_set_product_featured_image(OpLib\File $op_file, int $post_id)
   // op_record('set thumb '.$attach_id."   ".$post_id);
   set_post_thumbnail($post_id, $attach_id);
   // op_record('done...');
+}
+
+
+function op_dump_query(\Illuminate\Database\Eloquent\Builder $q) {
+  $sql = $q->toSql();
+  $bindings = $q->getBindings();
+
+  // Replace each ? with an element from bindings array
+  foreach ($bindings as $binding) {
+      $raw = null;
+      if (is_string($binding)) {
+          $raw = "'" . addslashes($binding) . "'";
+      } elseif (is_null($binding)) {
+          $raw = 'NULL';
+      } else {
+          $raw = $binding;
+      }
+      $sql = explode('?', $sql, 2);
+      $sql = $sql[0] . $raw . $sql[1];
+  }
+  return $sql;
 }
