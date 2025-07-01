@@ -21,6 +21,10 @@ class File {
     return op_file_url($this, null, null, null, $inline);
   }
 
+  public function onPageLink(bool $inline = false) {
+    return op_file_url($this, null, null, null, $inline, true);
+  }
+
   /** @return string|null the image url */
   public function cdn(string $cdn_name = null) {
     if (!isset($this->json->cdn)) return null;
@@ -38,9 +42,13 @@ class File {
     // Return the cdn url
     return $cdn[$cdn_name];
   }
-  
+
   public function thumb($w = null, $h = null, $contain = false) {
     return op_file_url($this, $w, $h, $contain);
+  }
+
+  public function onPageThumb($w = null, $h = null, $contain = false) {
+    return op_file_url($this, $w, $h, $contain, false, true);
   }
 
   function getWidth() {
