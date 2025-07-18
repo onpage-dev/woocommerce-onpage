@@ -324,6 +324,18 @@ add_action('op_gen_slug', function($item) {
 ```
 
 
+## Static terms
+On Page will manage all product categories and remove those that are not managed by On Page.
+If you have some terms that should not be updated or deleted or touched in any way by the import process, you can specify them as static terms.
+The `op_static_terms` filter can be used to specify the term_ids that the plugin should not touch.
+NOTE: you must specify the term_ids in the primary language, and the plugin will automatically consider all the translations of the terms you specify.
+```php
+add_filter('op_static_terms', function() {
+  return [1, 2, 3]; // term_ids in the primary language that should not be touched by the import process
+});
+```
+
+
 
 ## Legacy way to specify import method (do not use)
 The following hook will import only the resource 'shoes' and 't_shirts' as product,

@@ -838,14 +838,25 @@ function op_disable_old_categories(array $imported_items): int
   return $tax_to_remove->count();
 }
 
+/**
+ * Returns all the static terms that are not managed by On Page and that should not be updated or deleted or touched in any way by the import process.
+ */
 function op_get_static_terms()
 {
+  $primary_lang_static_term_ids = [];
+
+  array_push($primary_lang_static_term_ids, ...apply_filters('op_static_terms', null) ?: []);
 
   $static_parents = apply_filters('op_import_relations', null) ?: [];
-  $all_ids = [];
   foreach ($static_parents as $term_id) {
     if (!is_numeric($term_id)) continue;
+    $primary_lang_static_term_ids[] = $term_id;
+  }
 
+
+  // For each static term, get all the translations
+  $all_ids = [];
+  foreach ($primary_lang_static_term_ids as $term_id) {
     if (!op_wpml_enabled()) {
       $all_ids[] = $term_id;
     } else {
@@ -856,6 +867,7 @@ function op_get_static_terms()
   }
   return $all_ids;
 }
+
 function op_delete_old_things(array $imported_items): int
 {
   $things_to_remove = OpLib\Thing::query()->pluck('id')->flip();
