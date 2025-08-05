@@ -2038,6 +2038,11 @@ function op_file_remote_url(object $file, int $w = null, int $h = null, bool $co
     $op_name .= '.' . implode('x', [$w ?: '', $h ?: '']);
     if ($contain) {
       $op_name .= '-contain';
+    } else if ($w && $h && isset($file->focus) && is_array($file->focus) && count($file->focus) === 2) {
+      // Add focus coordinates when both dimensions are provided and no contain mode
+      $focus_x = floor($file->focus[0] * 100);
+      $focus_y = floor($file->focus[1] * 100);
+      $op_name .= "-focus-{$focus_x}-{$focus_y}";
     }
 
     $ext = op_preferred_image_format();

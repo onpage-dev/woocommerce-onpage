@@ -8,12 +8,19 @@ class File {
   public $name;
   public $ext;
   public $token;
+  /** @var array|null (e.g. [0.5, 0.5]) */
+  public $focus;
 
   public function __construct(object $file) {
     $this->json = $file;
     $this->name = $file->name;
     $this->ext = $file->ext;
     $this->token = $file->token;
+    if (isset($file->focus) && is_array($file->focus) && count($file->focus) === 2) {
+      $this->focus = $file->focus;
+    } else {
+      $this->focus = null;
+    }
   }
 
   /** @return string|null the image url */
