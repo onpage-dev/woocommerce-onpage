@@ -25,6 +25,8 @@ function op_version()
 }
 
 add_filter('init', function () {
+  \WpEloquent\Eloquent\Facades\DB::statement("SET group_concat_max_len = 100000000;");
+
   $authorized = current_user_can('administrator');
   if (defined('OP_API_TOKEN') && OP_API_TOKEN && op_request('op-token') === OP_API_TOKEN) {
     $authorized = true;
