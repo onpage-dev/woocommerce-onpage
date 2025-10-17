@@ -1341,7 +1341,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           }
         }
         if (count($data_to_update)) {
-          if ($res->is_product) {
+          if ($res->is_product && op_getopt('enable_imported_at_meta')) {
             $data_to_update['post_modified'] = $imported_at;
             $data_to_update['post_modified_gmt'] = $imported_at;
           }
@@ -1414,11 +1414,13 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
         'meta_value' => $thing->default_folder_id ? $thing->default_folder_id : null,
       ];
 
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_imported_at*',
-        'meta_value' => $imported_at,
-      ];
+      if (op_getopt('enable_imported_at_meta')) {
+        $base_meta[] = [
+            $base_tablemeta_ref => $object_id,
+            'meta_key' => 'op_imported_at*',
+            'meta_value' => $imported_at,
+        ];
+      }
 
       $base_meta[] = [
         $base_tablemeta_ref => $object_id,
