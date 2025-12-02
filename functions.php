@@ -692,13 +692,14 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
   $all_items = []; // [res][id][lang] -> wpid
   $new_items = []; // [res][id][lang] -> wpid
+  $items_with_default_slug = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
 
   $langs = op_locales();
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (" . count($data) . " items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $schema_json, $force_slug_regen);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $items_with_default_slug, $schema_json, $force_slug_regen);
     op_record("completed $res->label");
   }
 
@@ -727,7 +728,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Generating slugs...');
-  op_regenerate_import_slug($force_slug_regen ? $all_items : $new_items);
+  op_regenerate_import_slug($force_slug_regen ? $all_items : $items_with_default_slug);
   op_record('done');
 
   op_record('Setting Wordpress parent relation...');
@@ -1007,7 +1008,7 @@ function op_locale_to_lang(string $locale)
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, object $schema_json, bool $force_slug_regen = false)
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, array &$items_with_default_slug, object $schema_json, bool $force_slug_regen = false)
 {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
@@ -1256,8 +1257,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       }
 
       // If no slug has been generated, create a new one
+      $default_slug = op_slug("{$thing->id}-$lang");
       if (is_null($preferred_slug)) {
-        $preferred_slug = op_slug("{$thing->id}-$lang");
+        $preferred_slug = $default_slug;
       }
 
       $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
@@ -1373,6 +1375,9 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       }
       $object_ids["{$thing->id}-$lang"] = $object_id;
       $all_items[$res->id][$thing->id][$lang] = $object_id;
+      if ($preferred_slug === $default_slug) {
+        $items_with_default_slug[$res->id][$thing->id][$lang] = $object_id;
+      }
 
       $tax_id = null;
       if ($php_class->isTerm()) {
