@@ -244,6 +244,174 @@ function op_dir($dir)
   return __DIR__ . "/$dir";
 }
 
+/**
+ * WPML-aware function to set product terms across all languages.
+ * Falls back to standard wp_set_post_terms if WPML is not active.
+ *
+ * @param int $product_id Product ID (in default language if WPML is active)
+ * @param int|array $term_ids Term IDs (in default language if WPML is active)
+ * @param string $taxonomy Taxonomy name
+ * @param bool $append Whether to append or replace terms
+ * @return array{updated: bool, result: array|WP_Error} Array with 'updated' flag and result
+ */
+function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'product_cat', $append = false)
+{
+  // Normalize term_ids to array
+  $term_ids = (array)$term_ids;
+
+  // Use consistent WPML detection with rest of codebase
+  $wpml_active = op_wpml_enabled();
+
+  if (!$wpml_active) {
+    // FAST PATH: No WPML - check if terms already match (unless appending)
+    if (!$append) {
+      $current_terms = wp_get_post_terms($product_id, $taxonomy, ['fields' => 'ids']);
+      sort($current_terms);
+      $sorted_term_ids = $term_ids;
+      sort($sorted_term_ids);
+
+      // Skip if already correct (fast early exit)
+      if ($current_terms === $sorted_term_ids) {
+        return ['updated' => false, 'result' => $term_ids];
+      }
+    }
+
+    $result = wp_set_post_terms($product_id, $term_ids, $taxonomy, $append);
+    return ['updated' => true, 'result' => $result];
+  }
+
+  // WPML is active - get languages
+  $languages = apply_filters('wpml_active_languages', []);
+
+  if (empty($languages)) {
+    $result = wp_set_post_terms($product_id, $term_ids, $taxonomy, $append);
+    return ['updated' => true, 'result' => $result];
+  }
+
+  // FAST CHECK: Build expected state for all languages (only if not appending)
+  $needs_update = $append; // Always update if appending
+  $translations_map = [];
+
+  foreach ($languages as $lang_code => $lang_data) {
+    $translated_product_id = apply_filters('wpml_object_id', $product_id, 'product', false, $lang_code);
+    if (!$translated_product_id) continue;
+
+    // Translate term IDs
+    $translated_term_ids = [];
+    foreach ($term_ids as $term_id) {
+      $translated_term_id = apply_filters('wpml_object_id', $term_id, $taxonomy, false, $lang_code);
+      if ($translated_term_id) {
+        $translated_term_ids[] = $translated_term_id;
+      }
+    }
+
+    if (empty($translated_term_ids)) continue;
+
+    // Store translation map
+    $translations_map[$lang_code] = [
+      'product_id' => $translated_product_id,
+      'expected_terms' => $translated_term_ids
+    ];
+
+    // Fast check: compare current vs expected (only if not appending)
+    if (!$append && !$needs_update) {
+      $current_terms = wp_get_post_terms($translated_product_id, $taxonomy, ['fields' => 'ids']);
+      sort($current_terms);
+      $sorted_translated = $translated_term_ids;
+      sort($sorted_translated);
+
+      if ($current_terms !== $sorted_translated) {
+        $needs_update = true;
+      }
+    }
+  }
+
+  // FAST EXIT: If everything is already correct, skip all operations
+  if (!$needs_update) {
+    return ['updated' => false, 'result' => $term_ids];
+  }
+
+  // Something needs updating - proceed with full update
+  // Temporarily disable WPML's problematic term sync hook (with exception safety)
+  global $wp_filter;
+  $hook_removed = false;
+  $hook_callback = null;
+  $hook_priority = null;
+
+  if (isset($wp_filter['set_object_terms'])) {
+    foreach ($wp_filter['set_object_terms']->callbacks as $priority => $callbacks) {
+      foreach ($callbacks as $callback) {
+        if (is_array($callback['function']) &&
+            is_object($callback['function'][0]) &&
+            get_class($callback['function'][0]) === 'WPML_Terms_Translations' &&
+            $callback['function'][1] === 'set_object_terms_action') {
+          $hook_callback = $callback['function'];
+          $hook_priority = $priority;
+          remove_action('set_object_terms', $hook_callback, $hook_priority);
+          $hook_removed = true;
+          break 2;
+        }
+      }
+    }
+  }
+
+  // Ensure hook is restored even if exception occurs
+  try {
+    // Update only languages that need it
+    $result = null;
+    foreach ($translations_map as $lang_code => $data) {
+      $translated_product_id = $data['product_id'];
+      $translated_term_ids = $data['expected_terms'];
+
+      // Set the terms (respect $append parameter)
+      $result = wp_set_post_terms($translated_product_id, $translated_term_ids, $taxonomy, $append);
+
+      // Quick pollution check - only if we suspect issues (and not appending)
+      if (!$append) {
+        $assigned_terms = wp_get_post_terms($translated_product_id, $taxonomy, ['fields' => 'ids']);
+
+        // Fast check: if count matches and terms match, skip pollution check
+        if (count($assigned_terms) === count($translated_term_ids)) {
+          sort($assigned_terms);
+          $sorted_translated = $translated_term_ids;
+          sort($sorted_translated);
+          if ($assigned_terms === $sorted_translated) {
+            continue; // Perfect match, skip pollution check
+          }
+        }
+
+        // Only do expensive language check if counts don't match
+        $correct_terms = [];
+        foreach ($assigned_terms as $assigned_term_id) {
+          $term_lang = apply_filters('wpml_element_language_code', null, [
+            'element_id' => $assigned_term_id,
+            'element_type' => $taxonomy
+          ]);
+
+          if ($term_lang === $lang_code) {
+            $correct_terms[] = $assigned_term_id;
+          }
+        }
+
+        // Only update if cleanup is needed
+        if (count($correct_terms) !== count($assigned_terms)) {
+          wp_set_post_terms($translated_product_id, $correct_terms, $taxonomy, false);
+        }
+      }
+
+      clean_post_cache($translated_product_id);
+    }
+
+    return ['updated' => true, 'result' => $result];
+
+  } finally {
+    // Re-enable WPML hook (always runs, even on exception)
+    if ($hook_removed && $hook_callback) {
+      add_action('set_object_terms', $hook_callback, $hook_priority, 6);
+    }
+  }
+}
+
 function op_del_old_snapshots()
 {
   foreach (array_slice(op_get_snapshots_list(), 3) as $i => $name) {
@@ -891,11 +1059,9 @@ function op_link_imported_data($schema)
 {
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
+
+  // Only fetch term parent map (used for term-to-term relations)
   $id_to_parent = DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->pluck('parent', 'term_id');
-  $id_to_parent_post = DB::table('term_taxonomy')
-    ->join(OP_WP_PREFIX . 'term_relationships', OP_WP_PREFIX . 'term_relationships.term_taxonomy_id', '=', OP_WP_PREFIX . 'term_taxonomy.term_taxonomy_id')
-    ->where('taxonomy', 'product_cat')
-    ->pluck('term_id', 'object_id');
 
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
@@ -944,19 +1110,41 @@ function op_link_imported_data($schema)
         }
       ])->get();
 
+      $total_items = $terms->count();
+      $updated_items = 0;
+      $skipped_items = 0;
+      $error_items = 0;
+
       foreach ($terms as $child_term) {
         $parent_term = $child_term->$parent_relation->first();
-        if ($res->op_type === 'post') {
-          if ((int) ($id_to_parent_post[$child_term->id] ?? null) === (int) $parent_term->id) {
-            continue;
-          }
-          $ret = wp_set_post_terms($child_term->id, [$parent_term->id], 'product_cat');
 
-          if ($ret instanceof \WP_Error) {
-            op_err("Error while setting Product parent", ['wp_err' => $ret]);
+        // Null-check: skip if no parent relation exists
+        if (!$parent_term) {
+          $error_items++;
+          op_err("Missing parent relation for $resource_name item {$child_term->id}");
+          continue;
+        }
+
+        if ($res->op_type === 'post') {
+          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term->id], 'product_cat');
+
+          if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
+            op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+            $error_items++;
+          } elseif (is_array($ret) && isset($ret['updated'])) {
+            // Use explicit 'updated' flag from function
+            if ($ret['updated']) {
+              $updated_items++;
+            } else {
+              $skipped_items++;
+            }
+          } else {
+            // Fallback for unexpected return format
+            $updated_items++;
           }
         } else if ($res->op_type === 'term') {
           if ((int) ($id_to_parent[$child_term->id] ?? null) === (int) $parent_term->id) {
+            $skipped_items++;
             continue;
           }
           $ret = wp_update_term($child_term->id, 'product_cat', [
@@ -965,9 +1153,19 @@ function op_link_imported_data($schema)
           ]);
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
+            $error_items++;
+          } else {
+            $updated_items++;
           }
         }
       }
+
+      // Log summary
+      $summary = "Synced $resource_name: $total_items total";
+      if ($updated_items > 0) $summary .= ", $updated_items updated";
+      if ($skipped_items > 0) $summary .= ", $skipped_items skipped (unchanged)";
+      if ($error_items > 0) $summary .= ", $error_items errors";
+      op_record($summary);
     }
   }
 
