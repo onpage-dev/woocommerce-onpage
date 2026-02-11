@@ -1118,10 +1118,17 @@ function op_link_imported_data($schema)
       foreach ($terms as $child_term) {
         $parent_term = $child_term->$parent_relation->first();
 
-        // Null-check: skip if no parent relation exists
+        // No parent relation: set NULL as parent category (original behavior)
         if (!$parent_term) {
-          $error_items++;
-          op_err("Missing parent relation for $resource_name item {$child_term->id}");
+          if ($res->op_type === 'post') {
+            op_set_product_terms_wpml_safe($child_term->id, [], 'product_cat');
+          } else if ($res->op_type === 'term') {
+            wp_update_term($child_term->id, 'product_cat', [
+              'parent' => 0,
+              'slug' => $child_term->slug,
+            ]);
+          }
+          $updated_items++;
           continue;
         }
 
