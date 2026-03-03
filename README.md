@@ -121,7 +121,7 @@ if ($folder = $prod->getDefaultFolder()) {
 Files and thumbnails will not be downloaded during the import process, instead they are downloaded and stored when you reference them.
 So, when you do something like `$prod->file('main_image')->link()` or `$prod->file('main_image')->thumb(200)` for the first time, the file will be downloaded in the plugin folder, so the page may take a while to load. Later calls will be instantaneous because the file has already been downloaded.
 
-While this is very handful, original files can be very heavy to store on your server.
+While this is very handy, original files can be very heavy to store on your server.
 You can change the behaviour and use On Page as a CDN, so the `->link()` function will return the url from the On Page servers directly, without storing anything on your server:
 ```php
 define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
@@ -350,8 +350,8 @@ add_filter('on_page_product_resources', function() {
 
 ## Importing relations
 
-Wordpress relations (e.g. linking products with categories) is not be imported by default.
-You can specify, for each resource, wich relation to set the term parent.
+Wordpress relations (e.g. linking products with categories) are not imported by default.
+You can specify, for each resource, which relation to set the term parent.
 
 
 ```php
@@ -363,6 +363,8 @@ add_action('op_import_relations', function() {
     ];
 });
 ```
+
+By default only the first parent category is linked per product. To assign all related parent categories when a product has multiple, enable **Link all parent categories** in the plugin Import settings page.
 
 # Advanced language options
 
@@ -447,7 +449,7 @@ By default, __the import will exit instantly if there is no new data to be impor
 
 This is useful because you can run this command in a cron every minute, and it will only actually import your data when a new snapshot is available.
 
-If you want to ovverride this behaviour and import data anyway, you can add use the `wp onpage import --force` command, wich will re-import all your data.
+If you want to override this behaviour and import data anyway, you can use the `wp onpage import --force` command, which will re-import all your data.
 
 You can also force the regeneration of a new snapshot before importing, which would be `wp onpage import --regen-snapshot`.
 

@@ -1060,6 +1060,8 @@ function op_link_imported_data($schema)
   $relations = apply_filters('op_import_relations', null);
   if (empty($relations)) return;
 
+  $link_all_parent_categories = (bool) op_getopt('link_all_parent_categories');
+
   // Only fetch term parent map (used for term-to-term relations)
   $id_to_parent = DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->pluck('parent', 'term_id');
 
@@ -1116,6 +1118,44 @@ function op_link_imported_data($schema)
       $error_items = 0;
 
       foreach ($terms as $child_term) {
+        // Products: when option is on, link all related parent categories; otherwise first only (retrocompatible)
+        if ($res->op_type === 'post' && $link_all_parent_categories) {
+          $parent_ids = [];
+          foreach ($child_term->$parent_relation as $p) {
+            $parent_ids[] = $p->id;
+          }
+          if (empty($parent_ids)) {
+            $ret = op_set_product_terms_wpml_safe($child_term->id, [], 'product_cat');
+            if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
+              op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+              $error_items++;
+            } elseif (is_array($ret) && isset($ret['updated'])) {
+              if ($ret['updated']) {
+                $updated_items++;
+              } else {
+                $skipped_items++;
+              }
+            } else {
+              $updated_items++;
+            }
+            continue;
+          }
+          $ret = op_set_product_terms_wpml_safe($child_term->id, $parent_ids, 'product_cat');
+          if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
+            op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+            $error_items++;
+          } elseif (is_array($ret) && isset($ret['updated'])) {
+            if ($ret['updated']) {
+              $updated_items++;
+            } else {
+              $skipped_items++;
+            }
+          } else {
+            $updated_items++;
+          }
+          continue;
+        }
+
         $parent_term = $child_term->$parent_relation->first();
 
         // No parent relation: set NULL as parent category (original behavior)

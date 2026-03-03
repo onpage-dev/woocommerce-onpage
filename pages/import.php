@@ -304,6 +304,13 @@
         </label>
 
         <label>
+          <input type="checkbox" v-model="settings_form.link_all_parent_categories" />
+          Link all parent categories for products only (when a product has multiple categories in the relation, assign all of them).
+          <br />
+          <i>If unchecked, only the first parent category is linked (default). Category hierarchy still uses a single parent.</i>
+        </label>
+
+        <label>
           <input type="checkbox" v-model="settings_form.disable_product_status_update" />
           Disable product publishing when UPDATING existing products.
           <br />
