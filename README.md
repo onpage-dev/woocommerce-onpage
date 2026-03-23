@@ -250,6 +250,9 @@ foreach (op_schema()->resources as $res)
     echo $field->unit; // cm | kg | W | ...
     echo op_label($field); // field label in current language
     echo op_label($field, 'it'); // field label in custom language
+
+    echo op_description($field); // field description in current language
+    echo op_description($field, 'it'); // field description in custom language
   }
 }
 
