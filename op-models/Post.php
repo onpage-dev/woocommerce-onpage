@@ -23,7 +23,7 @@ class Post extends Model {
     self::addGlobalScope('_op-post-type-product', function($q) {
       $q->where('post_type', 'product');
     });
-    self::addGlobalScope('post_status_publish', function($q) {
+    self::addGlobalScope('_op-post-status-publish', function($q) {
       $q->where('post_status', 'publish');
     });
 
@@ -31,13 +31,13 @@ class Post extends Model {
   }
 
   public function scopeWithStatus($q, $status = null) {
-    $this->withoutGlobalScope('post_status_publish');
+    $this->withoutGlobalScope('_op-post-status-publish');
     $q->withAnyStatus();
     if (is_array($status)) $q->whereIn('post_status', $status);
     if (is_string($status)) $q->where('post_status', $status);
   }
   public function scopeWithAnyStatus($q) {
-    $q->withoutGlobalScope('post_status_publish');
+    $q->withoutGlobalScope('_op-post-status-publish');
   }
 
   public function scopeSlug($q, $slug) {

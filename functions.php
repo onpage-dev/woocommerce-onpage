@@ -1791,7 +1791,7 @@ function op_regenerate_import_slug(array $items)
     $class = op_name_to_class($res->name);
     foreach (array_chunk($wp_ids, 100) as $wp_id_chunk) {
       op_record_timing("loading data...");
-      $items = $class::unlocalized()->withoutGlobalScope('post_status_publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
+      $items = $class::unlocalized()->withoutGlobalScope('_op-post-status-publish')->whereIn($class::getPrimaryKey(), $wp_id_chunk)->get();
       op_record_timing("done ({$items->count()})");
       op_regenerate_items_slug($res, $items);
       op_record_timing("done setting slugs ({$items->count()})");

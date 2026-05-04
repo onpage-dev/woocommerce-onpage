@@ -22,12 +22,12 @@ class Thing extends Model {
     self::metaBoot();
   }
 
+  // Things do not have a status column; keep no-op scopes for API compatibility.
   public function scopeWithStatus($q, string $status = null) {
-    $this->withoutGlobalScope('_op-thing-status-publish');
-    $q->where('thing_status', $status);
+    return $q;
   }
   public function scopeWithAnyStatus($q) {
-    $this->withoutGlobalScope('_op-thing-status-publish');
+    return $q;
   }
 
   public function scopeSlug($q, $slug) {
