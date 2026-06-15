@@ -492,7 +492,7 @@ trait MetaFunctions {
 
     $permalink = $this->is_post
       ? get_permalink($this->id)
-      : get_term_link($this->id, 'product_cat');
+      : get_term_link($this->id, op_resource_target_taxonomy($this->getResource()));
 
     if ($lang && op_wpml_enabled()) {
       $permalink = apply_filters('wpml_permalink', $permalink, $lang);

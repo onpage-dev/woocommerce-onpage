@@ -14,9 +14,6 @@ class TermTaxonomy extends Model
   public static function boot()
   {
     parent::boot();
-    self::addGlobalScope('_op-cat-product_cat', function ($q) {
-      $q->where('taxonomy', 'product_cat');
-    });
   }
 
   public function term()
@@ -25,7 +22,10 @@ class TermTaxonomy extends Model
   }
   public function icl_translation()
   {
-    return $this->hasOne(IclTranslation::class, 'element_id', 'term_taxonomy_id')->where('element_type', 'tax_product_cat');
+    $element_type = method_exists(static::class, 'getResource')
+      ? op_resource_target_wpml_element_type(static::getResource())
+      : 'tax_product_cat';
+    return $this->hasOne(IclTranslation::class, 'element_id', 'term_taxonomy_id')->where('element_type', $element_type);
   }
 
   function getIdAttribute()

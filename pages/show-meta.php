@@ -6,7 +6,8 @@ if (!defined('OP_PLUGIN')) die(400);
 
 if (!$item || !$item->resource) return;
 
-if (!$item->resource->is_product) echo '<tr><td colspan="2">';
+$is_woocommerce_resource = op_resource_target_has_woocommerce($item->resource);
+if (!$is_woocommerce_resource) echo '<tr><td colspan="2">';
 ?>
 <div id="onpage_meta" class="panel woocommerce_options_panel">
   <h1 style="margin: 10px 20px 0">OnPage Fields</h1>
@@ -99,5 +100,5 @@ if (!$item->resource->is_product) echo '<tr><td colspan="2">';
 }
 </style>
 <?php
-if (!$item->resource->is_product) echo '</td></tr>';
+if (!$is_woocommerce_resource) echo '</td></tr>';
 ?>

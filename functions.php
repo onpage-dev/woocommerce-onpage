@@ -6,8 +6,14 @@ if (!defined('ABSPATH')) exit;
 // error_reporting(E_ALL);
 
 require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/src/ResourceTarget.php';
+require_once __DIR__ . '/src/ImportContext.php';
+require_once __DIR__ . '/src/WooCommerceFieldMap.php';
 // use Illuminate\Database\Capsule\Manager as DB;
 
+use OpSupport\ImportContext;
+use OpSupport\ResourceTarget;
+use OpSupport\WooCommerceFieldMap;
 use OpLib\Model;
 use \WpEloquent\Eloquent\Facades\DB;
 
@@ -271,26 +277,100 @@ function op_apply_resource_types(object $schema_json): void
 
   foreach ($schema_json->resources as $res) {
     $type = $types[$res->name] ?? $default;
-    if (!in_array($type, ['thing', 'term', 'post'], true)) {
-      throw new \Exception("Invalid type for resource $res->name: $type");
-    }
+    $target = op_normalize_resource_target($type, $res->name);
 
-    $res->is_thing = $type === 'thing';
-    $res->is_product = $type === 'post';
+    $res->target = (object) $target->toArray();
+    $res->is_thing = $target->isThing();
+    $res->is_product = $target->isPost();
 
     $res->php_class = \OpLib\Term::class;
     $res->php_metaclass = \OpLib\TermMeta::class;
-    $res->op_type = 'term';
-    if ($res->is_product) {
-      $res->op_type = 'post';
+    $res->op_type = ResourceTarget::STORAGE_TERM;
+    if ($target->isPost()) {
+      $res->op_type = ResourceTarget::STORAGE_POST;
       $res->php_class = \OpLib\Post::class;
       $res->php_metaclass = \OpLib\PostMeta::class;
-    } elseif ($res->is_thing) {
-      $res->op_type = 'thing';
+    } elseif ($target->isThing()) {
+      $res->op_type = ResourceTarget::STORAGE_THING;
       $res->php_class = \OpLib\Thing::class;
       $res->php_metaclass = \OpLib\ThingMeta::class;
     }
   }
+}
+
+function op_normalize_resource_target(string $type, string $resource_name = ''): ResourceTarget
+{
+  try {
+    return ResourceTarget::fromLegacyType($type);
+  } catch (\InvalidArgumentException $e) {
+    throw new \Exception("Invalid type for resource $resource_name: $type");
+  }
+}
+
+function op_resource_target_object(object $res): ResourceTarget
+{
+  if (!isset($res->target) || !is_object($res->target)) {
+    return op_normalize_resource_target($res->op_type ?? ($res->is_product ? 'post' : ($res->is_thing ? 'thing' : 'term')), $res->name ?? '');
+  }
+
+  return new ResourceTarget(
+    $res->target->storage,
+    $res->target->post_type ?? null,
+    $res->target->taxonomy ?? null,
+    $res->target->wc_mode ?? ResourceTarget::WC_MODE_NONE,
+    $res->target->wpml_element_type ?? null
+  );
+}
+
+function op_resource_target_storage(object $res): string
+{
+  return op_resource_target_object($res)->storage();
+}
+
+function op_resource_target_post_type(object $res): ?string
+{
+  return op_resource_target_object($res)->postType();
+}
+
+function op_resource_target_taxonomy(object $res): ?string
+{
+  return op_resource_target_object($res)->taxonomy();
+}
+
+function op_resource_target_wc_mode(object $res): string
+{
+  return op_resource_target_object($res)->wcMode();
+}
+
+function op_resource_target_wpml_element_type(object $res): ?string
+{
+  return op_resource_target_object($res)->wpmlElementType();
+}
+
+function op_resource_target_has_woocommerce(object $res): bool
+{
+  return op_resource_target_object($res)->hasWooCommerce();
+}
+
+function op_resource_target_thumbnail_meta_key(object $res): ?string
+{
+  return op_resource_target_object($res)->thumbnailMetaKey();
+}
+
+function op_schema_resources_by_storage(string $storage): array
+{
+  $schema = op_schema();
+  if (!$schema) return [];
+  return array_values(array_filter($schema->resources, function ($res) use ($storage) {
+    return op_resource_target_storage($res) === $storage;
+  }));
+}
+
+function op_schema_wpml_element_types(string $storage): array
+{
+  return array_values(array_unique(array_filter(array_map(function ($res) {
+    return op_resource_target_wpml_element_type($res);
+  }, op_schema_resources_by_storage($storage)))));
 }
 
 function op_resource_types_code_hooks_active(): bool
@@ -305,14 +385,16 @@ function op_resource_type_name_lists(?array $types = null): array
   $term = [];
   $thing = [];
   foreach ($types as $name => $type) {
-    if ($type === 'post') $product[] = $name;
-    elseif ($type === 'term') $term[] = $name;
-    elseif ($type === 'thing') $thing[] = $name;
+    $storage = op_normalize_resource_target($type, $name)->storage();
+    if ($storage === ResourceTarget::STORAGE_POST) $product[] = $name;
+    elseif ($storage === ResourceTarget::STORAGE_TERM) $term[] = $name;
+    elseif ($storage === ResourceTarget::STORAGE_THING) $thing[] = $name;
   }
   return [
     'product_resources' => $product,
     'term_resources' => $term,
     'thing_resources' => $thing,
+    'product_fields' => array_values(WooCommerceFieldMap::adminFields()),
   ];
 }
 
@@ -1274,6 +1356,7 @@ function op_schema(object $set = null)
   if (!$schema) {
     $schema = op_stored_schema();
     if (!$schema) return null;
+    op_apply_resource_types($schema);
     $schema->id_to_res = [];
     $schema->id_to_folder = [];
     $schema->id_to_field = [];
@@ -1560,34 +1643,31 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
 
 
-  $all_items = []; // [res][id][lang] -> wpid
-  $new_items = []; // [res][id][lang] -> wpid
-  $items_with_default_slug = []; // [res][id][lang] -> wpid
   $imported_at = date('Y-m-d H:i:s');
-
   $langs = op_locales();
+  $context = new ImportContext($schema, $schema_json, $langs, $imported_at);
   foreach ($schema->resources as $res) {
     $data = collect($schema_json->resources)->firstWhere('name', $res->name)->data ?? [];
     op_record("Importing $res->label (" . count($data) . " items)...");
-    op_import_resource($schema, $res, $data, $langs, $imported_at, $all_items, $new_items, $items_with_default_slug, $schema_json, $force_slug_regen);
+    op_import_resource($schema, $res, $data, $langs, $imported_at, $context, $schema_json, $force_slug_regen);
     op_record("completed $res->label");
   }
 
   op_record("Importing On Page relations...");
-  op_import_snapshot_relations($schema, $schema_json, $all_items);
+  op_import_snapshot_relations($schema, $schema_json, $context);
   op_record("done");
 
 
   op_record('Deleting old categories...');
-  $disabled_count = op_disable_old_categories($all_items);
+  $disabled_count = op_disable_old_categories($context);
   op_record("deleted $disabled_count categories");
 
   op_record('Disabling old products...');
-  $disabled_count = op_disable_old_products($all_items);
+  $disabled_count = op_disable_old_products($context);
   op_record("disabled $disabled_count products");
 
   op_record('Deleting old things...');
-  $disabled_count = op_delete_old_things($all_items);
+  $disabled_count = op_delete_old_things($context);
   op_record("deleted $disabled_count things");
 
   op_record('Deleting orphaned metadata');
@@ -1598,7 +1678,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record('done');
 
   op_record('Generating slugs...');
-  op_regenerate_import_slug($force_slug_regen ? $all_items : $items_with_default_slug);
+  op_regenerate_import_slug($force_slug_regen ? $context->idMap : $context->defaultSlugItems);
   op_record('done');
 
   op_record('Setting Wordpress parent relation...');
@@ -1607,7 +1687,10 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
 
   op_import_gallery($schema);
 
-  if (function_exists('wc_update_product_lookup_tables')) {
+  $has_woocommerce_resources = collect($schema->resources)->contains(function ($res) {
+    return op_resource_target_has_woocommerce($res);
+  });
+  if ($has_woocommerce_resources && function_exists('wc_update_product_lookup_tables')) {
     wc_update_product_lookup_tables();
   }
   op_record('updating woocommerce product meta');
@@ -1666,10 +1749,10 @@ function op_delete_orphan_meta()
   ];
 }
 
-function op_disable_old_products(array $imported_items): int
+function op_disable_old_products(ImportContext $context): int
 {
   $posts_to_remove = OpLib\Post::pluck('ID')->flip();
-  foreach ($imported_items as $res_id => $res_items) {
+  foreach ($context->idMap as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type !== 'post') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
@@ -1687,7 +1770,7 @@ function op_disable_old_products(array $imported_items): int
   }
   return $posts_to_remove->count();
 }
-function op_disable_old_categories(array $imported_items): int
+function op_disable_old_categories(ImportContext $context): int
 {
   $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
 
@@ -1695,7 +1778,7 @@ function op_disable_old_categories(array $imported_items): int
     $tax_to_remove->forget($wp_id);
   }
 
-  foreach ($imported_items as $res_id => $res_items) {
+  foreach ($context->idMap as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type !== 'term') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
@@ -1715,6 +1798,20 @@ function op_disable_old_categories(array $imported_items): int
 function op_get_static_terms()
 {
   $primary_lang_static_term_ids = op_get_db_static_terms();
+  $term_taxonomies = collect(op_schema()->resources ?? [])
+    ->filter(function ($res) {
+      return ($res->op_type ?? null) === 'term';
+    })
+    ->map(function ($res) {
+      return op_resource_target_taxonomy($res);
+    })
+    ->filter()
+    ->unique()
+    ->values()
+    ->all();
+  if (empty($term_taxonomies)) {
+    $term_taxonomies = ['product_cat'];
+  }
 
   $static_parents = op_get_import_relations();
   foreach ($static_parents as $term_id) {
@@ -1729,18 +1826,20 @@ function op_get_static_terms()
     if (!op_wpml_enabled()) {
       $all_ids[] = $term_id;
     } else {
-      foreach (op_wpml_langs() as $lang) {
-        $all_ids[] = apply_filters('wpml_object_id', $term_id, 'product_cat', true, $lang);
+      foreach ($term_taxonomies as $taxonomy) {
+        foreach (op_wpml_langs() as $lang) {
+          $all_ids[] = apply_filters('wpml_object_id', $term_id, $taxonomy, true, $lang);
+        }
       }
     }
   }
   return $all_ids;
 }
 
-function op_delete_old_things(array $imported_items): int
+function op_delete_old_things(ImportContext $context): int
 {
   $things_to_remove = OpLib\Thing::query()->pluck('id')->flip();
-  foreach ($imported_items as $res_id => $res_items) {
+  foreach ($context->idMap as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type !== 'thing') continue;
     foreach ($res_items as $op_id => $new_item_langs) {
@@ -1761,9 +1860,8 @@ function op_link_imported_data($schema)
   if (empty($relations)) return;
 
   $link_all_parent_categories = (bool) op_getopt('link_all_parent_categories');
-
-  // Only fetch term parent map (used for term-to-term relations)
-  $id_to_parent = DB::table('term_taxonomy')->where('taxonomy', 'product_cat')->pluck('parent', 'term_id');
+  $term_sync_taxonomies = [];
+  $post_sync_types = [];
 
   if (op_wpml_enabled()) {
     op_locale(op_wpml_default());
@@ -1774,18 +1872,25 @@ function op_link_imported_data($schema)
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
     if (!$res) op_err("Cannot find resource $resource_name for import_relations; available resources: " . collect($schema->resources)->pluck('name')->implode(', '));
     $class = op_name_to_class($res->name);
+    $taxonomy = op_resource_target_taxonomy($res);
+    $post_type = op_resource_target_post_type($res);
+    $id_to_parent = $taxonomy
+      ? DB::table('term_taxonomy')->where('taxonomy', $taxonomy)->pluck('parent', 'term_id')
+      : collect();
 
     // Static parent -> static category id
     if (is_numeric($parent_relation)) {
-      $parent_relation = (int) $parent_relation;
+      $parent_term_id = (int) $parent_relation;
       foreach ($class::query()->get() as $child_term) {
+        $resolved_parent_term_id = $parent_term_id;
         // make sure this is the primary language term
         if (op_wpml_enabled()) {
-          $parent_relation = apply_filters('wpml_object_id', $parent_relation, 'product_cat', true, op_wpml_default());
+          $resolved_parent_term_id = apply_filters('wpml_object_id', $parent_term_id, $taxonomy, true, op_wpml_default());
         }
 
         if ($res->op_type === 'post') {
-          $ret = wp_set_post_categories($child_term->id, $parent_relation);
+          $ret = wp_set_object_terms($child_term->id, [$resolved_parent_term_id], $taxonomy, false);
+          $post_sync_types[$post_type] = true;
 
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret]);
@@ -1793,10 +1898,11 @@ function op_link_imported_data($schema)
         } else if ($res->op_type === 'term') {
 
           // Call wp_update_term
-          $ret = wp_update_term($child_term->id, 'product_cat', [
-            'parent' => $parent_relation,
+          $ret = wp_update_term($child_term->id, $taxonomy, [
+            'parent' => $resolved_parent_term_id,
             'slug' => $child_term->slug,
           ]);
+          $term_sync_taxonomies[$taxonomy] = true;
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting Term parent", ['wp_err' => $ret]);
           }
@@ -1826,7 +1932,7 @@ function op_link_imported_data($schema)
             $parent_ids[] = $p->id;
           }
           if (empty($parent_ids)) {
-            $ret = op_set_product_terms_wpml_safe($child_term->id, [], 'product_cat');
+            $ret = op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy);
             if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
               op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
               $error_items++;
@@ -1841,7 +1947,8 @@ function op_link_imported_data($schema)
             }
             continue;
           }
-          $ret = op_set_product_terms_wpml_safe($child_term->id, $parent_ids, 'product_cat');
+          $ret = op_set_product_terms_wpml_safe($child_term->id, $parent_ids, $taxonomy);
+          $post_sync_types[$post_type] = true;
           if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
             $error_items++;
@@ -1862,19 +1969,22 @@ function op_link_imported_data($schema)
         // No parent relation: set NULL as parent category (original behavior)
         if (!$parent_term) {
           if ($res->op_type === 'post') {
-            op_set_product_terms_wpml_safe($child_term->id, [], 'product_cat');
+            op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy);
+            $post_sync_types[$post_type] = true;
           } else if ($res->op_type === 'term') {
-            wp_update_term($child_term->id, 'product_cat', [
+            wp_update_term($child_term->id, $taxonomy, [
               'parent' => 0,
               'slug' => $child_term->slug,
             ]);
+            $term_sync_taxonomies[$taxonomy] = true;
           }
           $updated_items++;
           continue;
         }
 
         if ($res->op_type === 'post') {
-          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term->id], 'product_cat');
+          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term->id], $taxonomy);
+          $post_sync_types[$post_type] = true;
 
           if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
             op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
@@ -1895,10 +2005,11 @@ function op_link_imported_data($schema)
             $skipped_items++;
             continue;
           }
-          $ret = wp_update_term($child_term->id, 'product_cat', [
+          $ret = wp_update_term($child_term->id, $taxonomy, [
             'parent' => $parent_term->id,
             'slug' => $child_term->slug,
           ]);
+          $term_sync_taxonomies[$taxonomy] = true;
           if ($ret instanceof \WP_Error) {
             op_err("Error while setting parent for a relation", ['wp_err' => $ret]);
             $error_items++;
@@ -1919,13 +2030,18 @@ function op_link_imported_data($schema)
 
   if (op_wpml_enabled()) {
     $sync_helper = wpml_get_hierarchy_sync_helper('post');
-    $sync_helper->sync_element_hierarchy('product');
+    foreach (array_keys($post_sync_types) as $sync_post_type) {
+      $sync_helper->sync_element_hierarchy($sync_post_type);
+    }
     $sync_helper = wpml_get_hierarchy_sync_helper('term');
-    $sync_helper->sync_element_hierarchy('product_cat');
+    foreach (array_keys($term_sync_taxonomies) as $sync_taxonomy) {
+      $sync_helper->sync_element_hierarchy($sync_taxonomy);
+    }
   }
 
-  // Reset category count
-  delete_option("product_cat_children");
+  foreach (array_keys($term_sync_taxonomies) as $sync_taxonomy) {
+    delete_option("{$sync_taxonomy}_children");
+  }
 }
 
 function set_op_locale_to_lang(array $set = null)
@@ -1961,7 +2077,193 @@ function op_locale_to_lang(string $locale)
   return $locale;
 }
 
-function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, array &$items_with_default_slug, object $schema_json, bool $force_slug_regen = false)
+function op_should_assign_simple_product_type(object $res): bool
+{
+  return op_resource_target_wc_mode($res) === ResourceTarget::WC_MODE_SIMPLE;
+}
+
+function op_prepare_import_object_data(object $php_class, object $res, object $thing, $object, ?string $lang, object $schema_json, string $imported_at, int $thing_i, string $preferred_name, string $preferred_description, string $preferred_excerpt, string $preferred_slug): array
+{
+  if ($php_class->isThing()) {
+    return [
+      'id' => $thing->id,
+      'resource_id' => $thing->resource_id,
+      'op_order' => $thing_i,
+    ];
+  }
+
+  if ($php_class->isPost()) {
+    $status = 'publish';
+    if (op_getopt('disable_product_status_update')) {
+      if ($object) {
+        $status = $object->post_status;
+      } else {
+        $status = op_getopt('disable_product_status_update_default_status') ?: 'publish';
+      }
+    }
+    if ($status === 'trash') {
+      $status = 'draft';
+    }
+
+    $menu_order = $thing_i;
+    $menu_order_preference = op_getopt("res-{$res->id}-sorting");
+    if ($menu_order_preference == '_wp_sorting') {
+      $menu_order = null;
+    } elseif ($menu_order_preference) {
+      $menu_order = op_extract_value_from_raw_thing($schema_json, $res, $thing, $menu_order_preference, null, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
+      if (is_array($menu_order)) $menu_order = $menu_order[0] ?? null;
+    }
+
+    $data = [
+      'post_author' => 1,
+      'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
+      'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
+      'post_content' => $preferred_description ?: ($object ? $object->post_description : ''),
+      'post_title' => $preferred_name,
+      'post_status' => $status,
+      'post_excerpt' => $preferred_excerpt ?: ($object ? $object->post_excerpt : ''),
+      'comment_status' => $object ? $object->comment_status : 'closed',
+      'ping_status' => $object ? $object->ping_status : 'closed',
+      'post_password' => $object ? $object->post_password : '',
+      'post_name' => $preferred_slug,
+      'to_ping' => '',
+      'pinged' => '',
+      'post_modified' => $object ? $object->post_modified : $imported_at,
+      'post_modified_gmt' => $object ? $object->post_modified_gmt : $imported_at,
+      'post_content_filtered' => '',
+      'post_parent' => 0,
+      'guid' => '',
+      'post_type' => op_resource_target_post_type($res),
+      'post_mime_type' => '',
+      'comment_count' => 0,
+    ];
+    if (strlen("$menu_order")) $data['menu_order'] = (int) $menu_order;
+    return $data;
+  }
+
+  return [
+    'name' => $preferred_name,
+    'slug' => $preferred_slug,
+    'term_group' => 0,
+    'op_order' => $thing_i,
+  ];
+}
+
+function op_upsert_import_object(object $res, object $php_class, ?object $object, array $data, string $base_table, string $base_table_key, string $imported_at): array
+{
+  if ($object) {
+    $object_id = $object->$base_table_key;
+    $data_to_update = [];
+    foreach ($data as $column => $new_value) {
+      if ($object->$column !== $new_value) {
+        $data_to_update[$column] = $new_value;
+      }
+    }
+    if (count($data_to_update)) {
+      if ($php_class->isPost() && op_getopt('enable_imported_at_meta')) {
+        $data_to_update['post_modified'] = $imported_at;
+        $data_to_update['post_modified_gmt'] = $imported_at;
+      }
+      DB::table($base_table)->where($base_table_key, $object_id)->update($data_to_update);
+    }
+    return [$object_id, false];
+  }
+
+  $object_id = DB::table($base_table)->insertGetId($data);
+  if ($php_class->isThing()) {
+    $object_id = $data['id'];
+  }
+  if (!$object_id) {
+    op_err("Cannot insert into $base_table: " . DB::instance()->db->last_error, [
+      'data' => $data,
+    ]);
+  }
+  if ($php_class->isPost() && op_should_assign_simple_product_type($res)) {
+    wp_set_object_terms($object_id, 'simple', 'product_type');
+  }
+
+  return [$object_id, true];
+}
+
+function op_ensure_term_taxonomy_row(object $res, object $php_class, int $object_id): ?int
+{
+  if (!$php_class->isTerm()) {
+    return null;
+  }
+
+  $tax_id = @DB::table('term_taxonomy')->where('term_id', $object_id)->first()->term_taxonomy_id;
+  if (!$tax_id) {
+    $tax_id = DB::table('term_taxonomy')->insertGetId([
+      'term_id' => $object_id,
+      'taxonomy' => op_resource_target_taxonomy($res),
+      'parent' => 0,
+      'count' => 1,
+    ]);
+  }
+  return $tax_id;
+}
+
+function op_build_base_meta(object $res, object $thing, int $object_id, $lang, string $base_tablemeta_ref, string $imported_at, $preferred_image): array
+{
+  $base_meta = [
+    [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_id*',
+      'meta_value' => $thing->id,
+    ],
+    [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_res*',
+      'meta_value' => $res->id,
+    ],
+    [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_lang*',
+      'meta_value' => $lang,
+    ],
+    [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_default_folder_id*',
+      'meta_value' => $thing->default_folder_id ? $thing->default_folder_id : null,
+    ],
+  ];
+
+  if (op_getopt('enable_imported_at_meta')) {
+    $base_meta[] = [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => 'op_imported_at*',
+      'meta_value' => $imported_at,
+    ];
+  }
+
+  $thumbnail_key = op_resource_target_thumbnail_meta_key($res);
+  if ($thumbnail_key) {
+    $base_meta[] = [
+      $base_tablemeta_ref => $object_id,
+      'meta_key' => $thumbnail_key,
+      'meta_value' => $preferred_image ? json_encode($preferred_image) : null,
+    ];
+  }
+
+  return $base_meta;
+}
+
+function op_build_wpml_translation_rows(?string $icl_type, bool $is_primary, ?int $icl_object_id, string $lang, int $icl_trid, ?string $icl_deflang): array
+{
+  if (!$icl_type || !$icl_object_id) {
+    return [];
+  }
+
+  return [[
+    'element_id' => $icl_object_id,
+    'element_type' => $icl_type,
+    'language_code' => $lang,
+    'trid' => $icl_trid,
+    'source_language_code' => $is_primary ? null : $icl_deflang,
+  ]];
+}
+
+function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, ImportContext $context, object $schema_json, bool $force_slug_regen = false)
 {
   $php_class = $res->php_class;
   /** @var \OpLib\MetaFunctions */
@@ -1979,7 +2281,7 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   $base_table_key = $php_class->primaryKey;
   $base_tablemeta_ref = $php_class::$meta_ref;
   $base_class = $res->php_class;
-  $icl_type = !op_wpml_enabled() || $res->is_thing ? null : ($res->is_product ? 'post_product' : 'tax_product_cat');
+  $icl_type = !op_wpml_enabled() || $res->is_thing ? null : op_resource_target_wpml_element_type($res);
   $icl_deflang = op_wpml_default();
 
   // Create map of resource fields [id => field]
@@ -2217,210 +2519,33 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
 
       $preferred_image = op_extract_value_from_raw_thing($schema_json, $res, $thing, op_getopt("res-{$res->id}-fakeimage"), op_getopt("res-{$res->id}-fakeimage-2"), $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
 
-      // Prepare data
-      $data = null;
-      if ($php_class->isThing()) {
-        $data = [
-          'id' => $thing->id,
-          'resource_id' => $thing->resource_id,
-          'op_order' => $thing_i,
-        ];
-      } elseif ($php_class->isPost()) {
-        // Be default we always activate the product for both create/update
-        $status = 'publish';
-
-        // If the user does not want to update the status
-        if (op_getopt('disable_product_status_update')) {
-          // We keep the existing status for updates
-          if ($object) {
-            $status = $object->post_status;
-          } else {
-            // We use the user option for product creation
-            $status = op_getopt('disable_product_status_update_default_status') ?: 'publish';
-          }
-        }
-        if ($status === 'trash') {
-          $status = 'draft';
-        }
-
-        $menu_order = $thing_i;
-        $menu_order_preference = op_getopt("res-{$res->id}-sorting");
-        if ($menu_order_preference == '_wp_sorting') {
-          $menu_order = null;
-        } elseif ($menu_order_preference) {
-          $menu_order = op_extract_value_from_raw_thing($schema_json, $res, $thing, $menu_order_preference, null, $lang ? op_locale_to_lang($lang) : $schema_json->langs[0]);
-          if (is_array($menu_order)) $menu_order = $menu_order[0] ?? null;
-        }
-
-        $data = [
-          'post_author' => 1,
-          'post_date' => $object ? $object->post_date : date('Y-m-d H:i:s'),
-          'post_date_gmt' => $object ? $object->post_date_gmt : date('Y-m-d H:i:s'),
-          'post_content' => $preferred_description ?: ($object ? $object->post_description : ''),
-          'post_title' => $preferred_name,
-          'post_status' => $status,
-          'post_excerpt' => $preferred_excerpt ?: ($object ? $object->post_excerpt : ''),
-          'comment_status' => $object ? $object->comment_status : 'closed',
-          'ping_status' => $object ? $object->ping_status : 'closed',
-          'post_password' => $object ? $object->post_password : '',
-          'post_name' => $preferred_slug,
-          'to_ping' => '',
-          'pinged' => '',
-          'post_modified' => $object ? $object->post_modified : $imported_at,
-          'post_modified_gmt' => $object ? $object->post_modified_gmt : $imported_at,
-          'post_content_filtered' => '',
-          'post_parent' => 0,
-          'guid' => '',
-          'post_type' => 'product',
-          'post_mime_type' => '',
-          'comment_count' => 0,
-        ];
-        if (strlen("$menu_order")) $data['menu_order'] = (int) $menu_order;
-      } elseif ($php_class->isTerm()) {
-        $data = [
-          'name' => $preferred_name,
-          'slug' => $preferred_slug,
-          'term_group' => 0,
-          'op_order' => $thing_i,
-        ];
-      }
+      $data = op_prepare_import_object_data($php_class, $res, $thing, $object, $lang, $schema_json, $imported_at, $thing_i, $preferred_name, $preferred_description, $preferred_excerpt, $preferred_slug);
 
       // op_record("- ready to upsert");
       // Create or update the object
-      if ($object) {
-        $object_id = $object->$base_table_key;
-        $data_to_update = [];
-        foreach ($data as $column => $new_value) {
-          if ($object->$column !== $new_value) {
-            $data_to_update[$column] = $new_value;
-          }
-        }
-        if (count($data_to_update)) {
-          if ($res->is_product && op_getopt('enable_imported_at_meta')) {
-            $data_to_update['post_modified'] = $imported_at;
-            $data_to_update['post_modified_gmt'] = $imported_at;
-          }
-          DB::table($base_table)->where($base_table_key, $object_id)->update($data_to_update);
-        }
-        // op_record("- updated");
-      } else {
-        $object_id = DB::table($base_table)->insertGetId($data);
-
-        // Things use the same onpage id
-        if ($php_class->isThing()) $object_id = $data['id'];
-
-        // Check for errors
-        if (!$object_id) {
-          op_err("Cannot insert into $base_table: " . DB::instance()->db->last_error, [
-            'data' => $data,
-          ]);
-        }
-        if (!$object) {
-          $new_items[$res->id][$thing->id][$lang] = $object_id;
-        }
-
-        // Delete all relations with parents
-        if ($php_class->isPost()) {
-          // DB::table('term_relationships')->where('object_id', $object_id)->delete();
-          wp_set_object_terms($object_id, 'simple', 'product_type');
-          // op_record("- wp_set_object_terms");
-        }
-      }
+      [$object_id, $is_new] = op_upsert_import_object($res, $php_class, $object, $data, $base_table, $base_table_key, $imported_at);
       $object_ids["{$thing->id}-$lang"] = $object_id;
-      $all_items[$res->id][$thing->id][$lang] = $object_id;
-      if ($preferred_slug === $default_slug) {
-        $items_with_default_slug[$res->id][$thing->id][$lang] = $object_id;
-      }
+      $context->addImportedItem($res->id, $thing->id, $lang, $object_id, $is_new, $preferred_slug === $default_slug);
 
-      $tax_id = null;
-      if ($php_class->isTerm()) {
-        $tax_id = @DB::table('term_taxonomy')->where('term_id', $object_id)->first()->term_taxonomy_id;
-        if (!$tax_id) {
-          $tax_id = DB::table('term_taxonomy')->insertGetId([
-            'term_id' => $object_id,
-            'taxonomy' => 'product_cat',
-            'parent' => 0,
-            'count' => 1,
-          ]);
-        }
-        // op_record("- updated tax");
-      }
+      $tax_id = op_ensure_term_taxonomy_row($res, $php_class, $object_id);
 
 
       // Calculate base meta
-      $base_meta = [];
-      // These fields are immutable and only created during the first import
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_id*',
-        'meta_value' => $thing->id,
-      ];
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_res*',
-        'meta_value' => $res->id,
-      ];
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_lang*',
-        'meta_value' => $lang,
-      ];
-
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => 'op_default_folder_id*',
-        'meta_value' => $thing->default_folder_id ? $thing->default_folder_id : null,
-      ];
-
-      if (op_getopt('enable_imported_at_meta')) {
-        $base_meta[] = [
-            $base_tablemeta_ref => $object_id,
-            'meta_key' => 'op_imported_at*',
-            'meta_value' => $imported_at,
-        ];
-      }
-
-      $base_meta[] = [
-        $base_tablemeta_ref => $object_id,
-        'meta_key' => $res->is_product ? '_thumbnail_id' : 'thumbnail_id',
-        'meta_value' => $preferred_image ? json_encode($preferred_image) : null,
-      ];
-
-      op_array_append($all_meta, $base_meta);
+      op_array_append($all_meta, op_build_base_meta($res, $thing, $object_id, $lang, $base_tablemeta_ref, $imported_at, $preferred_image));
       op_array_append($all_meta, op_generate_data_meta($schema_json, $res, $thing, $object_id, $field_map, $base_tablemeta_ref));
 
       // If this is the primary language
       if ($icl_type) {
-        $icl_object_id = $res->is_product ? $object_id : $tax_id;
+        $icl_object_id = op_resource_target_storage($res) === ResourceTarget::STORAGE_POST ? $object_id : $tax_id;
         $all_icl_object_ids[] = $icl_object_id;
         if (!$icl_object_id) {
           op_err("cannot get taxonomy id: $object_id-$tax_id");
         }
 
         if ($is_primary) {
-          // Mark item as primary - others are translations
           $icl_primary_id = $object_id;
-
-          // Recreate the metadata
-
-          // Create icl translation
-          $icl_translations[] = [
-            'element_id' => $icl_object_id,
-            'element_type' => $icl_type,
-            'language_code' => $lang,
-            'trid' => $icl_trid,
-            'source_language_code' => null,
-          ];
-        } else {
-          // No metadata for the secondary items - only the essentials
-          $icl_translations[] = [
-            'element_id' => $icl_object_id,
-            'element_type' => $icl_type,
-            'language_code' => $lang,
-            'trid' => $icl_trid,
-            'source_language_code' => $icl_deflang,
-          ];
         }
+        op_array_append($icl_translations, op_build_wpml_translation_rows($icl_type, $is_primary, $icl_object_id, $lang, $icl_trid, $icl_deflang));
       } // end icl
       // op_record("- end lang");
     } // end langs cycle
@@ -2439,8 +2564,21 @@ function op_array_append(array &$array, array $values)
 
 function op_remove_corrupted()
 {
+  $post_types = array_values(array_unique(array_filter(array_map(function ($res) {
+    return op_resource_target_post_type($res);
+  }, op_schema_resources_by_storage(ResourceTarget::STORAGE_POST)))));
+  if (empty($post_types)) {
+    $post_types = ['product'];
+  }
+  $term_taxonomies = array_values(array_unique(array_filter(array_map(function ($res) {
+    return op_resource_target_taxonomy($res);
+  }, op_schema_resources_by_storage(ResourceTarget::STORAGE_TERM)))));
+  if (empty($term_taxonomies)) {
+    $term_taxonomies = ['product_cat'];
+  }
+
   $deleted_posts = OpLib\Post::withoutGlobalScopes()
-    ->where('post_type', 'product')
+    ->whereIn('post_type', $post_types)
     ->where(function ($q) {
       $q->whereDoesntHave('meta', function ($meta_query) {
         $meta_query->where('meta_key', 'op_id*');
@@ -2458,7 +2596,7 @@ function op_remove_corrupted()
   $deleted_terms = OpLib\Term::withoutGlobalScopes()
     ->whereNotIn('term_id', op_get_static_terms())
     ->whereHas('taxonomies', function ($tax_query) {
-      $tax_query->where('taxonomy', 'product_cat');
+      $tax_query->whereIn('taxonomy', $term_taxonomies);
     })
     ->where(function ($q) {
       $q->whereDoesntHave('meta', function ($meta_query) {
@@ -2599,7 +2737,7 @@ function op_regenerate_items_slug($res, $items, bool $trigger_wp_actions = true)
 }
 
 
-function op_import_snapshot_relations($schema, $json, array $all_items)
+function op_import_snapshot_relations($schema, $json, ImportContext $context)
 {
   $langs = op_locales();
   $resources = collect($schema->resources)->keyBy('id');
@@ -2651,7 +2789,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
 
     foreach ($data as $thing) {
       // Things have only the null lang
-      foreach ($all_items[$res->id][$thing->id] as $lang => $wp_id) {
+      foreach ($context->languagesForItem($res->id, $thing->id) as $lang => $wp_id) {
 
         $item_meta = [];
         $fast_check = [];
@@ -2683,7 +2821,7 @@ function op_import_snapshot_relations($schema, $json, array $all_items)
           foreach ($tids as $rel_tid) {
             foreach ($relation_langs as $rel_lang) {
               $tick('start cycle');
-              $rel_wp_id = $all_items[$target_res->id][$rel_tid][$rel_lang];
+              $rel_wp_id = $context->wpId($target_res->id, $rel_tid, $rel_lang);
               $fast_check[$field->id][] = $rel_wp_id;
               $tick('pushed fast check');
               $item_meta[] = [
@@ -2819,64 +2957,8 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     }
   }
 
-  // Append the price and other woocommerce metadata
-  if ($res->is_product) {
-    $yes_no = function ($v) {
-      return $v ? 'yes' : 'no';
-    };
-    $meta_map = [
-      '_regular_price' => [
-        'option' => 'price',
-      ],
-      '_sale_price' => [
-        'option' => 'discounted-price',
-      ],
-      '_sale_price_dates_from' => [
-        'option' => 'discounted-start-date',
-      ],
-      '_sale_price_dates_to' => [
-        'option' => 'discounted-end-date',
-      ],
-      '_sku' => [
-        'option' => 'sku',
-      ],
-      '_weight' => [
-        'option' => 'weight',
-      ],
-      '_width' => [
-        'option' => 'width',
-      ],
-      '_length' => [
-        'option' => 'length',
-      ],
-      '_height' => [
-        'option' => 'height',
-      ],
-      '_downloadable' => [
-        'option' => 'downloadable', // yes|no
-        'mapper' => $yes_no,
-      ],
-      '_low_stock_amount' => [
-        'option' => 'low_stock_amount',
-      ],
-      '_manage_stock' => [
-        'option' => 'manage_stock', // yes|no
-        'mapper' => $yes_no,
-      ],
-      '_stock' => [
-        'option' => 'stock',
-      ],
-      '_stock_status' => [
-        'option' => 'stock_status', // instock|outofstock|onbackorder
-        'mapper' => function ($v) {
-          return $v ? 'instock' : 'outofstock';
-        },
-      ],
-      '_virtual' => [
-        'option' => 'virtual', // yes|no
-        'mapper' => $yes_no,
-      ],
-    ];
+  if (op_resource_target_has_woocommerce($res)) {
+    $meta_map = WooCommerceFieldMap::metaDefinitions();
 
     // Fill values using the mapping above
     $values = [];
@@ -2921,7 +3003,7 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
     $values['_price'] = @$values['_sale_price'] && $sale_period_active ? @$values['_sale_price'] : @$values['_regular_price'];
 
     foreach ($values as $meta_key => $value) {
-      $meta[] = ['post_id' => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key];
+      $meta[] = [$base_tablemeta_ref => $object_id, 'meta_value' => $value, 'meta_key' => $meta_key];
     }
   }
 
@@ -2932,17 +3014,33 @@ function op_gen_model(object $schema, object $res)
 {
   $camel_name = op_snake_to_camel($res->name);
   $extends = $res->php_class;
-
+  $target = op_resource_target_object($res);
   $extends_lc = strtolower(basename(str_replace('\\', '/', $extends)));
+  $scope_lines = [
+    "    self::addGlobalScope('_op-lang', function(\\$q) {",
+    "      \\$q->localized();",
+    "    });",
+  ];
+  if ($target->isPost()) {
+    $post_type = var_export($target->postType(), true);
+    $scope_lines[] = "    self::addGlobalScope('_op-target-post-type', function(\\$q) {";
+    $scope_lines[] = "      \\$q->where('post_type', {$post_type});";
+    $scope_lines[] = "    });";
+  } elseif ($target->isTerm()) {
+    $taxonomy = var_export($target->taxonomy(), true);
+    $scope_lines[] = "    self::addGlobalScope('_op-target-taxonomy', function(\\$q) {";
+    $scope_lines[] = "      \\$q->whereHas('taxonomies', function(\\$tax_query) {";
+    $scope_lines[] = "        \\$tax_query->where('taxonomy', {$taxonomy});";
+    $scope_lines[] = "      });";
+    $scope_lines[] = "    });";
+  }
 
   $code = "<?php\nnamespace Op; \n";
   $code .= "class $camel_name extends \\{$extends} {\n";
-  $code .= "  public static function boot() {
-    parent::boot();
-    self::addGlobalScope('_op-lang', function(\$q) {
-      \$q->localized();
-    });
-  }\n";
+  $code .= "  public static function boot() {\n";
+  $code .= "    parent::boot();\n";
+  $code .= implode("\n", $scope_lines) . "\n";
+  $code .= "  }\n";
   $code .= "  public static function getResource() {
     return op_schema()->name_to_res['{$res->name}'];
   }\n";
@@ -3499,6 +3597,7 @@ function op_resize_fallback($src_path, $dest_path, $params = [])
 function op_reset_data(callable $post_scope = null, callable $term_scope = null)
 {
   $wpml_enabled = op_wpml_enabled();
+  $post_element_types = op_schema_wpml_element_types(ResourceTarget::STORAGE_POST);
   ini_set('memory_limit', '1G');
   set_time_limit(30);
   try {
@@ -3513,9 +3612,9 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
       }
       $post_ids = $query->pluck('ID');
       if ($post_ids->isEmpty()) break;
-      if ($wpml_enabled) {
+      if ($wpml_enabled && !empty($post_element_types)) {
         DB::table('icl_translations')
-          ->where('element_type', 'post_product')
+          ->whereIn('element_type', $post_element_types)
           ->whereIn('element_id', $post_ids)
           ->delete();
       }
@@ -3559,9 +3658,10 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
 
 function op_delete_taxonomies_and_terms($taxonomies)
 {
-  if (op_wpml_enabled()) {
+  $term_element_types = op_schema_wpml_element_types(ResourceTarget::STORAGE_TERM);
+  if (op_wpml_enabled() && !empty($term_element_types)) {
     DB::table('icl_translations')
-      ->where('element_type', 'tax_product_cat')
+      ->whereIn('element_type', $term_element_types)
       ->whereIn('element_id', $taxonomies->pluck('term_taxonomy_id'))
       ->delete();
   }

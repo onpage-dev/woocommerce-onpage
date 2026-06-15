@@ -19,10 +19,6 @@ class Post extends Model {
 
   public static function boot() {
     parent::boot();
-
-    self::addGlobalScope('_op-post-type-product', function($q) {
-      $q->where('post_type', 'product');
-    });
     self::addGlobalScope('_op-post-status-publish', function($q) {
       $q->where('post_status', 'publish');
     });
@@ -45,7 +41,10 @@ class Post extends Model {
   }
 
   public function icl_translation() {
-    return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', 'post_product');
+    $element_type = method_exists(static::class, 'getResource')
+      ? op_resource_target_wpml_element_type(static::getResource())
+      : 'post_product';
+    return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', $element_type);
   }
 
   public function scopePublish($q) {
