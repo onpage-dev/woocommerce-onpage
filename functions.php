@@ -373,6 +373,41 @@ function op_schema_wpml_element_types(string $storage): array
   }, op_schema_resources_by_storage($storage)))));
 }
 
+function op_schema_target_post_types(): array
+{
+  $post_types = array_values(array_unique(array_filter(array_map(function ($res) {
+    return op_resource_target_post_type($res);
+  }, op_schema_resources_by_storage(ResourceTarget::STORAGE_POST)))));
+
+  return empty($post_types) ? ['product'] : $post_types;
+}
+
+function op_schema_target_taxonomies(): array
+{
+  $taxonomies = array_values(array_unique(array_filter(array_map(function ($res) {
+    return op_resource_target_taxonomy($res);
+  }, op_schema_resources_by_storage(ResourceTarget::STORAGE_TERM)))));
+
+  return empty($taxonomies) ? ['product_cat'] : $taxonomies;
+}
+
+function op_link_assignment_taxonomy(object $res, $parent_relation = null): ?string
+{
+  if (op_resource_target_storage($res) === ResourceTarget::STORAGE_TERM) {
+    return op_resource_target_taxonomy($res);
+  }
+
+  if (is_object($parent_relation) && isset($parent_relation->rel_res_id)) {
+    $target_res = op_schema()->id_to_res[$parent_relation->rel_res_id] ?? null;
+    if ($target_res) {
+      return op_resource_target_taxonomy($target_res);
+    }
+  }
+
+  $taxonomies = op_schema_target_taxonomies();
+  return $taxonomies[0] ?? 'product_cat';
+}
+
 function op_resource_types_code_hooks_active(): bool
 {
   return has_filter('op_resource_types') || has_filter('on_page_product_resources');
@@ -1751,7 +1786,11 @@ function op_delete_orphan_meta()
 
 function op_disable_old_products(ImportContext $context): int
 {
-  $posts_to_remove = OpLib\Post::pluck('ID')->flip();
+  $post_types = op_schema_target_post_types();
+  $posts_to_remove = OpLib\Post::withoutGlobalScopes()
+    ->whereIn('post_type', $post_types)
+    ->pluck('ID')
+    ->flip();
   foreach ($context->idMap as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type !== 'post') continue;
@@ -1772,7 +1811,11 @@ function op_disable_old_products(ImportContext $context): int
 }
 function op_disable_old_categories(ImportContext $context): int
 {
-  $tax_to_remove = OpLib\TermTaxonomy::get()->keyBy('term_id');
+  $taxonomies = op_schema_target_taxonomies();
+  $tax_to_remove = OpLib\TermTaxonomy::query()
+    ->whereIn('taxonomy', $taxonomies)
+    ->get()
+    ->keyBy('term_id');
 
   foreach (op_get_static_terms() as $wp_id) {
     $tax_to_remove->forget($wp_id);
@@ -1872,7 +1915,12 @@ function op_link_imported_data($schema)
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
     if (!$res) op_err("Cannot find resource $resource_name for import_relations; available resources: " . collect($schema->resources)->pluck('name')->implode(', '));
     $class = op_name_to_class($res->name);
-    $taxonomy = op_resource_target_taxonomy($res);
+    $relation_field = null;
+    if (!is_numeric($parent_relation)) {
+      $relation_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
+      if (!$relation_field) op_err("Cannot find relation $parent_relation for import_relations on resource $resource_name");
+    }
+    $taxonomy = op_link_assignment_taxonomy($res, $relation_field);
     $post_type = op_resource_target_post_type($res);
     $id_to_parent = $taxonomy
       ? DB::table('term_taxonomy')->where('taxonomy', $taxonomy)->pluck('parent', 'term_id')
@@ -1910,9 +1958,6 @@ function op_link_imported_data($schema)
       }
     } else {
       // Parent relation is a relation name
-      $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
-      if (!$rel_field) op_err("Cannot find relation $parent_relation for import_relations on resource $resource_name");
-
       $terms = $class::query()->withoutMeta()->with([
         $parent_relation => function ($q) {
           $q->withoutMeta();
