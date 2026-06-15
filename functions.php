@@ -19,6 +19,11 @@ define('OP_WP_PREFIX', $wpdb->prefix);
 
 $___op_conf = (object)[
   'op_fallback_langs' => [],
+  'locale_to_lang' => [],
+  'legacy_locale_to_lang_called' => false,
+  'legacy_fallback_lang_called' => false,
+  'language_config_scope' => 0,
+  'language_config_loaded' => false,
 ];
 
 function op_debug()
@@ -193,6 +198,13 @@ function op_initdb()
     op_migrate_api_token();
     op_setopt('migration', 74);
   }
+
+  if (op_settings()->migration < 75) {
+    op_migrate_language_settings();
+    op_setopt('migration', 75);
+  }
+
+  op_internal_bootstrap_language_config(true);
 }
 
 function op_resource_types_to_array($types): array
@@ -565,6 +577,293 @@ function op_migrate_api_token(): void
   }
 }
 
+function op_assoc_array($value): array
+{
+  if (is_array($value)) return $value;
+  if (is_object($value)) return (array) $value;
+  return [];
+}
+
+function op_internal_normalize_locale_key(string $locale): string
+{
+  return strtolower(str_replace('-', '_', $locale));
+}
+
+function op_internal_language_config_begin(): void
+{
+  global $___op_conf;
+  $___op_conf->language_config_scope++;
+}
+
+function op_internal_language_config_end(): void
+{
+  global $___op_conf;
+  $___op_conf->language_config_scope = max(0, $___op_conf->language_config_scope - 1);
+}
+
+function op_internal_language_config_active(): bool
+{
+  global $___op_conf;
+  return $___op_conf->language_config_scope > 0;
+}
+
+function op_internal_set_locale_to_lang(array $map): array
+{
+  global $___op_conf;
+  $locales = [];
+  foreach ($map as $wpml_locale => $op_lang) {
+    if (!is_string($wpml_locale) || !is_string($op_lang)) continue;
+    $key = op_internal_normalize_locale_key($wpml_locale);
+    $val = trim($op_lang);
+    if ($key === '' || $val === '') continue;
+    $locales[$key] = $val;
+  }
+  $___op_conf->locale_to_lang = $locales;
+  return $locales;
+}
+
+function op_internal_get_locale_to_lang(): array
+{
+  global $___op_conf;
+  return op_assoc_array($___op_conf->locale_to_lang ?? []);
+}
+
+function op_internal_set_fallback_lang(string $missing, array $fallback): void
+{
+  global $___op_conf;
+  $___op_conf->op_fallback_langs[$missing] = array_values($fallback);
+}
+
+function op_schema_langs_for_settings(): ?array
+{
+  $schema = op_stored_schema();
+  if (!$schema || empty($schema->langs) || !is_array($schema->langs)) return null;
+  return $schema->langs;
+}
+
+function op_is_valid_onpage_lang(string $lang, ?array $schema_langs = null): bool
+{
+  $lang = trim($lang);
+  if ($lang === '') return false;
+  $schema_langs = $schema_langs ?? op_schema_langs_for_settings();
+  if ($schema_langs) return in_array($lang, $schema_langs, true);
+  return (bool) preg_match('/^[a-z][a-z0-9_]*$/i', $lang);
+}
+
+function op_sanitize_locale_to_lang($map): array
+{
+  if (!op_wpml_enabled()) return [];
+
+  $map = op_assoc_array($map);
+  $schema_langs = op_schema_langs_for_settings();
+  $wpml_locales = array_flip(op_wpml_configured_locales());
+  $out = [];
+  foreach ($map as $locale => $lang) {
+    if (!is_string($locale) || !is_string($lang)) continue;
+    $locale = op_internal_normalize_locale_key($locale);
+    $lang = trim($lang);
+    if ($locale === '' || !op_is_valid_onpage_lang($lang, $schema_langs)) continue;
+    if (!isset($wpml_locales[$locale])) continue;
+    $out[$locale] = $lang;
+  }
+  return $out;
+}
+
+function op_sanitize_fallback_langs($map): array
+{
+  $map = op_assoc_array($map);
+  $schema_langs = op_schema_langs_for_settings();
+  if (!$schema_langs || count($schema_langs) < 2) return [];
+
+  $allowed = array_flip($schema_langs);
+  $out = [];
+  foreach ($map as $lang => $chain) {
+    if (!is_string($lang)) continue;
+    $lang = trim($lang);
+    if ($lang === '' || !isset($allowed[$lang])) continue;
+    if (!is_array($chain)) continue;
+    $sanitized_chain = [];
+    foreach ($chain as $fallback) {
+      if (!is_string($fallback)) continue;
+      $fallback = trim($fallback);
+      if ($fallback === '' || $fallback === $lang) continue;
+      if (!isset($allowed[$fallback])) continue;
+      if (!in_array($fallback, $sanitized_chain, true)) {
+        $sanitized_chain[] = $fallback;
+      }
+    }
+    if ($sanitized_chain) {
+      $out[$lang] = $sanitized_chain;
+    }
+  }
+  return $out;
+}
+
+function op_get_db_locale_to_lang(): array
+{
+  return op_sanitize_locale_to_lang(op_getopt('locale_to_lang', []));
+}
+
+function op_get_db_fallback_langs(): array
+{
+  return op_sanitize_fallback_langs(op_getopt('fallback_langs', []));
+}
+
+function op_language_settings_in_db(): bool
+{
+  $settings = op_settings();
+  return property_exists($settings, 'locale_to_lang') || property_exists($settings, 'fallback_langs');
+}
+
+function op_migrate_language_settings(): void
+{
+  if (op_language_settings_in_db()) return;
+
+  global $___op_conf;
+
+  $legacy_locales = op_internal_get_locale_to_lang();
+  $legacy_fallbacks = op_assoc_array($___op_conf->op_fallback_langs ?? []);
+
+  if (!empty($legacy_locales)) {
+    op_setopt('locale_to_lang', op_sanitize_locale_to_lang($legacy_locales));
+    op_setopt('locale_to_lang_migrated_from', 'code');
+    op_setopt('locale_to_lang_migrated_at', date('c'));
+  }
+  if (!empty($legacy_fallbacks)) {
+    op_setopt('fallback_langs', op_sanitize_fallback_langs($legacy_fallbacks));
+    op_setopt('fallback_langs_migrated_from', 'code');
+    op_setopt('fallback_langs_migrated_at', date('c'));
+  }
+}
+
+function op_internal_bootstrap_language_config(bool $force = false): void
+{
+  global $___op_conf;
+  if (!$force && !empty($___op_conf->language_config_loaded)) return;
+
+  op_internal_language_config_begin();
+  try {
+    $___op_conf->op_fallback_langs = [];
+    $___op_conf->locale_to_lang = [];
+    op_internal_set_locale_to_lang(op_get_db_locale_to_lang());
+    foreach (op_get_db_fallback_langs() as $lang => $chain) {
+      op_internal_set_fallback_lang($lang, $chain);
+    }
+    $___op_conf->language_config_loaded = true;
+  } finally {
+    op_internal_language_config_end();
+  }
+}
+
+function op_internal_ensure_language_config_loaded(): void
+{
+  global $___op_conf;
+  if (empty($___op_conf->language_config_loaded)) {
+    op_internal_bootstrap_language_config();
+  }
+}
+
+function op_language_legacy_code_active(): bool
+{
+  global $___op_conf;
+  return !empty($___op_conf->legacy_locale_to_lang_called)
+    || !empty($___op_conf->legacy_fallback_lang_called);
+}
+
+function op_wpml_language_ui_config(): array
+{
+  if (!op_wpml_enabled()) {
+    return [
+      'enabled' => false,
+      'default_code' => null,
+      'languages' => [],
+    ];
+  }
+
+  $active = apply_filters('wpml_active_languages', null);
+  if (!is_array($active)) {
+    return [
+      'enabled' => true,
+      'default_code' => op_wpml_default(),
+      'languages' => [],
+    ];
+  }
+
+  $default = op_wpml_default();
+  $languages = [];
+  foreach ($active as $code => $lang) {
+    if (!is_array($lang)) continue;
+    $locale = op_internal_normalize_locale_key($lang['default_locale'] ?? $code);
+    $languages[] = [
+      'code' => (string) $code,
+      'locale' => $locale,
+      'name' => $lang['display_name'] ?? $lang['native_name'] ?? $code,
+      'native_name' => $lang['native_name'] ?? $code,
+      'is_default' => (string) $code === (string) $default,
+    ];
+  }
+
+  usort($languages, function ($a, $b) {
+    if ($a['is_default'] !== $b['is_default']) return $a['is_default'] ? -1 : 1;
+    return 0;
+  });
+
+  return [
+    'enabled' => true,
+    'default_code' => $default,
+    'languages' => $languages,
+  ];
+}
+
+function op_wpml_configured_locales(): array
+{
+  $wpml = op_wpml_language_ui_config();
+  if (!$wpml['enabled']) return [];
+
+  $locales = [];
+  foreach ($wpml['languages'] as $lang) {
+    $locales[$lang['locale']] = $lang['locale'];
+  }
+  return array_values($locales);
+}
+
+function op_guess_onpage_lang_for_wpml(string $wpml_code, string $locale, array $schema_langs): ?string
+{
+  if (in_array($wpml_code, $schema_langs, true)) return $wpml_code;
+  if (in_array($locale, $schema_langs, true)) return $locale;
+  $prefix = explode('_', $locale)[0];
+  if (in_array($prefix, $schema_langs, true)) return $prefix;
+  return null;
+}
+
+function op_wpml_onpage_langs_for_settings(): array
+{
+  if (!op_wpml_enabled()) return [];
+
+  $schema_langs = op_schema_langs_for_settings() ?? [];
+  if (!$schema_langs) return [];
+
+  $locale_map = op_get_db_locale_to_lang();
+  $wpml = op_wpml_language_ui_config();
+  $out = [];
+  $seen = [];
+
+  foreach ($wpml['languages'] as $lang) {
+    $op_lang = $locale_map[$lang['locale']] ?? null;
+    if ($op_lang && in_array($op_lang, $schema_langs, true) && !isset($seen[$op_lang])) {
+      $seen[$op_lang] = true;
+      $out[] = $op_lang;
+    }
+  }
+
+  return $out;
+}
+
+function op_wpml_locale_hints(): array
+{
+  return op_wpml_configured_locales();
+}
+
 function op_search_product_categories(string $search, int $limit = 20): array
 {
   $args = [
@@ -917,11 +1216,20 @@ function op_langs()
 
 function op_set_fallback_lang(string $missing, array $fallback)
 {
+  if (op_internal_language_config_active()) {
+    op_internal_set_fallback_lang($missing, $fallback);
+    return;
+  }
+
   global $___op_conf;
-  $___op_conf->op_fallback_langs[$missing] = $fallback;
+  $___op_conf->legacy_fallback_lang_called = true;
+  op_internal_set_fallback_lang($missing, $fallback);
 }
+
 function op_fallback_langs($lang = null)
 {
+  op_internal_ensure_language_config_loaded();
+
   global $___op_conf;
   if (!$lang) $lang = op_locale_to_lang(op_locale());
   $fallback_langs = [$lang];
@@ -931,7 +1239,10 @@ function op_fallback_langs($lang = null)
     if (strlen($lang) > 2) {
       $fallback_langs[] = substr($lang, 0, 2);
     }
-    $fallback_langs[] = op_schema()->langs[0];
+    $schema = op_schema();
+    if ($schema && !empty($schema->langs)) {
+      $fallback_langs[] = $schema->langs[0];
+    }
   }
   return $fallback_langs;
 }
@@ -1619,25 +1930,32 @@ function op_link_imported_data($schema)
 
 function set_op_locale_to_lang(array $set = null)
 {
-  static $locales = [];
-  if ($set) {
-    $locales = [];
-    foreach ($set as $wpml_locale => $op_lang) {
-      $locales[strtolower(str_replace('-', '_', $wpml_locale))] = $op_lang;
+  if ($set !== null) {
+    if (op_internal_language_config_active()) {
+      return op_internal_set_locale_to_lang($set);
     }
+
+    global $___op_conf;
+    $___op_conf->legacy_locale_to_lang_called = true;
+    return op_internal_set_locale_to_lang($set);
   }
-  return $locales;
+
+  op_internal_ensure_language_config_loaded();
+  return op_internal_get_locale_to_lang();
 }
 
 function op_locale_to_lang(string $locale)
 {
-  $locale = strtolower(str_replace('-', '_', $locale));
+  op_internal_ensure_language_config_loaded();
 
-  $locales = set_op_locale_to_lang();
+  $locale = op_internal_normalize_locale_key($locale);
+
+  $locales = op_internal_get_locale_to_lang();
   if (isset($locales[$locale])) return $locales[$locale];
 
-  $schema_langs = op_schema()->langs ?? [];
-  if (in_array($locale, $schema_langs)) return $locale;
+  $schema = op_schema();
+  $schema_langs = $schema->langs ?? [];
+  if (in_array($locale, $schema_langs, true)) return $locale;
 
   $locale = explode('_', $locale)[0];
   return $locale;

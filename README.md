@@ -9,7 +9,7 @@ You can create a project snapshot (and the corresponding token) using the __Snap
 
 | Menu | Purpose |
 |------|---------|
-| **WooCommerce → OnPage Importer** | Snapshot token, run imports, field mappings, resource types, protected categories, file settings, plugin update |
+| **WooCommerce → OnPage Importer** | Snapshot token, run imports, field mappings, resource types, protected categories, file settings, language mapping, plugin update |
 | **WooCommerce → OnPage Cron Import** | API token for headless/cron imports, live curl and wp-cli command builder |
 
 Importer tabs: **Setup**, **Data Importer**, **Import settings**, **Variables**, **Update**.
@@ -117,6 +117,41 @@ define('OP_THUMBNAIL_FORMAT', 'webp');
 On plugin upgrade, legacy hooks and constants are auto-migrated into the database. If the importer shows a removal notice, delete the old config from your theme or `wp-config.php` — the database is the only source of truth after migration.
 
 `OP_API_TOKEN` is migrated the same way (migration 74) into **OnPage Cron Import**.
+
+</details>
+
+### Language mapping
+
+Configure in **Import settings → Language mapping** (requires a saved snapshot so OnPage languages are known).
+
+**WPML → OnPage locale mapping** (WPML active only)
+
+- Map each active WPML language to an OnPage language code via dropdowns.
+- Use when WPML locale codes differ from OnPage (e.g. WPML `en` → OnPage `en_gb`).
+- Unmapped locales still resolve automatically (e.g. `de_de` → `de`).
+- Without WPML, WordPress locales are matched to OnPage automatically — no mapping UI.
+
+**Fallback chains** (OnPage project has two or more languages)
+
+- Define, per OnPage language, which other languages to try **in order** when a translation is missing.
+- Use the step builder (↑/↓ reorder, add/remove steps).
+- If no custom chain is set, the importer tries the country-free variant (e.g. `de` for `de_au`) then the primary OnPage project language.
+
+On upgrade, legacy theme calls are auto-migrated once (migration 75). DB settings are canonical after migration.
+
+<details>
+<summary>Legacy theme code (deprecated)</summary>
+
+```php
+// Deprecated — use Import settings → Language mapping instead
+set_op_locale_to_lang([
+  'en_us' => 'en_gb',
+]);
+
+op_set_fallback_lang('no', ['en', 'it']);
+```
+
+Legacy public functions still exist for migration seeding; the importer shows a removal notice if theme code still calls them. Runtime reads DB via internal `op_internal_*` helpers only.
 
 </details>
 
@@ -365,7 +400,7 @@ $cat->products; // A collection of products
 
 # Hooks
 
-Active developer hooks not covered by Import settings.
+Optional developer hooks not covered by Import settings (slug customization). Language mapping and fallback chains are configured in the UI — see **Language mapping** above.
 
 ## Import completed
 A hook called whenever an import has completed, you can use it to regenerate the cache of the website.
@@ -405,25 +440,14 @@ add_action('op_gen_slug', function($item) {
 
 # Advanced language options
 
+Runtime behaviour for templates and import:
 
-### Setting up fallback languages
-By default, if no value is found in the current project, the system will fallback to the main project language.
-If the current language is country-specific (e.g. de_AU) then the system will also try the country-free alternative "de".
-If you need to use alternative languages when translations are missing, you can setup your own fallback languages:
-```php
-// When Norwegian is empty, try to find a value in the English or Italian language
-op_set_fallback_lang('no', ['en', 'it']);
-```
+- **Current language** — from WPML (`ICL_LANGUAGE_CODE`) or WordPress `get_locale()`, then mapped via DB `locale_to_lang` when WPML mappings exist.
+- **`->val('field')`** — uses `op_fallback_langs()` for translatable fields; order matters when custom chains are configured in the UI.
 
-### Mapping WPML locale to On Page language
-You can map WPML locales to a specific On Page language just like the following:
-```php
-// a map of WPML_LOCALE => OP_LANGUAGE to use
-set_op_locale_to_lang([
-  'en' => 'en_gb',
-]);
-```
+Default fallback (no custom chain): current OnPage language → country-free variant → primary OnPage project language.
 
+Legacy PHP APIs (`set_op_locale_to_lang`, `op_set_fallback_lang`) are deprecated — configure in **Import settings → Language mapping** instead.
 
 
 # Example templates

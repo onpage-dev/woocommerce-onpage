@@ -260,6 +260,80 @@
   #op-app .op-static-term-results li:hover {
     background: #56bd4814;
   }
+
+  #op-app .op-lang-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 0.75rem 0 1.5rem;
+  }
+
+  #op-app .op-lang-add-row.op-fallback-add {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #op-app .op-fallback-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 36rem;
+  }
+
+  #op-app .op-fallback-chain-primary {
+    font-weight: 600;
+  }
+
+  #op-app .op-fallback-chain-arrow {
+    color: #646970;
+    user-select: none;
+  }
+
+  #op-app .op-fallback-chain-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  #op-app .op-fallback-chain-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem 0.35rem;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+  }
+
+  #op-app .op-fallback-chain-step button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #646970;
+    padding: 0 0.2rem;
+    line-height: 1;
+    font-size: 0.85rem;
+  }
+
+  #op-app .op-fallback-chain-step button:hover:not(:disabled) {
+    color: #2271b1;
+  }
+
+  #op-app .op-fallback-chain-step button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  #op-app .op-fallback-chain-add {
+    min-width: 9rem;
+  }
+
+  #op-app .op-lang-field-error {
+    color: #b32d2e;
+    margin: 0.25rem 0 0;
+  }
 </style>
 
 <div id="op-app" style="margin-right: 2rem" v-cloak>
@@ -289,6 +363,14 @@
       Protected categories are now managed in <strong>Import settings</strong> and stored in the database.
       Please remove <code>add_filter('op_static_terms', …)</code> from your theme <code>functions.php</code> —
       the code hook is ignored and this notice will stay until you remove it.
+    </div>
+
+    <div v-if="languageLegacyCodeActive" class="op-notice op-header-notice">
+      <strong>Remove theme code:</strong>
+      Language mapping is now managed in <strong>Import settings</strong> and stored in the database.
+      Please remove <code>set_op_locale_to_lang(…)</code> and <code>op_set_fallback_lang(…)</code>
+      from your theme <code>functions.php</code> —
+      the code calls are ignored and this notice will stay until you remove them.
     </div>
 
     <div v-if="fileSettingsConstantsActive" class="op-notice op-header-notice">
@@ -589,6 +671,191 @@
         </ul>
         <p v-if="static_term_searching"><i>Searching…</i></p>
       </div>
+
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">Saving...</div>
+      </div>
+
+      <hr />
+
+      <h2>Language mapping</h2>
+      <p>
+        Configure OnPage fallback order when translations are missing.
+        With WPML, you can also map each WPML language to an OnPage language code.
+      </p>
+
+      <p v-if="!availableOnpageLangs.length"><i>Save your snapshot token first to load available OnPage languages.</i></p>
+
+      <template v-else>
+        <template v-if="wpmlEnabled">
+          <h3>WPML language → OnPage language</h3>
+          <p>
+            Pick from active WPML languages when locale codes differ from OnPage (e.g. <code>en</code> → <code>en_gb</code>).
+            Unmapped locales still resolve automatically (e.g. <code>de_de</code> → <code>de</code>).
+          </p>
+
+          <p v-if="!wpmlLanguages.length" class="op-notice op-notice-info">
+            WPML is active but no languages were returned. Check WPML setup, then reload this page.
+          </p>
+
+          <template v-else>
+            <table v-if="localeToLangRows.length" class="form-table">
+              <thead>
+                <tr>
+                  <th>WPML language</th>
+                  <th>OnPage language</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in localeToLangRows">
+                  <td>
+                    <strong>{{ row.wpml.name }}</strong>
+                    <span v-if="row.wpml.is_default"> (default)</span>
+                    <br /><code>{{ row.locale }}</code>
+                    · WPML <code>{{ row.wpml.code }}</code>
+                  </td>
+                  <td><code>{{ row.lang }}</code></td>
+                  <td>
+                    <input type="button" class="button" value="Remove" @click="removeLocaleMapping(row.locale)">
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else><i>No locale mappings configured.</i></p>
+
+            <div class="op-lang-add-row">
+              <select v-model="new_locale_mapping.locale" :disabled="!unmappedWpmlLanguages.length">
+                <option value="">— WPML language —</option>
+                <option v-for="w in unmappedWpmlLanguages" :value="w.locale">
+                  {{ w.name }} ({{ w.code }}) · {{ w.locale }}
+                </option>
+              </select>
+              <select v-model="new_locale_mapping.lang" :disabled="!new_locale_mapping.locale">
+                <option value="">— OnPage language —</option>
+                <option v-for="lang in availableOnpageLangs" :value="lang">{{ lang }}</option>
+              </select>
+              <input
+                type="button"
+                class="button"
+                value="Add mapping"
+                @click="addLocaleMapping"
+                :disabled="!canAddLocaleMapping"
+              >
+            </div>
+            <p v-if="locale_mapping_error" class="op-lang-field-error">{{ locale_mapping_error }}</p>
+            <p v-if="!unmappedWpmlLanguages.length"><i>All active WPML languages are mapped.</i></p>
+          </template>
+        </template>
+        <p v-else class="op-notice op-notice-info" style="margin: 1rem 0;">
+          <strong>WPML not active.</strong>
+          Locale mapping is only available with WPML. WordPress locales are matched to OnPage automatically.
+        </p>
+
+        <template v-if="multilingualOnpageProject">
+          <h3>Fallback languages</h3>
+          <p>
+            When a translation is missing, try these OnPage languages <strong>in order</strong> after the current one.
+            If no chain is set, the importer uses the country-free variant and then the primary OnPage project language.
+          </p>
+
+          <table v-if="fallbackLangRows.length" class="form-table">
+            <thead>
+              <tr>
+                <th>OnPage language</th>
+                <th>Then try (in order)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in fallbackLangRows">
+                <td>
+                  <code>{{ row.lang }}</code>
+                  <span v-if="wpmlLabelForOnpageLang(row.lang)"><br /><i>{{ wpmlLabelForOnpageLang(row.lang) }}</i></span>
+                </td>
+                <td>
+                  <div class="op-fallback-chain">
+                    <span class="op-fallback-chain-primary"><code>{{ row.lang }}</code></span>
+                    <span
+                      v-for="(step, idx) in settings_form.fallback_langs[row.lang]"
+                      :key="row.lang + '-' + step"
+                      class="op-fallback-chain-part"
+                    >
+                      <span class="op-fallback-chain-arrow">→</span>
+                      <span class="op-fallback-chain-step">
+                        <code>{{ step }}</code>
+                        <button type="button" title="Move up" :disabled="idx === 0" @click.stop="moveFallbackStep(row.lang, idx, -1)">↑</button>
+                        <button type="button" title="Move down" :disabled="idx === settings_form.fallback_langs[row.lang].length - 1" @click.stop="moveFallbackStep(row.lang, idx, 1)">↓</button>
+                        <button type="button" title="Remove" @click.stop="removeFallbackStep(row.lang, idx)">×</button>
+                      </span>
+                    </span>
+                    <select
+                      class="op-fallback-chain-add"
+                      :key="'fb-add-' + row.lang + '-' + (settings_form.fallback_langs[row.lang] || []).length"
+                      @change="addFallbackStep(row.lang, $event)"
+                      :disabled="!fallbackChainOptions(row.lang, settings_form.fallback_langs[row.lang] || []).length"
+                    >
+                      <option value="">+ Add step…</option>
+                      <option v-for="lang in fallbackChainOptions(row.lang, settings_form.fallback_langs[row.lang] || [])" :value="lang">{{ lang }}</option>
+                    </select>
+                  </div>
+                </td>
+                <td>
+                  <input type="button" class="button" value="Remove" @click="removeFallbackChain(row.lang)">
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else><i>No custom fallback chains configured.</i></p>
+
+          <div class="op-lang-add-row op-fallback-add">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+              <select v-model="new_fallback.lang">
+                <option value="">— OnPage language —</option>
+                <option
+                  v-for="lang in availableFallbackPrimaryLangs"
+                  :value="lang"
+                >{{ lang }}</option>
+              </select>
+              <input
+                type="button"
+                class="button"
+                value="Add fallback chain"
+                @click="addFallbackChain"
+                :disabled="!canAddFallbackChain"
+              >
+            </div>
+            <div v-if="new_fallback.lang" class="op-fallback-chain">
+              <span class="op-fallback-chain-primary"><code>{{ new_fallback.lang }}</code></span>
+              <span
+                v-for="(step, idx) in new_fallback.steps"
+                :key="new_fallback.lang + '-new-' + step"
+                class="op-fallback-chain-part"
+              >
+                <span class="op-fallback-chain-arrow">→</span>
+                <span class="op-fallback-chain-step">
+                  <code>{{ step }}</code>
+                  <button type="button" title="Move up" :disabled="idx === 0" @click.stop="moveNewFallbackStep(idx, -1)">↑</button>
+                  <button type="button" title="Move down" :disabled="idx === new_fallback.steps.length - 1" @click.stop="moveNewFallbackStep(idx, 1)">↓</button>
+                  <button type="button" title="Remove" @click.stop="removeNewFallbackStep(idx)">×</button>
+                </span>
+              </span>
+              <select
+                class="op-fallback-chain-add"
+                :key="'new-fb-' + new_fallback.lang + '-' + new_fallback.steps.length"
+                @change="addNewFallbackStep($event)"
+                :disabled="!fallbackChainOptions(new_fallback.lang, new_fallback.steps).length"
+              >
+                <option value="">+ Add step…</option>
+                <option v-for="lang in fallbackChainOptions(new_fallback.lang, new_fallback.steps)" :value="lang">{{ lang }}</option>
+              </select>
+            </div>
+            <p v-if="new_fallback.lang && !new_fallback.steps.length"><i>Add at least one fallback language.</i></p>
+          </div>
+        </template>
+        <p v-else><i>Fallback chains are available when the OnPage project has multiple languages.</i></p>
+      </template>
 
       <div class="submit">
         <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
@@ -914,6 +1181,9 @@
       static_term_labels: {},
       static_term_searching: false,
       _static_term_search_timeout: null,
+      new_locale_mapping: { locale: '', lang: '' },
+      new_fallback: { lang: '', steps: [] },
+      locale_mapping_error: '',
       generic_fields: [{
           name: 'name',
           label: 'Name',
@@ -1087,6 +1357,9 @@
       staticTermsCodeHooksActive() {
         return !!(this.server_config && this.server_config.static_terms_code_hooks_active)
       },
+      languageLegacyCodeActive() {
+        return !!(this.server_config && this.server_config.language_legacy_code_active)
+      },
       fileSettingsConstantsActive() {
         return !!(this.server_config && this.server_config.file_settings_constants_active)
       },
@@ -1151,6 +1424,89 @@
           }
         })
       },
+      availableOnpageLangs() {
+        if (this.next_schema && this.next_schema.langs) return this.next_schema.langs
+        if (this.schema && this.schema.langs) return this.schema.langs
+        return this.server_config?.onpage_langs || []
+      },
+      wpmlEnabled() {
+        return !!(this.server_config && this.server_config.wpml && this.server_config.wpml.enabled)
+      },
+      wpmlLanguages() {
+        if (!this.wpmlEnabled) return []
+        return this.server_config.wpml.languages || []
+      },
+      multilingualOnpageProject() {
+        return this.availableOnpageLangs.length > 1
+      },
+      languagePickerLangs() {
+        return this.multilingualOnpageProject ? this.availableOnpageLangs : []
+      },
+      wpmlOnpageLangEntries() {
+        const map = this.settings_form.locale_to_lang || {}
+        const entries = []
+        const seen = new Set()
+        for (const w of this.wpmlLanguages) {
+          const onpage = map[w.locale]
+          if (!onpage || !this.availableOnpageLangs.includes(onpage)) continue
+          if (seen.has(onpage)) continue
+          seen.add(onpage)
+          entries.push({ onpage, wpml: w })
+        }
+        return entries
+      },
+      unmappedWpmlLanguages() {
+        const mapped = new Set(Object.keys(this.settings_form.locale_to_lang || {}))
+        return this.wpmlLanguages.filter(w => !mapped.has(w.locale))
+      },
+      localeToLangRows() {
+        if (!this.wpmlEnabled) return []
+        const map = this.settings_form.locale_to_lang || {}
+        const rows = []
+        for (const w of this.wpmlLanguages) {
+          if (!map[w.locale]) continue
+          rows.push({ locale: w.locale, lang: map[w.locale], wpml: w })
+        }
+        return rows
+      },
+      fallbackLangRows() {
+        const map = this.settings_form.fallback_langs || {}
+        const rows = []
+        const seen = new Set()
+        for (const onpage of this.languagePickerLangs) {
+          if (!map[onpage]) continue
+          rows.push({
+            lang: onpage,
+            chain: this.sanitizeFallbackChain(onpage, map[onpage] || []),
+          })
+          seen.add(onpage)
+        }
+        for (const lang of Object.keys(map)) {
+          if (seen.has(lang)) continue
+          rows.push({
+            lang,
+            chain: this.sanitizeFallbackChain(lang, map[lang] || []),
+          })
+        }
+        return rows
+      },
+      availableFallbackPrimaryLangs() {
+        return this.languagePickerLangs.filter(lang => !this.hasFallbackChain(lang))
+      },
+      canAddLocaleMapping() {
+        if (!this.wpmlEnabled || !this.new_locale_mapping.locale || !this.new_locale_mapping.lang) return false
+        if (!this.isValidOnpageLang(this.new_locale_mapping.lang)) return false
+        const locale = this.normalizeLocaleKey(this.new_locale_mapping.locale)
+        if (!locale || !this.wpmlLanguageByLocale(locale)) return false
+        if (this.settings_form.locale_to_lang && this.settings_form.locale_to_lang[locale]) return false
+        return true
+      },
+      canAddFallbackChain() {
+        if (!this.multilingualOnpageProject || !this.new_fallback.lang) return false
+        if (!this.languagePickerLangs.includes(this.new_fallback.lang)) return false
+        if (this.hasFallbackChain(this.new_fallback.lang)) return false
+        return this.new_fallback.steps.length > 0
+      },
       form_unsaved() {
         return JSON.stringify(this.settings) !== JSON.stringify(this.settings_form)
       },
@@ -1178,12 +1534,14 @@
     },
     methods: {
       saveSettings() {
+        this.sanitizeLanguageSettings()
         this.is_saving = true
         axios.post('?op-api=save-settings', {
             settings: this.settings_form,
           }).then(res => {
             this.settings = _.cloneDeep(res.data)
             this.settings_form = _.cloneDeep(res.data)
+            this.sanitizeLanguageSettings()
             this.getServerConfig()
           })
           .finally(res => {
@@ -1481,8 +1839,191 @@
         if (this.settings_form.enable_imported_at_meta === undefined) {
           this.$set(this.settings_form, 'enable_imported_at_meta', false)
         }
+        this.ensureLanguageSettings()
+        this.sanitizeLanguageSettings()
         this.syncImportRelationsFromSettings()
         this.sanitizeAllImportRelations()
+      },
+      ensureLanguageSettings() {
+        if (!this.settings_form.locale_to_lang) {
+          this.$set(this.settings_form, 'locale_to_lang', {})
+        }
+        if (!this.settings_form.fallback_langs) {
+          this.$set(this.settings_form, 'fallback_langs', {})
+        }
+      },
+      isValidOnpageLang(lang) {
+        return !!lang && this.availableOnpageLangs.includes(lang)
+      },
+      isValidLanguagePickerLang(lang) {
+        return !!lang && this.languagePickerLangs.includes(lang)
+      },
+      wpmlLanguageByLocale(locale) {
+        const key = this.normalizeLocaleKey(locale)
+        return this.wpmlLanguages.find(w => w.locale === key) || null
+      },
+      guessOnpageLangForWpml(w) {
+        if (!w) return null
+        const schema = this.availableOnpageLangs
+        if (schema.includes(w.code)) return w.code
+        if (schema.includes(w.locale)) return w.locale
+        const prefix = (w.locale || '').split('_')[0]
+        if (prefix && schema.includes(prefix)) return prefix
+        return null
+      },
+      wpmlLabelForOnpageLang(onpage) {
+        const entry = this.wpmlOnpageLangEntries.find(e => e.onpage === onpage)
+        return entry ? `WPML: ${entry.wpml.name}` : ''
+      },
+      hasFallbackChain(lang) {
+        return !!(this.settings_form.fallback_langs && this.settings_form.fallback_langs[lang])
+      },
+      fallbackChainOptions(primaryLang, chain) {
+        const used = new Set([primaryLang, ...(chain || [])])
+        return this.languagePickerLangs.filter(lang => !used.has(lang))
+      },
+      sanitizeFallbackChain(primaryLang, chain) {
+        const seen = new Set([primaryLang])
+        const out = []
+        for (const lang of chain || []) {
+          if (!this.isValidLanguagePickerLang(lang)) continue
+          if (seen.has(lang)) continue
+          seen.add(lang)
+          out.push(lang)
+        }
+        return out
+      },
+      sanitizeLanguageSettings() {
+        this.ensureLanguageSettings()
+
+        if (this.wpmlEnabled) {
+          const wpmlLocales = new Set(this.wpmlLanguages.map(w => w.locale))
+          const locales = {}
+          for (const [rawLocale, lang] of Object.entries(this.settings_form.locale_to_lang || {})) {
+            const locale = this.normalizeLocaleKey(rawLocale)
+            if (!locale || !wpmlLocales.has(locale)) continue
+            if (!this.isValidOnpageLang(lang)) continue
+            locales[locale] = lang
+          }
+          this.$set(this.settings_form, 'locale_to_lang', locales)
+        }
+
+        if (!this.multilingualOnpageProject) {
+          this.$set(this.settings_form, 'fallback_langs', {})
+          return
+        }
+
+        const allowedLangs = new Set(this.languagePickerLangs)
+        const fallbacks = {}
+        for (const lang of this.availableOnpageLangs) {
+          if (!allowedLangs.has(lang) || !this.settings_form.fallback_langs[lang]) continue
+          const sanitized = this.sanitizeFallbackChain(lang, this.settings_form.fallback_langs[lang])
+          if (sanitized.length) fallbacks[lang] = sanitized
+        }
+        for (const lang of Object.keys(this.settings_form.fallback_langs || {})) {
+          if (fallbacks[lang] || !allowedLangs.has(lang)) continue
+          const sanitized = this.sanitizeFallbackChain(lang, this.settings_form.fallback_langs[lang])
+          if (sanitized.length) fallbacks[lang] = sanitized
+        }
+        this.$set(this.settings_form, 'fallback_langs', fallbacks)
+      },
+      normalizeLocaleKey(locale) {
+        return (locale || '').trim().toLowerCase().replace(/-/g, '_')
+      },
+      addLocaleMapping() {
+        this.locale_mapping_error = ''
+        if (!this.wpmlEnabled) return
+        this.ensureLanguageSettings()
+        const locale = this.normalizeLocaleKey(this.new_locale_mapping.locale)
+        const lang = this.new_locale_mapping.lang
+        if (!locale || !lang) return
+        if (!this.wpmlLanguageByLocale(locale)) {
+          this.locale_mapping_error = 'Choose an active WPML language.'
+          return
+        }
+        if (!this.isValidOnpageLang(lang)) {
+          this.locale_mapping_error = 'Choose a valid OnPage language.'
+          return
+        }
+        if (this.settings_form.locale_to_lang[locale]) {
+          this.locale_mapping_error = `“${locale}” is already mapped. Remove the existing row first.`
+          return
+        }
+        this.$set(this.settings_form.locale_to_lang, locale, lang)
+        this.new_locale_mapping = { locale: '', lang: '' }
+      },
+      removeLocaleMapping(locale) {
+        if (!this.settings_form.locale_to_lang) return
+        this.$delete(this.settings_form.locale_to_lang, locale)
+        this.locale_mapping_error = ''
+      },
+      resetNewFallbackDraft() {
+        this.new_fallback = { lang: '', steps: [] }
+      },
+      addFallbackChain() {
+        if (!this.multilingualOnpageProject) return
+        this.ensureLanguageSettings()
+        const lang = this.new_fallback.lang
+        const chain = this.sanitizeFallbackChain(lang, this.new_fallback.steps)
+        if (!lang || !chain.length || !this.isValidLanguagePickerLang(lang)) return
+        if (this.hasFallbackChain(lang)) return
+        this.$set(this.settings_form.fallback_langs, lang, chain)
+        this.resetNewFallbackDraft()
+      },
+      setFallbackChain(lang, chain) {
+        this.ensureLanguageSettings()
+        const sanitized = this.sanitizeFallbackChain(lang, chain)
+        if (!sanitized.length) {
+          this.$delete(this.settings_form.fallback_langs, lang)
+          return
+        }
+        this.$set(this.settings_form.fallback_langs, lang, sanitized)
+      },
+      addFallbackStep(lang, event) {
+        const step = event.target.value
+        event.target.value = ''
+        if (!step || !this.isValidLanguagePickerLang(step)) return
+        const chain = [...(this.settings_form.fallback_langs[lang] || [])]
+        if (lang === step || chain.includes(step)) return
+        chain.push(step)
+        this.setFallbackChain(lang, chain)
+      },
+      removeFallbackStep(lang, index) {
+        const chain = [...(this.settings_form.fallback_langs[lang] || [])]
+        chain.splice(index, 1)
+        this.setFallbackChain(lang, chain)
+      },
+      moveFallbackStep(lang, index, direction) {
+        const chain = (this.settings_form.fallback_langs[lang] || []).slice()
+        const target = index + direction
+        if (target < 0 || target >= chain.length) return
+        const tmp = chain[index]
+        chain[index] = chain[target]
+        chain[target] = tmp
+        this.$set(this.settings_form.fallback_langs, lang, chain)
+      },
+      addNewFallbackStep(event) {
+        const step = event.target.value
+        event.target.value = ''
+        if (!step || !this.isValidLanguagePickerLang(step)) return
+        if (step === this.new_fallback.lang || this.new_fallback.steps.includes(step)) return
+        this.new_fallback.steps.push(step)
+      },
+      removeNewFallbackStep(index) {
+        this.new_fallback.steps.splice(index, 1)
+      },
+      moveNewFallbackStep(index, direction) {
+        const steps = this.new_fallback.steps.slice()
+        const target = index + direction
+        if (target < 0 || target >= steps.length) return
+        const tmp = steps[index]
+        steps[index] = steps[target]
+        steps[target] = tmp
+        this.$set(this.new_fallback, 'steps', steps)
+      },
+      removeFallbackChain(lang) {
+        if (!this.settings_form.fallback_langs) return
+        this.$delete(this.settings_form.fallback_langs, lang)
       },
       queueStaticTermSearch() {
         clearTimeout(this._static_term_search_timeout)
@@ -1703,6 +2244,22 @@
       schema() {
         this.refreshFiles()
         this.refreshOldFiles()
+      },
+      'new_fallback.lang'(lang, prev) {
+        if (lang !== prev) {
+          this.new_fallback.steps = []
+        }
+      },
+      'new_locale_mapping.locale'(locale) {
+        this.locale_mapping_error = ''
+        if (!locale) {
+          this.new_locale_mapping.lang = ''
+          return
+        }
+        const w = this.wpmlLanguageByLocale(locale)
+        if (!w) return
+        const guess = this.guessOnpageLangForWpml(w)
+        if (guess) this.new_locale_mapping.lang = guess
       },
     },
   })

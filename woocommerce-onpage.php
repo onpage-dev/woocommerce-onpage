@@ -102,7 +102,19 @@ add_filter('init', function () {
             op_err('Invalid thumbnail format');
           }
         }
-        op_ret(op_settings($settings));
+        if (isset($settings['locale_to_lang']) && is_array($settings['locale_to_lang'])) {
+          if (op_wpml_enabled()) {
+            $settings['locale_to_lang'] = op_sanitize_locale_to_lang($settings['locale_to_lang']);
+          } else {
+            unset($settings['locale_to_lang']);
+          }
+        }
+        if (isset($settings['fallback_langs']) && is_array($settings['fallback_langs'])) {
+          $settings['fallback_langs'] = op_sanitize_fallback_langs($settings['fallback_langs']);
+        }
+        $saved = op_settings($settings);
+        op_internal_bootstrap_language_config(true);
+        op_ret($saved);
 
       case 'import':
         $t1 = microtime(true);
@@ -143,6 +155,14 @@ add_filter('init', function () {
           'static_terms_code_hooks_active' => op_static_terms_code_hooks_active(),
           'file_settings_constants_active' => op_file_settings_constants_active(),
           'api_token_constant_active' => op_api_token_constant_active(),
+          'locale_to_lang' => op_get_db_locale_to_lang(),
+          'fallback_langs' => op_get_db_fallback_langs(),
+          'language_legacy_code_active' => op_language_legacy_code_active(),
+          'onpage_langs' => op_schema_langs_for_settings() ?? [],
+          'wpml' => op_wpml_language_ui_config(),
+          'wpml_onpage_langs' => op_wpml_onpage_langs_for_settings(),
+          'wpml_locales' => op_wpml_configured_locales(),
+          'wordpress_locale' => op_internal_normalize_locale_key(get_locale()),
         ]));
 
       case 'api-token-status':
