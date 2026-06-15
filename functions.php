@@ -631,15 +631,6 @@ function op_cache(string $id, $callback)
   return $cached[$id];
 }
 
-function op_page($name = null, $file = null)
-{
-  static $pages = [];
-  if ($file) {
-    $pages[$name] = $file;
-  }
-  return $pages;
-}
-
 function op_e($string)
 {
   if (is_array($string)) {

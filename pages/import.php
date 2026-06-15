@@ -203,12 +203,6 @@
               <input class="regular-text code" v-model="settings_form.token" type="password">
             </td>
           </tr>
-          <!-- <tr>
-            <th><label>Custom routing path</label></th>
-            <td>
-              <input class="regular-text code" v-model="settings_form.shop_url">
-            </td>
-          </tr> -->
         </tbody>
       </table>
 
