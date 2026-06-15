@@ -1788,6 +1788,10 @@ function op_disable_old_products(ImportContext $context): int
   $post_types = op_schema_target_post_types();
   $posts_to_remove = OpLib\Post::query()
     ->whereIn('post_type', $post_types)
+    ->where('post_status', 'publish')
+    ->whereHas('meta', function ($meta_query) {
+      $meta_query->where('meta_key', 'op_res*');
+    })
     ->pluck('ID')
     ->flip();
   foreach ($context->idMap as $res_id => $res_items) {

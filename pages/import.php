@@ -869,7 +869,7 @@
         <h2 style="margin-bottom: 0">{{ res.label }}:</h2>
         <table class="form-table">
           <tbody>
-            <tr v-for="property in generic_fields.concat(product_resources.includes(res.name) ? product_fields : [])">
+            <tr v-for="property in generic_fields.concat(product_resources.includes(res.name) ? productFields : [])">
               <td>{{ property.label }}</td>
               <td>
                 <div style="display: flex; flex-direction: row; gap: 1rem">
@@ -1209,9 +1209,11 @@
           types: ['image'],
         },
       ],
-      product_fields: <?= json_encode(array_values(\OpSupport\WooCommerceFieldMap::adminFields())) ?>,
     },
     computed: {
+      productFields() {
+        return this.server_config?.product_fields ?? []
+      },
       product_resources() {
         if (!this.next_schema) return this.server_config?.product_resources ?? []
         return this.next_schema.resources
