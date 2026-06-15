@@ -164,13 +164,149 @@
   [v-cloak] {
     display: none !important
   }
+
+  #op-app .op-notice {
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid #dba617;
+    background: #fcf9e8;
+  }
+
+  #op-app .op-notice-info {
+    border-left-color: #72aee6;
+    background: #f0f6fc;
+  }
+
+  #op-app .op-header-notice {
+    margin: 0 2rem 1rem;
+    text-align: left;
+  }
+
+  #op-app .op-resource-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  #op-app .op-wizard-steps {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  #op-app .op-wizard-step {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: #eaecf1;
+    color: #666;
+  }
+
+  #op-app .op-wizard-step[active] {
+    background: #56bd48;
+    color: #fff;
+  }
+
+  #op-app .op-wizard-type-option {
+    display: block;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border: 2px solid #eaecf1;
+    cursor: pointer;
+  }
+
+  #op-app .op-wizard-type-option[selected] {
+    border-color: #56bd48;
+    background: #56bd4814;
+  }
+
+  #op-app .op-modal .modal-content {
+    min-width: 32rem;
+    max-width: 40rem;
+  }
+
+  #op-app .op-wizard-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  #op-app .op-static-term-search {
+    position: relative;
+    max-width: 28rem;
+  }
+
+  #op-app .op-static-term-results {
+    position: absolute;
+    z-index: 10;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+    max-height: 16rem;
+    overflow-y: auto;
+  }
+
+  #op-app .op-static-term-results li {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #eaecf1;
+  }
+
+  #op-app .op-static-term-results li:hover {
+    background: #56bd4814;
+  }
 </style>
 
 <div id="op-app" style="margin-right: 2rem" v-cloak>
   <div class="op-top-header">
     <div style="text-align: center;">
       <img src="<?= op_link(__DIR__ . '/../logo.png') ?>" alt="" style="max-width: 80%; max-height: 100px;">
-      <div style="margin: -1rem 0 2rem"><b>v<?= op_version() ?></b></div>
+      <div style="margin: -1rem 0 1rem"><b>v<?= op_version() ?></b></div>
+    </div>
+
+    <div v-if="resourceTypesCodeHooksActive" class="op-notice op-header-notice">
+      <strong>Remove theme code:</strong>
+      Resource import types are now managed in <strong>Import settings</strong> and stored in the database.
+      Please remove <code>add_filter('op_resource_types', …)</code> and any legacy
+      <code>on_page_product_resources</code> hook from your theme <code>functions.php</code> —
+      the code hook is ignored and this notice will stay until you remove it.
+    </div>
+
+    <div v-if="importRelationsCodeHooksActive" class="op-notice op-header-notice">
+      <strong>Remove theme code:</strong>
+      WordPress parent linking is now managed in <strong>Import settings</strong> and stored in the database.
+      Please remove <code>add_action('op_import_relations', …)</code> from your theme <code>functions.php</code> —
+      the code hook is ignored and this notice will stay until you remove it.
+    </div>
+
+    <div v-if="staticTermsCodeHooksActive" class="op-notice op-header-notice">
+      <strong>Remove theme code:</strong>
+      Protected categories are now managed in <strong>Import settings</strong> and stored in the database.
+      Please remove <code>add_filter('op_static_terms', …)</code> from your theme <code>functions.php</code> —
+      the code hook is ignored and this notice will stay until you remove it.
+    </div>
+
+    <div v-if="fileSettingsConstantsActive" class="op-notice op-header-notice">
+      <strong>Remove wp-config constants:</strong>
+      File import settings are now managed in <strong>Import settings</strong> and stored in the database.
+      Please remove <code>OP_DISABLE_ORIGINAL_FILE_IMPORT</code> and <code>OP_THUMBNAIL_FORMAT</code>
+      <code>define()</code> entries from <code>wp-config.php</code> — they are ignored and this notice will stay until you remove them.
+    </div>
+
+    <div v-if="apiTokenConstantActive" class="op-notice op-header-notice">
+      <strong>Remove wp-config constant:</strong>
+      The cron API token is now managed in <strong>WooCommerce → OnPage Cron Import</strong> and stored in the database.
+      Please remove <code>define('OP_API_TOKEN', …)</code> from <code>wp-config.php</code> —
+      it is ignored and this notice will stay until you remove it.
+    </div>
+
+    <div v-if="schemaResourceTypesMismatch" class="op-notice op-notice-info op-header-notice">
+      Stored import types differ from your current settings. Save and run a new import to apply changes.
     </div>
 
     <div class="op-navbar">
@@ -320,12 +456,143 @@
             <option value="draft">Draft</option>
           </select>
         </div>
+
+        <hr />
+
+        <h2>Files</h2>
+        <label>
+          <input type="checkbox" v-model="settings_form.disable_original_file_import" />
+          Serve original files from On Page CDN (do not store originals on this server)
+          <br />
+          <i>Files are still downloaded on first use by default. Thumbnails are always generated and cached locally when requested.</i>
+        </label>
+
+        <div>
+          Thumbnail format:
+          <br />
+          <select style="width: 20rem" v-model="settings_form.thumbnail_format">
+            <option value="png">PNG (default)</option>
+            <option value="jpg">JPG</option>
+            <option value="webp">WebP</option>
+          </select>
+        </div>
+
+        <label>
+          <input type="checkbox" v-model="settings_form.enable_imported_at_meta" />
+          Store <code>op_imported_at</code> meta on imported products
+          <br />
+          <i>Also updates <code>post_modified</code> when existing products change during import.</i>
+        </label>
+
         <div class="submit">
           <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
           <div v-if="is_saving">
             Saving...
           </div>
         </div>
+      </div>
+
+      <hr />
+
+      <h2>WooCommerce resources</h2>
+      <p>
+        Configure which OnPage resources are imported into WooCommerce and how they link to WordPress parents.
+        All other resources
+        <strong>({{ hiddenResourceCount }} of {{ next_schema.resources.length }})</strong>
+        use the hidden high-performance table automatically.
+        Parent linking uses one OnPage relation field per resource (category hierarchy or product→category assignment);
+        see <strong>Link all parent categories</strong> above when a product has multiple category relations.
+      </p>
+
+      <table v-if="configuredResourceRows.length" class="form-table">
+        <thead>
+          <tr>
+            <th>Resource</th>
+            <th>Import as</th>
+            <th>WordPress parent</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="res in configuredResourceRows">
+            <td>
+              <strong>{{ res.label }}</strong>
+              <br /><code>{{ res.name }}</code>
+            </td>
+            <td>{{ resourceTypeLabel(res.name) }}</td>
+            <td>{{ parentLinkLabel(res.name) }}</td>
+            <td>
+              <div class="op-resource-actions">
+                <input type="button" class="button" value="Edit" @click="openResourceModal(res)">
+                <input type="button" class="button" value="Use hidden table" @click="removeConfiguredResource(res.name)">
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else><i>No WooCommerce resources configured yet. Configure only resources that need product pages, category pages, or WordPress hierarchy.</i></p>
+
+      <p>
+        <input type="button" class="button button-primary" value="Configure resource" @click="openResourceModal()" :disabled="!resourceModalAvailableResources.length">
+      </p>
+
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">Saving...</div>
+      </div>
+
+      <hr />
+
+      <h2>Protected categories</h2>
+      <p>
+        WooCommerce categories listed here are never updated or deleted by the import.
+        Fixed parent categories configured under WooCommerce resources are protected automatically too.
+        Use primary-language category IDs; all WPML translations are protected automatically.
+      </p>
+
+      <table v-if="staticTermRows.length" class="form-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>ID</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in staticTermRows">
+            <td>
+              <strong>{{ row.name }}</strong>
+              <br /><code>{{ row.slug }}</code>
+            </td>
+            <td>{{ row.id }}</td>
+            <td>
+              <input type="button" class="button" value="Remove" @click="removeStaticTerm(row.id)">
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else><i>No protected categories configured.</i></p>
+
+      <div class="op-static-term-search">
+        <input
+          class="regular-text"
+          type="search"
+          placeholder="Search categories to protect…"
+          v-model="static_term_search"
+          @input="queueStaticTermSearch"
+        >
+        <ul v-if="static_term_results.length" class="op-static-term-results">
+          <li v-for="cat in static_term_results" @click="addStaticTerm(cat)">
+            <strong>{{ cat.name }}</strong>
+            <br /><code>{{ cat.slug }}</code> · ID {{ cat.id }}
+          </li>
+        </ul>
+        <p v-if="static_term_searching"><i>Searching…</i></p>
+      </div>
+
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">Saving...</div>
       </div>
 
       <hr />
@@ -452,6 +719,112 @@
     </div>
   </div>
 
+  <div class="op-modal" v-if="resource_modal">
+    <div class="modal-ext-content">
+      <div class="close" @click="closeResourceModal">&times;</div>
+      <div class="modal-content">
+        <h2 style="margin-top: 0">{{ resource_modal.editing ? 'Edit resource' : 'Configure resource' }}</h2>
+
+        <div class="op-wizard-steps">
+          <span class="op-wizard-step" :active="resource_modal.step === 1 || undefined">1. Resource</span>
+          <span class="op-wizard-step" :active="resource_modal.step === 2 || undefined">2. Import type</span>
+          <span class="op-wizard-step" :active="resource_modal.step === 3 || undefined">3. WordPress parent</span>
+        </div>
+
+        <div v-if="resource_modal.step === 1">
+          <p>Choose which OnPage resource should be imported into WooCommerce.</p>
+          <select style="width: 100%" v-model="resource_modal.resource_name">
+            <option :value="null" disabled>Select a resource...</option>
+            <option v-for="res in resourceModalStepResources" :value="res.name">{{ res.label }} ({{ res.name }})</option>
+          </select>
+        </div>
+
+        <div v-if="resource_modal.step === 2">
+          <p>
+            How should <strong>{{ resourceModalSelectedResource ? resourceModalSelectedResource.label : resource_modal.resource_name }}</strong>
+            be imported?
+          </p>
+          <label class="op-wizard-type-option" :selected="resource_modal.type === 'post' || undefined" @click="resource_modal.type = 'post'">
+            <strong>Product</strong>
+            <br />
+            <span>Creates WooCommerce products — use for sellable items with their own product pages.</span>
+          </label>
+          <label class="op-wizard-type-option" :selected="resource_modal.type === 'term' || undefined" @click="resource_modal.type = 'term'">
+            <strong>Category</strong>
+            <br />
+            <span>Creates WooCommerce product categories — use for taxonomy pages and category hierarchy.</span>
+          </label>
+        </div>
+
+        <div v-if="resource_modal.step === 3">
+          <p>
+            Optional: how should imported
+            <strong>{{ resourceModalSelectedResource ? resourceModalSelectedResource.label : resource_modal.resource_name }}</strong>
+            items link to WordPress parents?
+          </p>
+
+          <label style="display: block; margin-bottom: 0.5rem;">
+            <input type="radio" v-model="resource_modal.parent_mode" value="relation">
+            OnPage relation field
+          </label>
+          <label style="display: block; margin-bottom: 1rem;">
+            <input type="radio" v-model="resource_modal.parent_mode" value="fixed">
+            Fixed WordPress category (auto-protected)
+          </label>
+
+          <div v-if="resource_modal.parent_mode === 'relation'">
+            <select style="width: 100%" v-model="resource_modal.relation_name">
+              <option :value="null">— None (no automatic parent linking) —</option>
+              <option v-for="field in resourceModalRelationFields" :value="field.name">{{ relationFieldLabel(field) }}</option>
+            </select>
+            <p v-if="!resourceModalAllRelationFields.length"><i>This resource has no relation fields in the snapshot.</i></p>
+            <p v-else-if="!resourceModalRelationFields.length"><i>No valid parent relations: configure the target resource as a WooCommerce category first, then pick a relation that points to it.</i></p>
+            <p v-else-if="resource_modal.type === 'term'"><i>Category hierarchy: parent must be another configured WooCommerce category.</i></p>
+            <p v-else><i>Product categories: relation must point to a configured WooCommerce category.</i></p>
+          </div>
+
+          <div v-else>
+            <p><i>Every imported item is assigned to one WordPress category. That category is never updated or deleted by the import.</i></p>
+            <p v-if="resource_modal.fixed_category_id">
+              <strong>{{ resourceModalFixedCategoryLabel }}</strong>
+              <br /><code>ID {{ resource_modal.fixed_category_id }}</code>
+              <br />
+              <input type="button" class="button" value="Clear" @click="clearFixedParentCategory">
+            </p>
+            <div class="op-static-term-search">
+              <input
+                class="regular-text"
+                type="search"
+                placeholder="Search categories…"
+                v-model="resource_modal.fixed_category_search"
+                @input="queueFixedParentSearch"
+              >
+              <ul v-if="resource_modal.fixed_category_results.length" class="op-static-term-results">
+                <li v-for="cat in resource_modal.fixed_category_results" @click="selectFixedParentCategory(cat)">
+                  <strong>{{ cat.name }}</strong>
+                  <br /><code>{{ cat.slug }}</code> · ID {{ cat.id }}
+                </li>
+              </ul>
+              <p v-if="resource_modal.fixed_category_searching"><i>Searching…</i></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="op-wizard-footer">
+          <div>
+            <input v-if="resource_modal.step > 1" type="button" class="button" value="Back" @click="resource_modal.step--">
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="button" class="button" value="Cancel" @click="closeResourceModal">
+            <input v-if="resource_modal.step === 1" type="button" class="button button-primary" value="Next" :disabled="!resource_modal.resource_name" @click="resource_modal.step = 2">
+            <input v-if="resource_modal.step === 2" type="button" class="button button-primary" value="Next" @click="goResourceModalStep3">
+            <input v-if="resource_modal.step === 3" type="button" class="button button-primary" value="Save" @click="saveResourceModal">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="op-modal" v-if="field_modal">
     <div class="modal-ext-content">
       <div class="close" @keydown.esc="field_modal=null" @click="field_modal=null">
@@ -534,7 +907,13 @@
       old_files: [],
       snapshots_list: null,
       field_modal: null,
+      resource_modal: null,
       server_config: null,
+      static_term_search: '',
+      static_term_results: [],
+      static_term_labels: {},
+      static_term_searching: false,
+      _static_term_search_timeout: null,
       generic_fields: [{
           name: 'name',
           label: 'Name',
@@ -688,14 +1067,91 @@
     },
     computed: {
       product_resources() {
-        return this.server_config?.product_resources ?? []
+        if (!this.next_schema) return this.server_config?.product_resources ?? []
+        return this.next_schema.resources
+          .filter(r => this.resourceType(r.name) === 'post')
+          .map(r => r.name)
       },
       thing_resources() {
-        return this.server_config?.thing_resources ?? []
+        if (!this.next_schema) return this.server_config?.thing_resources ?? []
+        return this.next_schema.resources
+          .filter(r => this.resourceType(r.name) === 'thing')
+          .map(r => r.name)
+      },
+      resourceTypesCodeHooksActive() {
+        return !!(this.server_config && this.server_config.resource_types_code_hooks_active)
+      },
+      importRelationsCodeHooksActive() {
+        return !!(this.server_config && this.server_config.import_relations_code_hooks_active)
+      },
+      staticTermsCodeHooksActive() {
+        return !!(this.server_config && this.server_config.static_terms_code_hooks_active)
+      },
+      fileSettingsConstantsActive() {
+        return !!(this.server_config && this.server_config.file_settings_constants_active)
+      },
+      apiTokenConstantActive() {
+        return !!(this.server_config && this.server_config.api_token_constant_active)
+      },
+      schemaResourceTypesMismatch() {
+        return !!(this.server_config && this.server_config.schema_resource_types_mismatch)
+      },
+      configuredResourceRows() {
+        if (!this.next_schema) return []
+        const types = this.settings_form.resource_types || {}
+        const resources = this.next_schema.resources.filter(r => types[r.name] === 'post' || types[r.name] === 'term')
+        return this.sortResourcesByHierarchy(resources)
+      },
+      hiddenResourceCount() {
+        if (!this.next_schema) return 0
+        return this.next_schema.resources.length - this.configuredResourceRows.length
+      },
+      resourceModalAvailableResources() {
+        if (!this.next_schema) return []
+        const types = this.settings_form.resource_types || {}
+        return _.sortBy(
+          this.next_schema.resources.filter(r => types[r.name] !== 'post' && types[r.name] !== 'term'),
+          'label'
+        )
+      },
+      resourceModalStepResources() {
+        if (!this.resource_modal) return []
+        if (this.resource_modal.editing) {
+          const res = this.schemaResourceByName(this.resource_modal.resource_name)
+          return res ? [res] : []
+        }
+        return this.resourceModalAvailableResources
+      },
+      resourceModalSelectedResource() {
+        return this.schemaResourceByName(this.resource_modal && this.resource_modal.resource_name)
+      },
+      resourceModalRelationFields() {
+        const res = this.resourceModalSelectedResource
+        if (!res || !this.resource_modal) return []
+        return this.validParentRelationFields(res, this.resource_modal.type)
+      },
+      resourceModalAllRelationFields() {
+        const res = this.resourceModalSelectedResource
+        if (!res) return []
+        return this.relationFieldsForResource(res)
+      },
+      resourceModalFixedCategoryLabel() {
+        if (!this.resource_modal || !this.resource_modal.fixed_category_id) return ''
+        const label = this.resource_modal.fixed_category_label
+        return label ? label.name : `Category #${this.resource_modal.fixed_category_id}`
+      },
+      staticTermRows() {
+        const ids = this.settings_form.static_terms || []
+        return ids.map(id => {
+          const label = this.static_term_labels[id]
+          return {
+            id,
+            name: label ? label.name : `Category #${id}`,
+            slug: label ? label.slug : '',
+          }
+        })
       },
       form_unsaved() {
-        console.log(JSON.stringify(this.settings))
-        console.log(JSON.stringify(this.settings_form))
         return JSON.stringify(this.settings) !== JSON.stringify(this.settings_form)
       },
       connection_string() {
@@ -726,12 +1182,357 @@
         axios.post('?op-api=save-settings', {
             settings: this.settings_form,
           }).then(res => {
-            console.log(res.data)
-            this.settings = _.clone(res.data)
+            this.settings = _.cloneDeep(res.data)
+            this.settings_form = _.cloneDeep(res.data)
+            this.getServerConfig()
           })
           .finally(res => {
             this.is_saving = false
           })
+      },
+      resourceType(name) {
+        const types = this.settings_form.resource_types || {}
+        const t = types[name]
+        if (t === 'post' || t === 'term') return t
+        return 'thing'
+      },
+      resourceTypeLabel(name) {
+        const t = this.resourceType(name)
+        if (t === 'post') return 'Product'
+        if (t === 'term') return 'Category'
+        return 'Hidden (high performance)'
+      },
+      schemaResourceByName(name) {
+        if (!this.next_schema || !name) return null
+        return this.next_schema.resources.find(r => r.name === name) || null
+      },
+      setResourceType(name, type) {
+        if (!this.settings_form.resource_types) {
+          this.$set(this.settings_form, 'resource_types', {})
+        }
+        if (type === 'thing') {
+          this.$delete(this.settings_form.resource_types, name)
+          return
+        }
+        this.$set(this.settings_form.resource_types, name, type)
+      },
+      removeConfiguredResource(name) {
+        this.setResourceType(name, 'thing')
+        this.removeImportRelation(name)
+      },
+      ensureImportRelations() {
+        if (!this.settings_form.import_relations) {
+          this.$set(this.settings_form, 'import_relations', {})
+        }
+      },
+      setImportRelation(resourceName, relationName) {
+        this.ensureImportRelations()
+        this.$set(this.settings_form.import_relations, resourceName, relationName)
+      },
+      removeImportRelation(resourceName) {
+        if (!this.settings_form.import_relations) return
+        this.$delete(this.settings_form.import_relations, resourceName)
+      },
+      relationFieldsForResource(res) {
+        if (!res || !res.fields) return []
+        return Object.values(res.fields).filter(f => f.type === 'relation')
+      },
+      validParentRelationFields(res, sourceType) {
+        if (!res || (sourceType !== 'post' && sourceType !== 'term')) return []
+        return this.relationFieldsForResource(res).filter(field => {
+          const target = this.schemaResourceById(field.rel_res_id)
+          if (!target) return false
+          return this.resourceType(target.name) === 'term'
+        })
+      },
+      isFixedParent(value) {
+        return typeof value === 'number' || (/^\d+$/).test(String(value))
+      },
+      sanitizeResourceModalRelation() {
+        if (!this.resource_modal || this.resource_modal.parent_mode === 'fixed') return
+        if (!this.resource_modal.relation_name) return
+        const res = this.resourceModalSelectedResource
+        if (!res) {
+          this.resource_modal.relation_name = null
+          return
+        }
+        const valid = this.validParentRelationFields(res, this.resource_modal.type)
+        if (!valid.some(f => f.name === this.resource_modal.relation_name)) {
+          this.resource_modal.relation_name = null
+        }
+      },
+      sanitizeAllImportRelations() {
+        if (!this.next_schema || !this.settings_form.import_relations) return
+        const relations = { ...this.settings_form.import_relations }
+        let changed = false
+        for (const resourceName of Object.keys(relations)) {
+          const res = this.schemaResourceByName(resourceName)
+          const type = this.resourceType(resourceName)
+          const parent = relations[resourceName]
+          if (!res || (type !== 'post' && type !== 'term')) {
+            delete relations[resourceName]
+            changed = true
+            continue
+          }
+          if (this.isFixedParent(parent)) {
+            continue
+          }
+          if (typeof parent !== 'string') {
+            delete relations[resourceName]
+            changed = true
+            continue
+          }
+          if (!this.validParentRelationFields(res, type).some(f => f.name === parent)) {
+            delete relations[resourceName]
+            changed = true
+          }
+        }
+        if (changed) {
+          this.$set(this.settings_form, 'import_relations', relations)
+        }
+      },
+      goResourceModalStep3() {
+        this.resource_modal.step = 3
+        this.sanitizeResourceModalRelation()
+      },
+      relationFieldLabel(field) {
+        const target = this.schemaResourceById(field.rel_res_id)
+        const targetLabel = target ? target.label : '?'
+        return field.label + ' → ' + targetLabel + ' (' + field.name + ')'
+      },
+      parentRelationLabel(resourceName, relationName) {
+        if (typeof relationName === 'number' || (/^\d+$/).test(String(relationName))) {
+          return 'Fixed WordPress category #' + relationName
+        }
+        const res = this.schemaResourceByName(resourceName)
+        if (!res) return relationName
+        const field = Object.values(res.fields || {}).find(f => f.name === relationName)
+        return field ? this.relationFieldLabel(field) : relationName
+      },
+      parentLinkLabel(resourceName) {
+        const relations = this.settings_form.import_relations || {}
+        const rel = relations[resourceName]
+        if (!rel) return '—'
+        return this.parentRelationLabel(resourceName, rel)
+      },
+      schemaResourceById(id) {
+        if (!this.next_schema || !id) return null
+        return this.next_schema.resources.find(r => r.id === id) || null
+      },
+      getConfiguredParentResourceName(resourceName, configuredNames) {
+        const relations = this.settings_form.import_relations || {}
+        const relationName = relations[resourceName]
+        if (!relationName || typeof relationName !== 'string') return null
+        const res = this.schemaResourceByName(resourceName)
+        if (!res) return null
+        const field = Object.values(res.fields || {}).find(f => f.name === relationName)
+        if (!field) return null
+        const target = this.schemaResourceById(field.rel_res_id)
+        if (!target || !configuredNames.has(target.name)) return null
+        return target.name
+      },
+      sortResourcesByHierarchy(resources) {
+        const configuredNames = new Set(resources.map(r => r.name))
+        const childrenOf = {}
+        for (const res of resources) {
+          const parent = this.getConfiguredParentResourceName(res.name, configuredNames) || ''
+          if (!childrenOf[parent]) childrenOf[parent] = []
+          childrenOf[parent].push(res)
+        }
+        const sortSiblings = (list) => _.sortBy(list, [
+          r => (this.resourceType(r.name) === 'term' ? 0 : 1),
+          'label',
+        ])
+        const result = []
+        const visited = new Set()
+        const visit = (parentKey) => {
+          for (const child of sortSiblings(childrenOf[parentKey] || [])) {
+            if (visited.has(child.name)) continue
+            visited.add(child.name)
+            result.push(child)
+            visit(child.name)
+          }
+        }
+        visit('')
+        const orphans = sortSiblings(resources.filter(r => !visited.has(r.name)))
+        return result.concat(orphans)
+      },
+      syncImportRelationsFromSettings() {
+        this.ensureImportRelations()
+      },
+      openResourceModal(res) {
+        const relations = this.settings_form.import_relations || {}
+        if (res) {
+          const rel = relations[res.name]
+          const isFixed = this.isFixedParent(rel)
+          this.resource_modal = {
+            step: 2,
+            resource_name: res.name,
+            type: this.resourceType(res.name),
+            parent_mode: isFixed ? 'fixed' : 'relation',
+            relation_name: isFixed ? null : (rel || null),
+            fixed_category_id: isFixed ? parseInt(rel, 10) : null,
+            fixed_category_label: null,
+            fixed_category_search: '',
+            fixed_category_results: [],
+            fixed_category_searching: false,
+            _fixed_category_search_timeout: null,
+            editing: true,
+          }
+          if (isFixed) this.loadFixedParentLabel(this.resource_modal.fixed_category_id)
+          return
+        }
+        this.resource_modal = {
+          step: 1,
+          resource_name: null,
+          type: 'post',
+          parent_mode: 'relation',
+          relation_name: null,
+          fixed_category_id: null,
+          fixed_category_label: null,
+          fixed_category_search: '',
+          fixed_category_results: [],
+          fixed_category_searching: false,
+          _fixed_category_search_timeout: null,
+          editing: false,
+        }
+      },
+      closeResourceModal() {
+        this.resource_modal = null
+      },
+      saveResourceModal() {
+        if (!this.resource_modal || !this.resource_modal.resource_name) return
+        this.sanitizeResourceModalRelation()
+        const name = this.resource_modal.resource_name
+        this.setResourceType(name, this.resource_modal.type)
+        if (this.resource_modal.parent_mode === 'fixed' && this.resource_modal.fixed_category_id) {
+          this.setImportRelation(name, this.resource_modal.fixed_category_id)
+        } else if (this.resource_modal.relation_name) {
+          this.setImportRelation(name, this.resource_modal.relation_name)
+        } else {
+          this.removeImportRelation(name)
+        }
+        this.closeResourceModal()
+      },
+      loadFixedParentLabel(id) {
+        if (!id || !this.resource_modal) return
+        axios.post('?op-api=search-categories', {}, { params: { ids: [id] } })
+          .then(res => {
+            const label = res.data && res.data[id]
+            if (label && this.resource_modal) {
+              this.resource_modal.fixed_category_label = label
+            }
+          })
+      },
+      queueFixedParentSearch() {
+        if (!this.resource_modal) return
+        clearTimeout(this.resource_modal._fixed_category_search_timeout)
+        if (!this.resource_modal.fixed_category_search.trim()) {
+          this.resource_modal.fixed_category_results = []
+          this.resource_modal.fixed_category_searching = false
+          return
+        }
+        this.resource_modal._fixed_category_search_timeout = setTimeout(() => this.searchFixedParentCategories(), 250)
+      },
+      searchFixedParentCategories() {
+        if (!this.resource_modal) return
+        const q = this.resource_modal.fixed_category_search.trim()
+        if (!q) {
+          this.resource_modal.fixed_category_results = []
+          return
+        }
+        this.resource_modal.fixed_category_searching = true
+        axios.post('?op-api=search-categories', {}, { params: { q } })
+          .then(res => {
+            if (!this.resource_modal) return
+            this.resource_modal.fixed_category_results = res.data || []
+          })
+          .finally(() => {
+            if (this.resource_modal) this.resource_modal.fixed_category_searching = false
+          })
+      },
+      selectFixedParentCategory(cat) {
+        if (!this.resource_modal || !cat || !cat.id) return
+        this.resource_modal.fixed_category_id = cat.id
+        this.resource_modal.fixed_category_label = cat
+        this.resource_modal.fixed_category_search = ''
+        this.resource_modal.fixed_category_results = []
+      },
+      clearFixedParentCategory() {
+        if (!this.resource_modal) return
+        this.resource_modal.fixed_category_id = null
+        this.resource_modal.fixed_category_label = null
+        this.resource_modal.fixed_category_search = ''
+        this.resource_modal.fixed_category_results = []
+      },
+      syncResourceTypesFromSchema() {
+        if (!this.settings_form.resource_types) {
+          this.$set(this.settings_form, 'resource_types', {})
+        }
+        if (!this.settings_form.static_terms) {
+          this.$set(this.settings_form, 'static_terms', [])
+        }
+        if (this.settings_form.disable_original_file_import === undefined) {
+          this.$set(this.settings_form, 'disable_original_file_import', false)
+        }
+        if (!this.settings_form.thumbnail_format) {
+          this.$set(this.settings_form, 'thumbnail_format', 'png')
+        }
+        if (this.settings_form.enable_imported_at_meta === undefined) {
+          this.$set(this.settings_form, 'enable_imported_at_meta', false)
+        }
+        this.syncImportRelationsFromSettings()
+        this.sanitizeAllImportRelations()
+      },
+      queueStaticTermSearch() {
+        clearTimeout(this._static_term_search_timeout)
+        if (!this.static_term_search.trim()) {
+          this.static_term_results = []
+          this.static_term_searching = false
+          return
+        }
+        this._static_term_search_timeout = setTimeout(() => this.searchStaticTerms(), 250)
+      },
+      searchStaticTerms() {
+        const q = this.static_term_search.trim()
+        if (!q) {
+          this.static_term_results = []
+          return
+        }
+        this.static_term_searching = true
+        axios.post('?op-api=search-categories', {}, { params: { q } })
+          .then(res => {
+            const selected = new Set(this.settings_form.static_terms || [])
+            this.static_term_results = (res.data || []).filter(cat => !selected.has(cat.id))
+          })
+          .finally(() => {
+            this.static_term_searching = false
+          })
+      },
+      addStaticTerm(cat) {
+        if (!cat || !cat.id) return
+        if (!this.settings_form.static_terms) {
+          this.$set(this.settings_form, 'static_terms', [])
+        }
+        if (this.settings_form.static_terms.includes(cat.id)) return
+        this.settings_form.static_terms.push(cat.id)
+        this.$set(this.static_term_labels, cat.id, cat)
+        this.static_term_search = ''
+        this.static_term_results = []
+      },
+      removeStaticTerm(id) {
+        if (!this.settings_form.static_terms) return
+        const idx = this.settings_form.static_terms.indexOf(id)
+        if (idx === -1) return
+        this.settings_form.static_terms.splice(idx, 1)
+        this.$delete(this.static_term_labels, id)
+      },
+      syncStaticTermLabels() {
+        if (!this.server_config || !this.server_config.static_term_labels) return
+        this.static_term_labels = { ...this.server_config.static_term_labels }
+      },
+      sortedResources(resources) {
+        return _.sortBy(Object.values(resources || {}), 'label')
       },
       startImport(file_name) {
         this.is_importing = true
@@ -749,6 +1550,7 @@
             this.import_result = res.data
             this.refreshSchema()
             this.getSnapshotsList()
+            this.getServerConfig()
           })
           .finally(res => {
             this.is_importing = false
@@ -758,6 +1560,7 @@
         this.is_loading_next_schema = true
         axios.post('?op-api=next-schema').then(res => {
             this.next_schema = res.data
+            this.syncResourceTypesFromSchema()
             this.panel_active = 'data-importer'
           })
           .finally(res => {
@@ -871,6 +1674,8 @@
       getServerConfig() {
         axios.post(`?op-api=server-config`).then(res => {
           this.server_config = res.data
+          this.syncResourceTypesFromSchema()
+          this.syncStaticTermLabels()
         })
       },
       fieldById(id) {

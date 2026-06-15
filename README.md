@@ -5,26 +5,120 @@
 This plugin is used to import a project snapshot into your woocommerce website. It uses the wordpress tables so you can use it the way you are used to. __All field data is saved into the object meta table.__
 You can create a project snapshot (and the corresponding token) using the __Snapshot__ feature in OnPage.
 
+## Admin UI
+
+| Menu | Purpose |
+|------|---------|
+| **WooCommerce → OnPage Importer** | Snapshot token, run imports, field mappings, resource types, protected categories, file settings, plugin update |
+| **WooCommerce → OnPage Cron Import** | API token for headless/cron imports, live curl and wp-cli command builder |
+
+Importer tabs: **Setup**, **Data Importer**, **Import settings**, **Variables**, **Update**.
+
+All import configuration (except optional developer hooks below) is stored in the database via **Import settings** or **OnPage Cron Import**.
+
 # Handling data
 When you import your snapshots, the plugin will generate [Eloquent Models](https://laravel.com/docs/7.x/eloquent) for your data, in the plugin directory `db-models/` these models are updated every time you import your data.
 
 You can view the models generated for your project in the plugin import page. For each model, you'll find the list of relations and fields imported.
 
 
-## Configure how to import each resource
-Before importing the data, you should specify how to import each resource (in your `functions.php`).
-Resources that are not listed here will still be imported in a custom `op_things` table (which makes them invisible to wordpress, and faster to import).
-You should only list those resources that will have their own page.
-For example, if you plan to have a page for each "Category" and one for each "Product", you can do it as follows (the format is "resource alias" => "import method").
-```
+## Import settings
+
+All import configuration is managed in **WooCommerce → OnPage Importer → Import settings** and stored in the database.
+
+### Resource mapping
+
+Use **WooCommerce resources** to choose, for each OnPage resource:
+
+- **Product** — imported as a WooCommerce product (`post`)
+- **Category** — imported as a WooCommerce product category (`term`)
+- **Hidden (thing)** — default for unlisted resources; stored in the plugin's high-performance `op_things` table (invisible to WordPress)
+
+<details>
+<summary>Legacy theme code (deprecated)</summary>
+
+```php
 add_filter('op_resource_types', function() {
   return [
-    'product' => 'post', // "post" = woocommerce product
-    'category' => 'term', // "term" = woocommerce category
-    // all other resources will be imported in a hidden plugin table with high performance
+    'product' => 'post',
+    'category' => 'term',
   ];
 });
+
+// Older hook — listed resources become products, all others become categories
+add_filter('on_page_product_resources', function() {
+  return ['shoes', 't_shirts'];
+});
 ```
+
+</details>
+
+### Parent relations
+
+Use the **WordPress parent** column in **WooCommerce resources** to link products and categories:
+
+- **OnPage relation field** — parent resolved from imported data
+- **Fixed WordPress category** — every item assigned to one category (that category is protected automatically)
+
+Enable **Link all parent categories** when a product has multiple category relations and you want all of them assigned (default: first only).
+
+<details>
+<summary>Legacy theme code (deprecated)</summary>
+
+```php
+add_action('op_import_relations', function() {
+    return [
+        'products' => 'subcategories',
+        'subcategories' => 'categories',
+    ];
+});
+```
+
+</details>
+
+### Protected categories
+
+Use **Protected categories** for WooCommerce categories the import must never update or delete (e.g. hand-made categories not from OnPage). Use primary-language IDs; WPML translations are protected automatically.
+
+<details>
+<summary>Legacy theme code (deprecated)</summary>
+
+```php
+add_filter('op_static_terms', function() {
+  return [1, 2, 3];
+});
+```
+
+</details>
+
+### File storage
+
+Files and thumbnails are not downloaded during the import process — they are fetched when you first reference them in templates (e.g. `$prod->file('main_image')->link()` or `->thumb(200)`). Later calls use the local cache.
+
+Under **Import settings → Files** you can configure:
+
+- **Serve original files from On Page CDN** — `->link()` returns the On Page URL directly without storing originals on your server (thumbnails are still cached locally).
+- **Thumbnail format** — force `png`, `jpg`, or `webp` for generated thumbnails (default: `png`).
+- **Store `op_imported_at` meta** — record when each product was last imported.
+
+<details>
+<summary>Legacy wp-config constants (deprecated)</summary>
+
+```php
+define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
+define('OP_THUMBNAIL_FORMAT', 'webp');
+```
+
+</details>
+
+<details>
+<summary>Upgrading from theme code or wp-config</summary>
+
+On plugin upgrade, legacy hooks and constants are auto-migrated into the database. If the importer shows a removal notice, delete the old config from your theme or `wp-config.php` — the database is the only source of truth after migration.
+
+`OP_API_TOKEN` is migrated the same way (migration 74) into **OnPage Cron Import**.
+
+</details>
 
 
 ## Selecting data
@@ -90,6 +184,16 @@ foreach ($prods as $prod) {
   $cat = $p->getRelatedItems('subcategory.category')->first();
 ```
 
+### Pluck field values
+You can use the `pluckField` method to pluck a single field from the query:
+```php
+$prods = Op\Product::pluckField('name'); // ['Product A', 'Product B', 'Product C']
+```
+
+__NOTE:__ All the above functions will return the value __as is__, so if the name contains special characters, they will __not__ be returned as HTML entities (`&` becomes `&amp;`). You have the responsibility to escape the output with functions such as `htmlentities` or the shorthand `op_e($string)`.
+
+__NOTE:__ All the above functions will return an array of values if the field is set to multiple.
+
 
 ### Accessing folders
 In On Page you can create field folders, and mark them as "default"
@@ -117,40 +221,10 @@ if ($folder = $prod->getDefaultFolder()) {
 }
 ```
 
-### File import settings
-Files and thumbnails will not be downloaded during the import process, instead they are downloaded and stored when you reference them.
-So, when you do something like `$prod->file('main_image')->link()` or `$prod->file('main_image')->thumb(200)` for the first time, the file will be downloaded in the plugin folder, so the page may take a while to load. Later calls will be instantaneous because the file has already been downloaded.
-
-While this is very handy, original files can be very heavy to store on your server.
-You can change the behaviour and use On Page as a CDN, so the `->link()` function will return the url from the On Page servers directly, without storing anything on your server:
-```php
-define('OP_DISABLE_ORIGINAL_FILE_IMPORT', true);
-```
-
-Note: in this scenario, `$file->thumb(...)` will still ask On Page to generate the thumbnail, and the thumbnail will be saved in the plugin folder.
-
 ### CDN support
 On Page supports uploading files to external CDNs.
 You can get the image url from the CDN simply calling `$p->file('info_file')->cdn()`.
 If you use multiple CDN, you can specify the CDN name like so: `$p->file('info_file')->link('my_custom_cdn')`.
-
-### Thumbnail settings
-Thumbnails will by default use the original file format,
-but you can force png, jpg, or webp using the `OP_THUMBNAIL_FORMAT` constant, like so:
-```php
-define('OP_THUMBNAIL_FORMAT', 'webp');
-```
-
-### 
-You can use the `pluckField` method to get the field from the query.
-```php
-$prods = Op\Product::pluckField('name'); // ['Product A', 'Product B', 'Product C']
-```
-
-__NOTE:__ All the above functions will return the value __as is__, so if the name contains special characters, they will __not__ be returned as HTML entities (`&` becomes `&amp;`). You have the responsibility to escape the output with functions such as `htmlentities` or the shorthand `op_e($string)`.
-
-__NOTE:__ All the above functions will return an array of values if the field is set to multiple.
-
 
 ## Filtering data
 You can use all the eloquent methods to filter your data, but because the fields are stored inside the meta table, we provide some helper functions as follow:
@@ -291,6 +365,8 @@ $cat->products; // A collection of products
 
 # Hooks
 
+Active developer hooks not covered by Import settings.
+
 ## Import completed
 A hook called whenever an import has completed, you can use it to regenerate the cache of the website.
 
@@ -326,48 +402,6 @@ add_action('op_gen_slug', function($item) {
 
 ```
 
-
-## Static terms
-On Page will manage all product categories and remove those that are not managed by On Page.
-If you have some terms that should not be updated or deleted or touched in any way by the import process, you can specify them as static terms.
-The `op_static_terms` filter can be used to specify the term_ids that the plugin should not touch.
-NOTE: you must specify the term_ids in the primary language, and the plugin will automatically consider all the translations of the terms you specify.
-```php
-add_filter('op_static_terms', function() {
-  return [1, 2, 3]; // term_ids in the primary language that should not be touched by the import process
-});
-```
-
-
-
-## Legacy way to specify import method (do not use)
-The following hook will import only the resource 'shoes' and 't_shirts' as product,
-and any other resource will be imported as a category.
-
-```php
-add_filter('on_page_product_resources', function() {
-  return ['shoes', 't_shirts']; // list of resource names (not labels)
-});
-```
-
-
-## Importing relations
-
-Wordpress relations (e.g. linking products with categories) are not imported by default.
-You can specify, for each resource, which relation to set the term parent.
-
-
-```php
-add_action('op_import_relations', function() {
-    return [
-        // On Page resource name => // On Page parent relation name
-        'products' => 'subcategories',
-        'subcategories' => 'categories',
-    ];
-});
-```
-
-By default only the first parent category is linked per product. To assign all related parent categories when a product has multiple, enable **Link all parent categories** in the plugin Import settings page.
 
 # Advanced language options
 
@@ -421,47 +455,88 @@ foreach ($category->products as $prod): ?>
 ## Product Page
 You should understand the way it works by now. Simply use the `->link()` method to get the link to the item.
 
-# Automate imports with APIs
-First of all, define a random token in your theme functions.php:
+# Automate imports
+
+Scheduled imports can run via **HTTP + API token** (remote cron) or **WP-CLI** (on the server). Both are configured from **WooCommerce → OnPage Cron Import**.
+
+## API token
+
+1. Open **WooCommerce → OnPage Cron Import**.
+2. Click **Generate token** (or **Regenerate token** to rotate an existing one).
+3. Copy the token or use the generated commands below.
+
+The token is stored in the database. Use **Disable token** to turn off HTTP cron auth. Regenerating or disabling invalidates any cron jobs still using the old token.
+
+<details>
+<summary>Legacy: <code>OP_API_TOKEN</code> in wp-config.php (deprecated)</summary>
+
+If you previously defined a token in `wp-config.php`, it is copied to the database once on upgrade (migration 74), then ignored at runtime:
+
 ```php
 define('OP_API_TOKEN', '0T780347N89YGA78EYN');
 ```
 
-You can do a POST call to your website passing the following parameters:
+Remove the constant after migrating — use **OnPage Cron Import** instead.
 
-__Command__:  
-`op-api`: import  
-__Your secret token__:  
-`op-token`: 0T780347N89YGA78EYN  
-__Generate a new snapshot before importing__:  
-`regen-snapshot`: true/false  
-__Import even if there are no updates from On Page__:  
-`force`: true/false  
-__Regenerate all slugs__:  
-`force-slug-regen`: true/false  
+</details>
 
-If you are using cron or similar, you can use the CURL command:
-`curl -X POST 'https://yourwebsite/?op-api=import&op-token=0T780347N89YGA78EYN&regen-snapshot=true&force=false'`
+## Import options and command builder
 
+On the **OnPage Cron Import** page, use the **Import options** checkboxes to include optional flags in the curl and wp-cli examples:
 
+| Option | curl parameter | wp-cli flag | Description |
+|--------|----------------|-------------|-------------|
+| *(none checked)* | — | — | Recommended for cron: import only when a new snapshot is available |
+| regen-snapshot | `regen-snapshot=true` | `--regen-snapshot` | Generate a new snapshot before importing |
+| force | `force=true` | `--force` | Import even if there are no updates from On Page |
+| force-slug-regen | `force-slug-regen=true` | `--force-slug-regen` | Regenerate all slugs (development only; bad for SEO) |
 
-# Automate imports with wp-cli
-You can easily automate the snapshot through wp-cli using the command `wp onpage import`.
+The page updates both commands live as you toggle options. Use **Copy curl command** or **Copy wp-cli command** when ready.
 
-By default, __the import will exit instantly if there is no new data to be imported__.
+### Minimal cron (recommended)
 
-This is useful because you can run this command in a cron every minute, and it will only actually import your data when a new snapshot is available.
+With all options unchecked, a typical cron entry looks like:
 
-If you want to override this behaviour and import data anyway, you can use the `wp onpage import --force` command, which will re-import all your data.
-
-You can also force the regeneration of a new snapshot before importing, which would be `wp onpage import --regen-snapshot`.
-
-If you are on __development__ and want the existing slugs to be updated as well, you can add the `--force-slug-regen` flag to the command.
-
-## Other wp-cli commands:
 ```bash
-wp onpage reset # Delete all the products and categories in WooCommerce
-wp onpage listmedia # List the files imported in WooCommerce
+curl -X POST 'https://yourwebsite/?op-api=import&op-token=YOUR_TOKEN'
+```
+
+Or on the server:
+
+```bash
+wp onpage import
+```
+
+By default, __the import exits instantly if there is no new data to be imported__. Safe to run every minute — it only imports when On Page has a new snapshot.
+
+### Example with options enabled
+
+If you enable **regen-snapshot** and **force**:
+
+```bash
+curl -X POST 'https://yourwebsite/?op-api=import&op-token=YOUR_TOKEN&regen-snapshot=true&force=true'
+wp onpage import --regen-snapshot --force
+```
+
+### HTTP parameters reference
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `op-api` | yes | Set to `import` |
+| `op-token` | yes | Your API token from **OnPage Cron Import** |
+| `regen-snapshot` | no | `true` to refresh the snapshot before importing |
+| `force` | no | `true` to re-import even without new data |
+| `force-slug-regen` | no | `true` to regenerate slugs (development only) |
+
+Request method: **POST**.
+
+## Other wp-cli commands
+
+```bash
+wp onpage reset      # Delete all products and categories managed by the plugin
+wp onpage listmedia  # List imported media files
+wp onpage update     # Update the plugin
+wp onpage cleanmeta  # Delete orphaned meta
 ```
 
 # Important Notes

@@ -168,6 +168,445 @@ function op_initdb()
     }
     op_setopt('migration', 60);
   }
+
+  if (op_settings()->migration < 70) {
+    op_migrate_resource_types();
+    op_setopt('migration', 70);
+  }
+
+  if (op_settings()->migration < 71) {
+    op_migrate_import_relations();
+    op_setopt('migration', 71);
+  }
+
+  if (op_settings()->migration < 72) {
+    op_migrate_static_terms();
+    op_setopt('migration', 72);
+  }
+
+  if (op_settings()->migration < 73) {
+    op_migrate_file_settings();
+    op_setopt('migration', 73);
+  }
+
+  if (op_settings()->migration < 74) {
+    op_migrate_api_token();
+    op_setopt('migration', 74);
+  }
+}
+
+function op_resource_types_to_array($types): array
+{
+  if (is_array($types)) return $types;
+  if (is_object($types)) return (array) $types;
+  return [];
+}
+
+function op_get_resource_types(): array
+{
+  return op_resource_types_to_array(op_getopt('resource_types'));
+}
+
+function op_get_resource_type_default(): string
+{
+  return op_getopt('resource_types_migrated_from') === 'legacy' ? 'term' : 'thing';
+}
+
+function op_migrate_resource_types(): void
+{
+  if (!empty(op_get_resource_types())) return;
+
+  $from_code = apply_filters('op_resource_types', null);
+  if (is_array($from_code) && count($from_code)) {
+    op_setopt('resource_types', $from_code);
+    op_setopt('resource_types_migrated_from', 'code');
+    op_setopt('resource_types_migrated_at', date('c'));
+    return;
+  }
+
+  $legacy = apply_filters('on_page_product_resources', null);
+  if (is_array($legacy) && count($legacy)) {
+    $types = [];
+    foreach ($legacy as $name) {
+      $types[$name] = 'post';
+    }
+    op_setopt('resource_types', $types);
+    op_setopt('resource_types_migrated_from', 'legacy');
+    op_setopt('resource_types_migrated_at', date('c'));
+    return;
+  }
+
+  $schema = op_schema();
+  if ($schema) {
+    $types = [];
+    foreach ($schema->resources as $res) {
+      if (!empty($res->op_type)) {
+        $types[$res->name] = $res->op_type;
+      }
+    }
+    if (count($types)) {
+      op_setopt('resource_types', $types);
+      op_setopt('resource_types_migrated_from', 'schema');
+      op_setopt('resource_types_migrated_at', date('c'));
+    }
+  }
+}
+
+function op_apply_resource_types(object $schema_json): void
+{
+  $types = op_get_resource_types();
+  $default = op_get_resource_type_default();
+
+  foreach ($schema_json->resources as $res) {
+    $type = $types[$res->name] ?? $default;
+    if (!in_array($type, ['thing', 'term', 'post'], true)) {
+      throw new \Exception("Invalid type for resource $res->name: $type");
+    }
+
+    $res->is_thing = $type === 'thing';
+    $res->is_product = $type === 'post';
+
+    $res->php_class = \OpLib\Term::class;
+    $res->php_metaclass = \OpLib\TermMeta::class;
+    $res->op_type = 'term';
+    if ($res->is_product) {
+      $res->op_type = 'post';
+      $res->php_class = \OpLib\Post::class;
+      $res->php_metaclass = \OpLib\PostMeta::class;
+    } elseif ($res->is_thing) {
+      $res->op_type = 'thing';
+      $res->php_class = \OpLib\Thing::class;
+      $res->php_metaclass = \OpLib\ThingMeta::class;
+    }
+  }
+}
+
+function op_resource_types_code_hooks_active(): bool
+{
+  return has_filter('op_resource_types') || has_filter('on_page_product_resources');
+}
+
+function op_resource_type_name_lists(?array $types = null): array
+{
+  $types = $types ?? op_get_resource_types();
+  $product = [];
+  $term = [];
+  $thing = [];
+  foreach ($types as $name => $type) {
+    if ($type === 'post') $product[] = $name;
+    elseif ($type === 'term') $term[] = $name;
+    elseif ($type === 'thing') $thing[] = $name;
+  }
+  return [
+    'product_resources' => $product,
+    'term_resources' => $term,
+    'thing_resources' => $thing,
+  ];
+}
+
+function op_schema_resource_types_mismatch(): bool
+{
+  $schema = op_schema();
+  if (!$schema) return false;
+
+  $types = op_get_resource_types();
+  if (empty($types)) return false;
+
+  $default = op_get_resource_type_default();
+  foreach ($schema->resources as $res) {
+    $db_type = $types[$res->name] ?? $default;
+    if (($res->op_type ?? null) !== $db_type) return true;
+  }
+  return false;
+}
+
+function op_resource_types_admin_notice(): void
+{
+  if (!current_user_can('administrator')) return;
+  if (!op_resource_types_code_hooks_active()) return;
+
+  echo '<div class="notice notice-warning"><p>';
+  echo '<strong>OnPage:</strong> Resource import types have been migrated to ';
+  echo '<a href="' . esc_url(admin_url('admin.php?page=onpage-importer')) . '">WooCommerce → OnPage Importer → Import settings</a>. ';
+  echo 'Please remove <code>add_filter(\'op_resource_types\', …)</code> ';
+  echo '(and any legacy <code>on_page_product_resources</code> hook) from your theme <code>functions.php</code> — ';
+  echo 'this config is now stored in the database and the code hook is ignored.';
+  echo '</p></div>';
+}
+
+function op_import_relations_to_array($relations): array
+{
+  if (is_array($relations)) return $relations;
+  if (is_object($relations)) return (array) $relations;
+  return [];
+}
+
+function op_is_fixed_parent_relation($parent): bool
+{
+  return is_int($parent) || (is_string($parent) && ctype_digit($parent));
+}
+
+function op_normalize_import_relation_parent($parent)
+{
+  if (op_is_fixed_parent_relation($parent)) {
+    return op_primary_lang_term_id((int) $parent);
+  }
+  return $parent;
+}
+
+function op_is_valid_fixed_parent_relation($parent): bool
+{
+  if (!op_is_fixed_parent_relation($parent)) return false;
+  $term = get_term(op_primary_lang_term_id((int) $parent), 'product_cat');
+  return $term && !is_wp_error($term);
+}
+
+function op_normalize_import_relations(array $relations): array
+{
+  foreach ($relations as $resource_name => $parent) {
+    if (op_is_fixed_parent_relation($parent)) {
+      $relations[$resource_name] = op_normalize_import_relation_parent($parent);
+    }
+  }
+  return $relations;
+}
+
+function op_get_import_relations(): array
+{
+  return op_normalize_import_relations(op_import_relations_to_array(op_getopt('import_relations')));
+}
+
+function op_migrate_import_relations(): void
+{
+  if (!empty(op_get_import_relations())) return;
+
+  $from_code = apply_filters('op_import_relations', null);
+  if (is_array($from_code) && count($from_code)) {
+    op_setopt('import_relations', $from_code);
+    op_setopt('import_relations_migrated_from', 'code');
+    op_setopt('import_relations_migrated_at', date('c'));
+    return;
+  }
+
+  $legacy = op_getopt('relations');
+  if ($legacy) {
+    $converted = [];
+    foreach ((array) $legacy as $row) {
+      $row = (array) $row;
+      if (empty($row['from']) || empty($row['to'])) continue;
+      $converted[$row['from']] = $row['to'];
+    }
+    if (count($converted)) {
+      op_setopt('import_relations', $converted);
+      op_setopt('import_relations_migrated_from', 'legacy-db');
+      op_setopt('import_relations_migrated_at', date('c'));
+    }
+  }
+}
+
+function op_import_relations_code_hooks_active(): bool
+{
+  return has_filter('op_import_relations');
+}
+
+function op_is_valid_parent_relation(string $resource_name, string $relation_name, array $resource_types, object $schema): bool
+{
+  $source_type = $resource_types[$resource_name] ?? null;
+  if (!in_array($source_type, ['post', 'term'], true)) return false;
+
+  $res = collect($schema->resources)->firstWhere('name', $resource_name);
+  if (!$res) return false;
+
+  $field = collect($res->fields)->firstWhere('name', $relation_name);
+  if (!$field || ($field->type ?? null) !== 'relation') return false;
+
+  $target = collect($schema->resources)->firstWhere('id', $field->rel_res_id);
+  if (!$target) return false;
+
+  return ($resource_types[$target->name] ?? null) === 'term';
+}
+
+function op_sanitize_import_relations(array $relations, array $resource_types, ?object $schema): array
+{
+  if (!$schema) return $relations;
+
+  foreach ($relations as $resource_name => $parent) {
+    if (op_is_fixed_parent_relation($parent)) {
+      if (!op_is_valid_fixed_parent_relation($parent)) {
+        unset($relations[$resource_name]);
+      } else {
+        $relations[$resource_name] = op_normalize_import_relation_parent($parent);
+      }
+      continue;
+    }
+    if (!is_string($parent) || !op_is_valid_parent_relation($resource_name, $parent, $resource_types, $schema)) {
+      unset($relations[$resource_name]);
+    }
+  }
+
+  return $relations;
+}
+
+function op_primary_lang_term_id(int $term_id): int
+{
+  if (!op_wpml_enabled()) return $term_id;
+  return (int) apply_filters('wpml_object_id', $term_id, 'product_cat', true, op_wpml_default());
+}
+
+function op_static_terms_to_array($terms): array
+{
+  if (!is_array($terms)) return [];
+  return array_values(array_unique(array_map('intval', $terms)));
+}
+
+function op_get_db_static_terms(): array
+{
+  return op_static_terms_to_array(op_getopt('static_terms'));
+}
+
+function op_migrate_static_terms(): void
+{
+  if (!empty(op_get_db_static_terms())) return;
+
+  $from_code = apply_filters('op_static_terms', null);
+  if (is_array($from_code) && count($from_code)) {
+    op_setopt('static_terms', op_sanitize_static_terms($from_code));
+    op_setopt('static_terms_migrated_from', 'code');
+    op_setopt('static_terms_migrated_at', date('c'));
+  }
+}
+
+function op_sanitize_static_terms(array $ids): array
+{
+  $out = [];
+  foreach ($ids as $id) {
+    if (!is_numeric($id)) continue;
+    $primary = op_primary_lang_term_id((int) $id);
+    $term = get_term($primary, 'product_cat');
+    if (!$term || is_wp_error($term)) continue;
+    $out[$primary] = $primary;
+  }
+  return array_values($out);
+}
+
+function op_static_terms_code_hooks_active(): bool
+{
+  return has_filter('op_static_terms');
+}
+
+function op_migrate_file_settings(): void
+{
+  if (!isset(op_settings()->disable_original_file_import)) {
+    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+      op_setopt('disable_original_file_import', true);
+      op_setopt('file_settings_migrated_from', 'constant');
+      op_setopt('file_settings_migrated_at', date('c'));
+    }
+  }
+
+  if (!isset(op_settings()->thumbnail_format)) {
+    if (defined('OP_THUMBNAIL_FORMAT') && in_array(OP_THUMBNAIL_FORMAT, ['png', 'jpg', 'webp'], true)) {
+      op_setopt('thumbnail_format', OP_THUMBNAIL_FORMAT);
+      if (!op_getopt('file_settings_migrated_from')) {
+        op_setopt('file_settings_migrated_from', 'constant');
+        op_setopt('file_settings_migrated_at', date('c'));
+      }
+    }
+  }
+}
+
+function op_disable_original_file_import(): bool
+{
+  return (bool) op_getopt('disable_original_file_import');
+}
+
+function op_preferred_image_format(): string
+{
+  $fmt = op_getopt('thumbnail_format');
+  return in_array($fmt, ['png', 'jpg', 'webp'], true) ? $fmt : 'png';
+}
+
+function op_file_settings_constants_active(): bool
+{
+  return defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') || defined('OP_THUMBNAIL_FORMAT');
+}
+
+function op_generate_api_token(): string
+{
+  return strtoupper(wp_generate_password(24, false, false));
+}
+
+function op_get_api_token(): ?string
+{
+  $token = op_getopt('api_token');
+  return is_string($token) && $token !== '' ? $token : null;
+}
+
+function op_api_token_valid(?string $token): bool
+{
+  if (!$token) return false;
+  $stored = op_get_api_token();
+  return $stored && hash_equals($stored, $token);
+}
+
+function op_api_token_constant_active(): bool
+{
+  return defined('OP_API_TOKEN') && OP_API_TOKEN;
+}
+
+function op_migrate_api_token(): void
+{
+  if (op_get_api_token() !== null) return;
+
+  if (defined('OP_API_TOKEN') && OP_API_TOKEN) {
+    op_setopt('api_token', (string) OP_API_TOKEN);
+    op_setopt('api_token_migrated_from', 'constant');
+    op_setopt('api_token_migrated_at', date('c'));
+  }
+}
+
+function op_search_product_categories(string $search, int $limit = 20): array
+{
+  $args = [
+    'taxonomy' => 'product_cat',
+    'hide_empty' => false,
+    'number' => $limit,
+  ];
+  if ($search !== '') {
+    $args['search'] = $search;
+  }
+
+  $terms = get_terms($args);
+  if (is_wp_error($terms) || !$terms) return [];
+
+  $out = [];
+  foreach ($terms as $term) {
+    $primary_id = op_primary_lang_term_id((int) $term->term_id);
+    if (isset($out[$primary_id])) continue;
+    $primary = get_term($primary_id, 'product_cat');
+    if (!$primary || is_wp_error($primary)) continue;
+    $out[$primary_id] = [
+      'id' => $primary_id,
+      'name' => $primary->name,
+      'slug' => $primary->slug,
+    ];
+  }
+  return array_values($out);
+}
+
+function op_get_category_labels(array $ids): array
+{
+  $out = [];
+  foreach (op_sanitize_static_terms($ids) as $id) {
+    $term = get_term($id, 'product_cat');
+    if (!$term || is_wp_error($term)) continue;
+    $out[$id] = [
+      'id' => $id,
+      'name' => $term->name,
+      'slug' => $term->slug,
+    ];
+  }
+  return $out;
 }
 
 function op_setopt($opt, $value)
@@ -741,6 +1180,7 @@ function op_unlock($lock)
 function op_import_snapshot(bool $force_slug_regen = false, string $restore_previous_snapshot = null, bool $force_import = false, bool $regen_snapshot = false)
 {
   op_ignore_user_scopes(true);
+  op_initdb();
   op_record("Starting import");
   op_record("Server time: " . date('Y-m-d H:i:s'));
 
@@ -797,47 +1237,7 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
     // Create imported_at field
     $schema_json->imported_at = date('Y-m-d H:i:s');
 
-    // Overwrite which resource must be imported as a product
-    // This is a legacy hook
-    $overwrite_products = apply_filters('on_page_product_resources', null);
-    if (is_array($overwrite_products)) {
-      foreach ($schema_json->resources as $res) {
-        $res->is_product = in_array($res->name, $overwrite_products);
-      }
-    }
-
-    // This is the newer hook which defines how to import resources
-    $overwrite_things = apply_filters('op_resource_types', null);
-    if (is_array($overwrite_things)) {
-      foreach ($schema_json->resources as $res) {
-        $type = 'thing';
-        if (isset($overwrite_things[$res->name])) {
-          $type = $overwrite_things[$res->name];
-          if (!in_array($type, ['thing', 'term', 'post'])) {
-            throw new \Exception("Invalid type for resource $res->name: $type");
-          }
-        }
-
-        $res->is_thing = $type === 'thing';
-        $res->is_product = $type === 'post';
-      }
-    }
-
-    // Setup php_class, php_metaclass, op_type for all the resources
-    foreach ($schema_json->resources as $res) {
-      $res->php_class = \OpLib\Term::class;
-      $res->php_metaclass = \OpLib\TermMeta::class;
-      $res->op_type = 'term';
-      if ($res->is_product) {
-        $res->op_type = 'post';
-        $res->php_class = \OpLib\Post::class;
-        $res->php_metaclass = \OpLib\PostMeta::class;
-      } elseif ($res->is_thing) {
-        $res->op_type = 'thing';
-        $res->php_class = \OpLib\Thing::class;
-        $res->php_metaclass = \OpLib\ThingMeta::class;
-      }
-    }
+    op_apply_resource_types($schema_json);
 
     // Clone this element
     $snapshot_to_save = clone $schema_json;
@@ -1003,11 +1403,9 @@ function op_disable_old_categories(array $imported_items): int
  */
 function op_get_static_terms()
 {
-  $primary_lang_static_term_ids = [];
+  $primary_lang_static_term_ids = op_get_db_static_terms();
 
-  array_push($primary_lang_static_term_ids, ...apply_filters('op_static_terms', null) ?: []);
-
-  $static_parents = apply_filters('op_import_relations', null) ?: [];
+  $static_parents = op_get_import_relations();
   foreach ($static_parents as $term_id) {
     if (!is_numeric($term_id)) continue;
     $primary_lang_static_term_ids[] = $term_id;
@@ -1048,7 +1446,7 @@ function op_delete_old_things(array $imported_items): int
 
 function op_link_imported_data($schema)
 {
-  $relations = apply_filters('op_import_relations', null);
+  $relations = op_get_import_relations();
   if (empty($relations)) return;
 
   $link_all_parent_categories = (bool) op_getopt('link_all_parent_categories');
@@ -1063,11 +1461,12 @@ function op_link_imported_data($schema)
 
   foreach ($relations as $resource_name => $parent_relation) {
     $res = collect($schema->resources)->firstWhere('name', $resource_name);
-    if (!$res) op_err("Cannot find resource $resource_name for hook op_import_relations; available resources: " . collect($schema->resources)->pluck('name')->implode(', '));
+    if (!$res) op_err("Cannot find resource $resource_name for import_relations; available resources: " . collect($schema->resources)->pluck('name')->implode(', '));
     $class = op_name_to_class($res->name);
 
     // Static parent -> static category id
-    if (is_int($parent_relation)) {
+    if (is_numeric($parent_relation)) {
+      $parent_relation = (int) $parent_relation;
       foreach ($class::query()->get() as $child_term) {
         // make sure this is the primary language term
         if (op_wpml_enabled()) {
@@ -1095,7 +1494,7 @@ function op_link_imported_data($schema)
     } else {
       // Parent relation is a relation name
       $rel_field = collect($res->fields)->where('type', 'relation')->firstWhere('name', $parent_relation);
-      if (!$rel_field) op_err("Cannot find relation $parent_relation for hook op_import_relations");
+      if (!$rel_field) op_err("Cannot find relation $parent_relation for import_relations on resource $resource_name");
 
       $terms = $class::query()->withoutMeta()->with([
         $parent_relation => function ($q) {
@@ -2304,7 +2703,7 @@ function op_file_url(object $file, int $w = null, int $h = null, bool $contain =
 
   // Serve original files directly from On Page servers
   if (!$is_thumb) {
-    if (defined('OP_DISABLE_ORIGINAL_FILE_IMPORT') && OP_DISABLE_ORIGINAL_FILE_IMPORT) {
+    if (op_disable_original_file_import()) {
       return $op_url;
     }
   }
@@ -2329,11 +2728,6 @@ function op_import_log_path()
   $path = op_file_path('import-log.txt');
   if (!is_file($path)) touch($path);
   return $path;
-}
-
-function op_preferred_image_format()
-{
-  return (defined('OP_THUMBNAIL_FORMAT') && OP_THUMBNAIL_FORMAT) ? OP_THUMBNAIL_FORMAT : 'png';
 }
 
 function op_http_file_url(string $token, string $name = null, bool $inline = null)

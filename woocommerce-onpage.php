@@ -27,7 +27,7 @@ add_filter('init', function () {
   \WpEloquent\Eloquent\Facades\DB::statement("SET group_concat_max_len = 100000000;");
 
   $authorized = current_user_can('administrator');
-  if (defined('OP_API_TOKEN') && OP_API_TOKEN && op_request('op-token') === OP_API_TOKEN) {
+  if (op_api_token_valid(op_request('op-token'))) {
     $authorized = true;
   }
 
@@ -54,7 +54,55 @@ add_filter('init', function () {
     op_ignore_user_scopes(true);
     switch ($api) {
       case 'save-settings':
-        op_ret(op_settings(op_post('settings')));
+        $settings = op_post('settings');
+        if (isset($settings['resource_types']) && is_array($settings['resource_types'])) {
+          foreach ($settings['resource_types'] as $name => $type) {
+            if ($type === 'thing') {
+              unset($settings['resource_types'][$name]);
+              continue;
+            }
+            if (!in_array($type, ['post', 'term', 'thing'], true)) {
+              op_err("Invalid resource type for $name: $type");
+            }
+          }
+        }
+        if (isset($settings['import_relations']) && is_array($settings['import_relations'])) {
+          foreach ($settings['import_relations'] as $resource => $parent) {
+            if (!is_string($resource) || $resource === '') {
+              op_err('Invalid import_relations resource name');
+            }
+            if (op_is_fixed_parent_relation($parent)) {
+              if (!op_is_valid_fixed_parent_relation($parent)) {
+                op_err("Invalid fixed parent category for resource $resource");
+              }
+              $settings['import_relations'][$resource] = op_normalize_import_relation_parent($parent);
+              continue;
+            }
+            if (!is_string($parent)) {
+              op_err("Invalid parent for resource $resource");
+            }
+          }
+          $types = op_resource_types_to_array($settings['resource_types'] ?? op_get_resource_types());
+          $schema = op_stored_schema();
+          if ($schema) {
+            $settings['import_relations'] = op_sanitize_import_relations($settings['import_relations'], $types, $schema);
+          }
+        }
+        if (isset($settings['static_terms']) && is_array($settings['static_terms'])) {
+          $settings['static_terms'] = op_sanitize_static_terms($settings['static_terms']);
+        }
+        if (array_key_exists('disable_original_file_import', $settings)) {
+          $settings['disable_original_file_import'] = (bool) $settings['disable_original_file_import'];
+        }
+        if (array_key_exists('enable_imported_at_meta', $settings)) {
+          $settings['enable_imported_at_meta'] = (bool) $settings['enable_imported_at_meta'];
+        }
+        if (isset($settings['thumbnail_format'])) {
+          if (!in_array($settings['thumbnail_format'], ['png', 'jpg', 'webp'], true)) {
+            op_err('Invalid thumbnail format');
+          }
+        }
+        op_ret(op_settings($settings));
 
       case 'import':
         $t1 = microtime(true);
@@ -81,17 +129,68 @@ add_filter('init', function () {
         }
         op_ret($schema);
       case 'server-config':
+        $type_lists = op_resource_type_name_lists();
+        $static_terms = op_get_db_static_terms();
+        op_ret(array_merge($type_lists, [
+          'resource_types' => op_get_resource_types(),
+          'default_unmapped_resource_type' => op_get_resource_type_default(),
+          'resource_types_code_hooks_active' => op_resource_types_code_hooks_active(),
+          'schema_resource_types_mismatch' => op_schema_resource_types_mismatch(),
+          'import_relations' => op_get_import_relations(),
+          'import_relations_code_hooks_active' => op_import_relations_code_hooks_active(),
+          'static_terms' => $static_terms,
+          'static_term_labels' => op_get_category_labels($static_terms),
+          'static_terms_code_hooks_active' => op_static_terms_code_hooks_active(),
+          'file_settings_constants_active' => op_file_settings_constants_active(),
+          'api_token_constant_active' => op_api_token_constant_active(),
+        ]));
+
+      case 'api-token-status':
+        if (!current_user_can('administrator')) op_err('Unauthorized');
         op_ret([
-          'product_resources' => !op_schema() ? [] : collect(op_schema()->resources)
-            ->where('op_type', 'post')
-            ->pluck('name'),
-          'term_resources' => !op_schema() ? [] : collect(op_schema()->resources)
-            ->where('op_type', 'term')
-            ->pluck('name'),
-          'thing_resources' => !op_schema() ? [] : collect(op_schema()->resources)
-            ->where('op_type', 'thing')
-            ->pluck('name'),
+          'enabled' => (bool) op_get_api_token(),
+          'token' => op_get_api_token(),
+          'site_url' => home_url('/'),
+          'api_token_constant_active' => op_api_token_constant_active(),
         ]);
+
+      case 'generate-api-token':
+        if (!current_user_can('administrator')) op_err('Unauthorized');
+        if (op_get_api_token()) op_err('API token already enabled');
+        $token = op_generate_api_token();
+        op_setopt('api_token', $token);
+        op_ret([
+          'enabled' => true,
+          'token' => $token,
+          'site_url' => home_url('/'),
+        ]);
+
+      case 'regenerate-api-token':
+        if (!current_user_can('administrator')) op_err('Unauthorized');
+        if (!op_get_api_token()) op_err('No API token to regenerate');
+        $token = op_generate_api_token();
+        op_setopt('api_token', $token);
+        op_ret([
+          'enabled' => true,
+          'token' => $token,
+          'site_url' => home_url('/'),
+        ]);
+
+      case 'disable-api-token':
+        if (!current_user_can('administrator')) op_err('Unauthorized');
+        op_setopt('api_token', null);
+        op_ret([
+          'enabled' => false,
+          'token' => null,
+          'site_url' => home_url('/'),
+        ]);
+
+      case 'search-categories':
+        $ids = op_request('ids');
+        if ($ids) {
+          op_ret(op_get_category_labels(is_array($ids) ? $ids : [$ids]));
+        }
+        op_ret(op_search_product_categories((string) (op_request('q') ?? '')));
 
 
       case 'next-schema':
@@ -143,12 +242,23 @@ add_filter('admin_menu', function () {
     'onpage-importer',
     function () {
       op_ignore_user_scopes(true);
+      op_initdb();
       require __DIR__ . '/pages/import.php';
     }
   );
+  add_submenu_page(
+    'woocommerce',
+    'OnPage Cron Import',
+    'OnPage Cron Import',
+    'administrator',
+    'onpage-cron-import',
+    function () {
+      op_ignore_user_scopes(true);
+      op_initdb();
+      require __DIR__ . '/pages/api-token.php';
+    }
+  );
 });
-
-
 
 // Add tab with product info
 add_filter('woocommerce_product_data_tabs', function ($tabs) {
