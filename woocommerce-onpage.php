@@ -128,7 +128,7 @@ add_filter('init', function () {
         op_ret([
           'log' => op_record('finish'),
           'c_count' => OpLib\Term::localized()->count(),
-          'p_count' => OpLib\Post::localized()->count(),
+          'p_count' => OpLib\Post::localized()->whereIn('post_type', op_schema_target_post_types())->count(),
           't_count' => OpLib\Thing::localized()->count(),
           'time' => $t2 - $t1,
         ]);

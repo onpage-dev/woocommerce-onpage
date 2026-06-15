@@ -183,6 +183,10 @@ trait MetaFunctions {
     } else {
       $query = Term::query()->unfiltered()->where(self::$slug_field, $slug)
       ->whereHas('taxonomies', function($q) {
+         $taxonomy = method_exists(static::class, 'getResource')
+           ? op_resource_target_taxonomy(static::getResource())
+           : 'product_cat';
+         $q->where('taxonomy', $taxonomy);
          if (op_wpml_enabled()) {
            $q->whereHas('icl_translation', function($q) {
              $q->where('language_code', op_locale());

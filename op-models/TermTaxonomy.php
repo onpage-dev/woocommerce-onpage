@@ -24,7 +24,7 @@ class TermTaxonomy extends Model
   {
     $element_type = method_exists(static::class, 'getResource')
       ? op_resource_target_wpml_element_type(static::getResource())
-      : 'tax_product_cat';
+      : 'tax_' . ($this->taxonomy ?: 'product_cat');
     return $this->hasOne(IclTranslation::class, 'element_id', 'term_taxonomy_id')->where('element_type', $element_type);
   }
 

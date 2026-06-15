@@ -5,6 +5,11 @@ if (!defined('ABSPATH')) exit;
 // ini_set('display_errors', 1); ini_set('display_startup_errors', 1);
 // error_reporting(E_ALL);
 
+global $wpdb;
+define('OP_PLUGIN', true);
+define('OP_MAGIC_VALUE_NULL', 'QXY7NG087REYFN0N7YA08D7NS7');
+define('OP_WP_PREFIX', $wpdb->prefix);
+
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/src/ResourceTarget.php';
 require_once __DIR__ . '/src/ImportContext.php';
@@ -16,12 +21,6 @@ use OpSupport\ResourceTarget;
 use OpSupport\WooCommerceFieldMap;
 use OpLib\Model;
 use \WpEloquent\Eloquent\Facades\DB;
-
-
-global $wpdb;
-define('OP_PLUGIN', true);
-define('OP_MAGIC_VALUE_NULL', 'QXY7NG087REYFN0N7YA08D7NS7');
-define('OP_WP_PREFIX', $wpdb->prefix);
 
 $___op_conf = (object)[
   'op_fallback_langs' => [],
@@ -104,7 +103,7 @@ function op_initdb()
 
   if (op_settings()->migration < 51) {
     // op_debug();
-    foreach (\OpLib\Post::all() as $item) {
+    foreach (\OpLib\Post::whereIn('post_type', op_schema_target_post_types())->get() as $item) {
       if (!$item->getMeta('op_lang*')) {
         $item->meta()->create([
           'meta_key'   => 'op_lang*',
@@ -254,7 +253,7 @@ function op_migrate_resource_types(): void
     return;
   }
 
-  $schema = op_schema();
+  $schema = op_stored_schema();
   if ($schema) {
     $types = [];
     foreach ($schema->resources as $res) {
@@ -435,7 +434,7 @@ function op_resource_type_name_lists(?array $types = null): array
 
 function op_schema_resource_types_mismatch(): bool
 {
-  $schema = op_schema();
+  $schema = op_stored_schema();
   if (!$schema) return false;
 
   $types = op_get_resource_types();
@@ -1787,7 +1786,7 @@ function op_delete_orphan_meta()
 function op_disable_old_products(ImportContext $context): int
 {
   $post_types = op_schema_target_post_types();
-  $posts_to_remove = OpLib\Post::withoutGlobalScopes()
+  $posts_to_remove = OpLib\Post::query()
     ->whereIn('post_type', $post_types)
     ->pluck('ID')
     ->flip();
@@ -1925,6 +1924,11 @@ function op_link_imported_data($schema)
     $id_to_parent = $taxonomy
       ? DB::table('term_taxonomy')->where('taxonomy', $taxonomy)->pluck('parent', 'term_id')
       : collect();
+    if ($res->op_type === 'post' && $post_type) {
+      $post_sync_types[$post_type] = true;
+    } elseif ($res->op_type === 'term' && $taxonomy) {
+      $term_sync_taxonomies[$taxonomy] = true;
+    }
 
     // Static parent -> static category id
     if (is_numeric($parent_relation)) {
@@ -3445,7 +3449,7 @@ function op_category($key, $value)
 
 function op_product($key, $value)
 {
-  $item = OpLib\Post::where($key, $value)->first();
+  $item = OpLib\Post::whereIn('post_type', op_schema_target_post_types())->where($key, $value)->first();
   if (!$item) return null;
 
   $class = op_name_to_class($item->resource->name);
@@ -3651,6 +3655,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
       $query = \OpLib\Post::query()
         ->unfiltered()
         ->withAnyStatus()
+        ->whereIn('post_type', op_schema_target_post_types())
         ->limit(2000);
       if ($post_scope) {
         $post_scope($query);
@@ -3678,6 +3683,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
     while (true) {
       $query = OpLib\TermTaxonomy::query()
         ->select(['term_taxonomy_id', 'term_id'])
+        ->whereIn('taxonomy', op_schema_target_taxonomies())
         ->limit(2000);
 
       if ($term_scope) {

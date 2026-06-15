@@ -34,7 +34,7 @@ class ONPAGE_CLI
     print_r([
       // 'log' => op_record('finish'),
       'c_count' => OpLib\Term::localized()->count(),
-      'p_count' => OpLib\Post::localized()->count(),
+      'p_count' => OpLib\Post::localized()->whereIn('post_type', op_schema_target_post_types())->count(),
       'time' => $t2 - $t1,
     ]);
   }

@@ -43,7 +43,7 @@ class Post extends Model {
   public function icl_translation() {
     $element_type = method_exists(static::class, 'getResource')
       ? op_resource_target_wpml_element_type(static::getResource())
-      : 'post_product';
+      : 'post_' . ($this->post_type ?: 'product');
     return $this->hasOne(IclTranslation::class, 'element_id', 'ID')->where('element_type', $element_type);
   }
 
