@@ -118,6 +118,14 @@ add_filter('init', function () {
         if (isset($settings['fallback_langs']) && is_array($settings['fallback_langs'])) {
           $settings['fallback_langs'] = op_sanitize_fallback_langs($settings['fallback_langs']);
         }
+        $schema = op_stored_schema();
+        if ($schema) {
+          op_apply_resource_types($schema, $types_for_targets, $settings['resource_targets']);
+        }
+        $settings['woocommerce_variations'] = op_sanitize_woocommerce_variations(
+          op_woocommerce_variations_to_array($settings['woocommerce_variations'] ?? []),
+          $schema
+        );
         $saved = op_settings($settings);
         op_internal_bootstrap_language_config(true);
         op_ret($saved);
@@ -153,6 +161,7 @@ add_filter('init', function () {
         op_ret(array_merge($type_lists, [
           'resource_types' => op_get_resource_types(),
           'resource_targets' => op_get_resource_targets(),
+          'woocommerce_variations' => op_woocommerce_variations_to_array(op_getopt('woocommerce_variations')),
           'default_unmapped_resource_type' => op_get_resource_type_default(),
           'resource_types_code_hooks_active' => op_resource_types_code_hooks_active(),
           'schema_resource_types_mismatch' => op_schema_resource_types_mismatch(),

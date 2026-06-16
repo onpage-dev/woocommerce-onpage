@@ -14,11 +14,14 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/src/ResourceTarget.php';
 require_once __DIR__ . '/src/ImportContext.php';
 require_once __DIR__ . '/src/WooCommerceFieldMap.php';
+require_once __DIR__ . '/src/WooCommerceVariationConfig.php';
 // use Illuminate\Database\Capsule\Manager as DB;
 
 use OpSupport\ImportContext;
 use OpSupport\ResourceTarget;
 use OpSupport\WooCommerceFieldMap;
+use OpSupport\WooCommerceVariationAttributeConfig;
+use OpSupport\WooCommerceVariationConfig;
 use OpLib\Model;
 use \WpEloquent\Eloquent\Facades\DB;
 
@@ -281,10 +284,10 @@ function op_migrate_resource_types(): void
   }
 }
 
-function op_apply_resource_types(object $schema_json): void
+function op_apply_resource_types(object $schema_json, ?array $types = null, ?array $targets = null): void
 {
-  $types = op_get_resource_types();
-  $targets = op_get_resource_targets();
+  $types = $types ?? op_get_resource_types();
+  $targets = $targets ?? op_get_resource_targets();
   $default = op_get_resource_type_default();
 
   foreach ($schema_json->resources as $res) {
@@ -443,6 +446,8 @@ function op_resource_type_name_lists(?array $types = null): array
     'term_resources' => $term,
     'thing_resources' => $thing,
     'product_fields' => array_values(WooCommerceFieldMap::adminFields()),
+    'variation_fields' => array_values(WooCommerceFieldMap::variationAdminFields()),
+    'woocommerce_available' => op_woocommerce_available(),
     'post_types' => op_registered_post_type_options(),
     'taxonomies' => op_registered_taxonomy_options(),
   ];
@@ -687,6 +692,92 @@ function op_target_taxonomies_from_settings(array $targets): array
     if ($taxonomy) $taxonomies[] = $taxonomy;
   }
   return array_values(array_unique($taxonomies)) ?: ['product_cat'];
+}
+
+function op_woocommerce_available(): bool
+{
+  return function_exists('wc_attribute_taxonomy_name')
+    && function_exists('wc_create_attribute')
+    && taxonomy_exists('product_type');
+}
+
+function op_woocommerce_variations_to_array($configs): array
+{
+  if (is_array($configs)) return $configs;
+  if (is_object($configs)) return (array) $configs;
+  return [];
+}
+
+function op_sanitize_woocommerce_variations(array $configs, ?object $schema): array
+{
+  if (!$schema) return [];
+
+  $out = [];
+  $resources = collect($schema->resources)->keyBy('name');
+  $field_options = array_column(WooCommerceFieldMap::variationAdminFields(), 'name');
+
+  foreach ($configs as $resource_name => $raw_config) {
+    if (!is_string($resource_name) || $resource_name === '') continue;
+    $res = $resources[$resource_name] ?? null;
+    if (!$res || !op_resource_target_has_woocommerce($res)) continue;
+
+    $raw_config = is_object($raw_config) ? (array) $raw_config : (array) $raw_config;
+    $config = WooCommerceVariationConfig::fromArray($raw_config);
+    if (!$config) continue;
+
+    $relation = collect($res->fields)->where('type', 'relation')->firstWhere('name', $config->relation);
+    if (!$relation) continue;
+
+    $variant_res = collect($schema->resources)->firstWhere('id', $relation->rel_res_id);
+    if (!$variant_res) continue;
+
+    $valid_fields = [];
+    foreach ($field_options as $field_option) {
+      $field = $config->fields[$field_option] ?? null;
+      if (!$field) continue;
+      if ($field !== 'empty' && !op_is_valid_variation_value_field($schema, $variant_res, $field, null)) continue;
+      $valid_fields[$field_option] = $field;
+    }
+
+    $attributes = [];
+    foreach ($config->attributes as $attribute) {
+      if (!op_is_valid_variation_value_field($schema, $variant_res, $attribute->field, $attribute->field2)) continue;
+      $attributes[] = $attribute;
+    }
+    if (empty($attributes)) continue;
+
+    $out[$resource_name] = (new WooCommerceVariationConfig(true, $config->relation, $valid_fields, $attributes))->toArray();
+  }
+
+  return $out;
+}
+
+function op_is_valid_variation_value_field(object $schema, object $res, string $field_id, ?string $field2_id): bool
+{
+  $field = collect($res->fields)->firstWhere('id', $field_id);
+  if (!$field) return false;
+  if (($field->type ?? null) !== 'relation') return true;
+  if (!$field2_id) return false;
+  $target_res = collect($schema->resources ?? [])->firstWhere('id', $field->rel_res_id);
+  if (!$target_res) return false;
+  return (bool) collect($target_res->fields)->firstWhere('id', $field2_id);
+}
+
+/**
+ * @return array<string,WooCommerceVariationConfig>
+ */
+function op_get_woocommerce_variation_configs(?object $schema = null): array
+{
+  $schema = $schema ?: op_schema();
+  if (!$schema) return [];
+
+  $configs = op_sanitize_woocommerce_variations(op_woocommerce_variations_to_array(op_getopt('woocommerce_variations')), $schema);
+  $out = [];
+  foreach ($configs as $resource_name => $config) {
+    $typed = WooCommerceVariationConfig::fromArray(is_object($config) ? (array) $config : (array) $config);
+    if ($typed) $out[$resource_name] = $typed;
+  }
+  return $out;
 }
 
 function op_static_terms_to_array($terms): array
@@ -1819,6 +1910,9 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_import_snapshot_relations($schema, $schema_json, $context);
   op_record("done");
 
+  op_record("Importing WooCommerce variations...");
+  $variation_count = op_import_woocommerce_variations($schema, $schema_json, $context);
+  op_record("done ($variation_count variations)");
 
   op_record('Deleting old terms...');
   $disabled_count = op_disable_old_categories($context);
@@ -1934,12 +2028,29 @@ function op_disable_old_products(ImportContext $context): int
 
   // Set posts as trashed
   foreach ($posts_to_remove->keys()->chunk(1000) as $chunk) {
+    op_delete_product_variations_for_parents($chunk->all());
     OpLib\Post::whereIn('ID', $chunk)->update([
       'post_status' => 'trash',
     ]);
   }
   return $posts_to_remove->count();
 }
+
+function op_delete_product_variations_for_parents(array $parent_ids): void
+{
+  $parent_ids = array_values(array_unique(array_filter(array_map('intval', $parent_ids))));
+  if (empty($parent_ids)) return;
+
+  foreach (array_chunk($parent_ids, 1000) as $chunk) {
+    $variation_ids = DB::table('posts')
+      ->where('post_type', 'product_variation')
+      ->whereIn('post_parent', $chunk)
+      ->pluck('ID')
+      ->all();
+    op_delete_product_variations($variation_ids);
+  }
+}
+
 function op_disable_old_categories(ImportContext $context): int
 {
   $taxonomies = op_schema_target_taxonomies();
@@ -2781,7 +2892,7 @@ function op_remove_corrupted()
 
   $deleted_terms = OpLib\Term::withoutGlobalScopes()
     ->whereNotIn('term_id', op_get_static_terms())
-    ->whereHas('taxonomies', function ($tax_query) {
+    ->whereHas('taxonomies', function ($tax_query) use ($term_taxonomies) {
       $tax_query->whereIn('taxonomy', $term_taxonomies);
     })
     ->where(function ($q) {
@@ -3194,6 +3305,563 @@ function op_generate_data_meta($schema_json, $res, $thing, int $object_id, $fiel
   }
 
   return $meta;
+}
+
+function op_extract_variation_value(object $schema_json, object $variant_res, object $variant_thing, ?string $field_id, ?string $field2_id, ?string $lang)
+{
+  if (!$field_id) return null;
+  $value = op_extract_value_from_raw_thing($schema_json, $variant_res, $variant_thing, $field_id, $field2_id, $lang);
+  if (is_array($value)) {
+    $value = $value[0] ?? null;
+  }
+  if (is_object($value)) {
+    $value = json_encode($value);
+  }
+  return is_scalar($value) ? trim((string) $value) : null;
+}
+
+function op_extract_variation_wc_meta(object $schema_json, object $variant_res, object $variant_thing, WooCommerceVariationConfig $config, ?string $lang): array
+{
+  $values = [];
+  foreach (WooCommerceFieldMap::metaDefinitions() as $meta_key => $meta_info) {
+    $option = $meta_info['option'];
+    $field_id = $config->fields[$option] ?? null;
+    if (!$field_id) continue;
+
+    $values[$meta_key] = null;
+    if ($field_id === 'empty') continue;
+
+    $value = op_extract_variation_value($schema_json, $variant_res, $variant_thing, $field_id, null, $lang);
+    if ($value === null || $value === '') continue;
+    if (isset($meta_info['mapper'])) {
+      $value = $meta_info['mapper']($value, $values);
+    }
+    $values[$meta_key] = $value;
+  }
+
+  if (!isset($values['_stock_status']) && isset($values['_stock'])) {
+    $values['_stock_status'] = (float) $values['_stock'] > 0 ? 'instock' : 'outofstock';
+  }
+
+  $sale_period_active = true;
+  if (isset($values['_sale_price_dates_from']) && $values['_sale_price_dates_from']) {
+    $values['_sale_price_dates_from'] = strtotime($values['_sale_price_dates_from']);
+    if (time() < $values['_sale_price_dates_from']) $sale_period_active = false;
+  }
+  if (isset($values['_sale_price_dates_to']) && $values['_sale_price_dates_to']) {
+    $values['_sale_price_dates_to'] = strtotime($values['_sale_price_dates_to']);
+    if (time() > $values['_sale_price_dates_to']) $sale_period_active = false;
+  }
+  $values['_price'] = @$values['_sale_price'] && $sale_period_active ? @$values['_sale_price'] : @$values['_regular_price'];
+
+  return $values;
+}
+
+function op_ensure_wc_attribute_taxonomy(WooCommerceVariationAttributeConfig $attribute): string
+{
+  $taxonomy = wc_attribute_taxonomy_name($attribute->slug);
+  $attribute_id = wc_attribute_taxonomy_id_by_name($attribute->slug);
+  $created = wc_create_attribute([
+    'id' => $attribute_id ?: 0,
+    'name' => $attribute->label,
+    'slug' => $attribute->slug,
+    'type' => 'select',
+    'order_by' => 'menu_order',
+    'has_archives' => false,
+  ]);
+  if ($created instanceof \WP_Error) {
+    op_err('Cannot create WooCommerce attribute', ['attribute' => $attribute->toArray(), 'wp_err' => $created]);
+  }
+  delete_transient('wc_attribute_taxonomies');
+  if (class_exists('WC_Cache_Helper')) {
+    \WC_Cache_Helper::invalidate_cache_group('woocommerce-attributes');
+  }
+
+  if (!taxonomy_exists($taxonomy)) {
+    register_taxonomy($taxonomy, ['product'], [
+      'hierarchical' => false,
+      'show_ui' => false,
+      'query_var' => true,
+      'rewrite' => false,
+    ]);
+  }
+
+  return $taxonomy;
+}
+
+function op_ensure_wc_attribute_term(string $taxonomy, string $label): ?array
+{
+  $label = trim($label);
+  if ($label === '') return null;
+
+  $existing = term_exists($label, $taxonomy);
+  if (!$existing) {
+    $existing = wp_insert_term($label, $taxonomy, ['slug' => sanitize_title($label)]);
+  }
+  if ($existing instanceof \WP_Error) {
+    op_err('Cannot create WooCommerce attribute term', ['taxonomy' => $taxonomy, 'label' => $label, 'wp_err' => $existing]);
+  }
+
+  $term_id = is_array($existing) ? (int) $existing['term_id'] : (int) $existing;
+  $term = get_term($term_id, $taxonomy);
+  if (!$term || is_wp_error($term)) return null;
+
+  return [
+    'term_id' => (int) $term->term_id,
+    'slug' => $term->slug,
+    'name' => $term->name,
+  ];
+}
+
+function op_current_managed_variations(array $parent_ids): array
+{
+  if (empty($parent_ids)) return [];
+
+  $rows = DB::table('posts as p')
+    ->leftJoin('postmeta as op_id', function ($join) {
+      $join->on('op_id.post_id', '=', 'p.ID')->where('op_id.meta_key', '=', 'op_id*');
+    })
+    ->leftJoin('postmeta as op_res', function ($join) {
+      $join->on('op_res.post_id', '=', 'p.ID')->where('op_res.meta_key', '=', 'op_res*');
+    })
+    ->leftJoin('postmeta as op_lang', function ($join) {
+      $join->on('op_lang.post_id', '=', 'p.ID')->where('op_lang.meta_key', '=', 'op_lang*');
+    })
+    ->leftJoin('postmeta as op_parent_res', function ($join) {
+      $join->on('op_parent_res.post_id', '=', 'p.ID')->where('op_parent_res.meta_key', '=', 'op_parent_res*');
+    })
+    ->where('p.post_type', 'product_variation')
+    ->whereIn('p.post_parent', $parent_ids)
+    ->whereNotNull('op_parent_res.meta_value')
+    ->get([
+      'p.ID',
+      'p.post_parent',
+      DB::raw('op_id.meta_value as op_id'),
+      DB::raw('op_res.meta_value as op_res'),
+      DB::raw('op_lang.meta_value as op_lang'),
+    ]);
+
+  $out = [];
+  foreach ($rows as $row) {
+    $key = op_variation_identity_key((int) $row->post_parent, (string) $row->op_res, (string) $row->op_id, $row->op_lang);
+    $out[$key] = (int) $row->ID;
+  }
+  return $out;
+}
+
+function op_current_managed_variation_parent_ids(array $include_parent_ids = [], array $exclude_parent_ids = []): array
+{
+  $query = DB::table('posts as p')
+    ->join('postmeta as op_parent_res', function ($join) {
+      $join->on('op_parent_res.post_id', '=', 'p.ID')->where('op_parent_res.meta_key', '=', 'op_parent_res*');
+    })
+    ->where('p.post_type', 'product_variation');
+
+  if (!empty($include_parent_ids)) {
+    $query->whereIn('p.post_parent', array_values(array_unique(array_map('intval', $include_parent_ids))));
+  }
+  if (!empty($exclude_parent_ids)) {
+    $query->whereNotIn('p.post_parent', array_values(array_unique(array_map('intval', $exclude_parent_ids))));
+  }
+
+  return array_values(array_unique(array_map('intval', $query->pluck('p.post_parent')->all())));
+}
+
+function op_managed_variation_attribute_taxonomies(array $parent_ids): array
+{
+  $parent_ids = array_values(array_unique(array_filter(array_map('intval', $parent_ids))));
+  if (empty($parent_ids)) return [];
+
+  $keys = DB::table('posts as p')
+    ->join('postmeta as pm', 'pm.post_id', '=', 'p.ID')
+    ->where('p.post_type', 'product_variation')
+    ->whereIn('p.post_parent', $parent_ids)
+    ->where('pm.meta_key', 'like', 'attribute\\_pa\\_%')
+    ->pluck('pm.meta_key')
+    ->all();
+
+  return array_values(array_unique(array_map(static function ($key) {
+    return substr($key, strlen('attribute_'));
+  }, $keys)));
+}
+
+function op_reset_managed_variation_parents(array $parent_ids, array $attribute_taxonomies = [], bool $clear_commerce_meta = false): void
+{
+  $parent_ids = array_values(array_unique(array_filter(array_map('intval', $parent_ids))));
+  if (empty($parent_ids)) return;
+
+  $attribute_taxonomies = array_values(array_unique(array_filter($attribute_taxonomies)));
+
+  foreach ($parent_ids as $parent_id) {
+    wp_set_object_terms($parent_id, 'simple', 'product_type');
+    foreach ($attribute_taxonomies as $taxonomy) {
+      if (taxonomy_exists($taxonomy)) {
+        wp_set_object_terms($parent_id, [], $taxonomy, false);
+      }
+    }
+    delete_post_meta($parent_id, '_product_attributes');
+    delete_post_meta($parent_id, '_default_attributes');
+    if ($clear_commerce_meta) {
+      foreach (WooCommerceFieldMap::commerceMetaKeys() as $meta_key) {
+        delete_post_meta($parent_id, $meta_key);
+      }
+    }
+  }
+}
+
+function op_cleanup_disabled_woocommerce_variations(array $active_parent_ids = []): int
+{
+  if (!op_woocommerce_available()) return 0;
+
+  $parent_ids = empty($active_parent_ids)
+    ? op_current_managed_variation_parent_ids()
+    : op_current_managed_variation_parent_ids([], $active_parent_ids);
+  if (empty($parent_ids)) return 0;
+
+  $attribute_taxonomies = op_managed_variation_attribute_taxonomies($parent_ids);
+  $variation_ids = DB::table('posts as p')
+    ->join('postmeta as op_parent_res', function ($join) {
+      $join->on('op_parent_res.post_id', '=', 'p.ID')->where('op_parent_res.meta_key', '=', 'op_parent_res*');
+    })
+    ->where('p.post_type', 'product_variation')
+    ->whereIn('p.post_parent', $parent_ids)
+    ->pluck('p.ID')
+    ->all();
+
+  op_delete_product_variations($variation_ids);
+  op_reset_managed_variation_parents(op_parent_ids_without_product_variations($parent_ids), $attribute_taxonomies);
+
+  return count($variation_ids);
+}
+
+function op_parent_ids_without_product_variations(array $parent_ids): array
+{
+  $parent_ids = array_values(array_unique(array_filter(array_map('intval', $parent_ids))));
+  if (empty($parent_ids)) return [];
+
+  $parents_with_variations = DB::table('posts')
+    ->where('post_type', 'product_variation')
+    ->whereIn('post_parent', $parent_ids)
+    ->pluck('post_parent')
+    ->all();
+
+  return array_values(array_diff($parent_ids, array_map('intval', $parents_with_variations)));
+}
+
+function op_variation_identity_key(int $parent_id, string $variant_res_id, $variant_op_id, $lang): string
+{
+  return implode('|', [$parent_id, $variant_res_id, (string) $variant_op_id, (string) $lang]);
+}
+
+function op_sync_variation_meta(array $meta_by_post_id): void
+{
+  if (empty($meta_by_post_id)) return;
+
+  $post_ids = array_keys($meta_by_post_id);
+  $keys = [];
+  $rows = [];
+  foreach ($meta_by_post_id as $post_id => $metas) {
+    foreach ($metas as $meta_key => $meta_value) {
+      $keys[$meta_key] = true;
+      if ($meta_value === null) continue;
+      $rows[] = [
+        'post_id' => $post_id,
+        'meta_key' => $meta_key,
+        'meta_value' => is_scalar($meta_value) ? $meta_value : maybe_serialize($meta_value),
+      ];
+    }
+  }
+
+  foreach (array_chunk($post_ids, 1000) as $post_id_chunk) {
+    DB::table('postmeta')
+      ->whereIn('post_id', $post_id_chunk)
+      ->whereIn('meta_key', array_keys($keys))
+      ->delete();
+  }
+
+  foreach (array_chunk($rows, 5000) as $chunk) {
+    DB::table('postmeta')->insert($chunk);
+  }
+}
+
+function op_sync_variation_wpml_rows(array $variation_wpml_groups, array $variation_ids): void
+{
+  if (!op_wpml_enabled() || empty($variation_ids)) return;
+
+  $variation_ids = array_values(array_unique(array_filter(array_map('intval', $variation_ids))));
+  DB::table('icl_translations')
+    ->where('element_type', 'post_product_variation')
+    ->whereIn('element_id', $variation_ids)
+    ->delete();
+
+  $rows = [];
+  $trid = (int) DB::table('icl_translations')->max('trid') + 1;
+  $default_lang = op_wpml_default();
+
+  foreach ($variation_wpml_groups as $parent_groups) {
+    foreach ($parent_groups as $lang_to_variation_id) {
+      $group_trid = $trid++;
+      $primary_lang = isset($lang_to_variation_id[$default_lang])
+        ? $default_lang
+        : array_key_first($lang_to_variation_id);
+      foreach ($lang_to_variation_id as $lang => $variation_id) {
+        op_array_append($rows, op_build_wpml_translation_rows(
+          'post_product_variation',
+          $lang === $primary_lang,
+          (int) $variation_id,
+          $lang,
+          $group_trid,
+          $primary_lang
+        ));
+      }
+    }
+  }
+
+  foreach (array_chunk($rows, 2000) as $chunk) {
+    DB::table('icl_translations')->insert($chunk);
+  }
+}
+
+function op_delete_product_variations(array $variation_ids): void
+{
+  $variation_ids = array_values(array_unique(array_filter(array_map('intval', $variation_ids))));
+  if (empty($variation_ids)) return;
+
+  foreach (array_chunk($variation_ids, 1000) as $chunk) {
+    DB::table('postmeta')->whereIn('post_id', $chunk)->delete();
+    DB::table('term_relationships')->whereIn('object_id', $chunk)->delete();
+    if (op_table_exists('wc_product_meta_lookup')) {
+      DB::table('wc_product_meta_lookup')->whereIn('product_id', $chunk)->delete();
+    }
+    if (op_table_exists('wc_product_attributes_lookup')) {
+      DB::table('wc_product_attributes_lookup')
+        ->whereIn('product_id', $chunk)
+        ->orWhereIn('product_or_parent_id', $chunk)
+        ->delete();
+    }
+    if (op_wpml_enabled()) {
+      DB::table('icl_translations')
+        ->where('element_type', 'post_product_variation')
+        ->whereIn('element_id', $chunk)
+        ->delete();
+    }
+    DB::table('posts')->whereIn('ID', $chunk)->delete();
+  }
+}
+
+function op_table_exists(string $table_without_prefix): bool
+{
+  static $cache = [];
+  if (array_key_exists($table_without_prefix, $cache)) {
+    return $cache[$table_without_prefix];
+  }
+
+  global $wpdb;
+  $table = $wpdb->prefix . $table_without_prefix;
+  $cache[$table_without_prefix] = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
+  return $cache[$table_without_prefix];
+}
+
+function op_import_woocommerce_variations(object $schema, object $schema_json, ImportContext $context): int
+{
+  if (!op_woocommerce_available()) return 0;
+
+  $configs = op_get_woocommerce_variation_configs($schema);
+  $json_resources = collect($schema_json->resources)->keyBy('id');
+  $schema_resources = collect($schema->resources)->keyBy('id');
+  $total_variations = 0;
+  $active_parent_ids = [];
+
+  foreach (array_keys($configs) as $product_resource_name) {
+    $product_res = collect($schema->resources)->firstWhere('name', $product_resource_name);
+    if (!$product_res) continue;
+    foreach ($context->idMap[$product_res->id] ?? [] as $langs) {
+      foreach ($langs as $parent_id) $active_parent_ids[] = (int) $parent_id;
+    }
+  }
+
+  $removed_count = op_cleanup_disabled_woocommerce_variations($active_parent_ids);
+  if ($removed_count) {
+    op_record("removed $removed_count WooCommerce variations for disabled variation configs");
+  }
+
+  if (empty($configs)) return 0;
+
+  foreach ($configs as $product_resource_name => $config) {
+    $product_res = collect($schema->resources)->firstWhere('name', $product_resource_name);
+    if (!$product_res || !op_resource_target_has_woocommerce($product_res)) continue;
+
+    $relation = collect($product_res->fields)->where('type', 'relation')->firstWhere('name', $config->relation);
+    if (!$relation) continue;
+
+    $variant_res = $schema_resources[$relation->rel_res_id] ?? null;
+    $product_json_res = $json_resources[$product_res->id] ?? null;
+    $variant_json_res = $json_resources[$relation->rel_res_id] ?? null;
+    if (!$variant_res || !$product_json_res || !$variant_json_res) continue;
+
+    op_record("Importing WooCommerce variations for {$product_res->label}...");
+
+    $variant_data = collect($variant_json_res->data ?? [])->keyBy('id');
+    $parent_ids = [];
+    foreach ($context->idMap[$product_res->id] ?? [] as $langs) {
+      foreach ($langs as $parent_id) $parent_ids[] = $parent_id;
+    }
+    $parent_ids = array_values(array_unique(array_map('intval', $parent_ids)));
+    $current_variations = op_current_managed_variations($parent_ids);
+
+    $posts_to_update = [];
+    $meta_by_post_id = [];
+    $wanted_variation_ids = [];
+    $parent_attribute_terms = [];
+    $parent_variation_counts = [];
+    $parent_attribute_combos = [];
+    $variation_wpml_groups = [];
+    $variation_i = [];
+    $attribute_taxonomies_by_position = [];
+    foreach ($config->attributes as $attribute_config) {
+      $attribute_taxonomies_by_position[] = op_ensure_wc_attribute_taxonomy($attribute_config);
+    }
+    $managed_attribute_taxonomies = array_values(array_unique($attribute_taxonomies_by_position));
+
+    foreach ($product_json_res->data ?? [] as $product_thing) {
+      $variant_ids = (array) (@$product_thing->rel_ids->{$relation->id} ?? []);
+      foreach ($context->languagesForItem($product_res->id, $product_thing->id) as $lang => $parent_id) {
+        $parent_variation_counts[$parent_id] = 0;
+        $variation_i[$parent_id] = 0;
+        $parent_attribute_combos[$parent_id] = [];
+
+        foreach ($variant_ids as $variant_op_id) {
+          $variant_thing = $variant_data[$variant_op_id] ?? null;
+          if (!$variant_thing) {
+            op_record("Skipping WooCommerce variation: missing variant item {$variant_op_id} for product {$product_thing->id}");
+            continue;
+          }
+
+          $variant_lang = $variant_res->is_thing ? null : $lang;
+          $identity_key = op_variation_identity_key((int) $parent_id, (string) $variant_res->id, $variant_op_id, $variant_lang);
+          $variation_id = $current_variations[$identity_key] ?? null;
+
+          $attribute_meta = [];
+          $attribute_labels = [];
+          foreach ($config->attributes as $position => $attribute_config) {
+            $taxonomy = $attribute_taxonomies_by_position[$position] ?? op_ensure_wc_attribute_taxonomy($attribute_config);
+            $label = op_extract_variation_value($schema_json, $variant_res, $variant_thing, $attribute_config->field, $attribute_config->field2, $lang ? op_locale_to_lang($lang) : null);
+            $term = $label === null ? null : op_ensure_wc_attribute_term($taxonomy, $label);
+            if (!$term) {
+              op_record("Skipping WooCommerce variation: missing attribute {$attribute_config->slug} for product {$product_thing->id}, variant {$variant_op_id}, field {$attribute_config->field}");
+              continue 2;
+            }
+
+            $attribute_meta["attribute_{$taxonomy}"] = $term['slug'];
+            $attribute_labels[] = $term['name'];
+            $parent_attribute_terms[$parent_id][$taxonomy][$term['term_id']] = [
+              'attribute' => $attribute_config,
+              'position' => $position,
+            ];
+          }
+          ksort($attribute_meta);
+          $combo_key = http_build_query($attribute_meta, '', '&');
+          if (isset($parent_attribute_combos[$parent_id][$combo_key])) {
+            op_record("Skipping duplicate WooCommerce variation attribute combo for product {$product_thing->id}, variant {$variant_op_id}");
+            continue;
+          }
+          $parent_attribute_combos[$parent_id][$combo_key] = true;
+
+          $menu_order = $variation_i[$parent_id]++;
+          $post_data = [
+            'post_author' => 1,
+            'post_date' => date('Y-m-d H:i:s'),
+            'post_date_gmt' => date('Y-m-d H:i:s'),
+            'post_content' => '',
+            'post_title' => implode(' / ', $attribute_labels),
+            'post_status' => 'publish',
+            'post_excerpt' => '',
+            'comment_status' => 'closed',
+            'ping_status' => 'closed',
+            'post_password' => '',
+            'post_name' => 'product-' . $parent_id . '-variation-' . sanitize_title((string) $variant_op_id),
+            'to_ping' => '',
+            'pinged' => '',
+            'post_modified' => $context->importedAt,
+            'post_modified_gmt' => $context->importedAt,
+            'post_content_filtered' => '',
+            'post_parent' => (int) $parent_id,
+            'guid' => '',
+            'menu_order' => $menu_order,
+            'post_type' => 'product_variation',
+            'post_mime_type' => '',
+            'comment_count' => 0,
+          ];
+
+          if ($variation_id) {
+            unset($post_data['post_date'], $post_data['post_date_gmt']);
+            $posts_to_update[$variation_id] = $post_data;
+          } else {
+            $variation_id = DB::table('posts')->insertGetId($post_data);
+          }
+          $wanted_variation_ids[] = $variation_id;
+          $parent_variation_counts[$parent_id]++;
+          if (op_wpml_enabled() && $lang) {
+            $variation_wpml_groups[$product_thing->id][$variant_op_id][$lang] = $variation_id;
+          }
+
+          $wc_meta = op_extract_variation_wc_meta($schema_json, $variant_res, $variant_thing, $config, $lang ? op_locale_to_lang($lang) : null);
+          $meta_by_post_id[$variation_id] = array_merge([
+            'op_id*' => $variant_op_id,
+            'op_res*' => $variant_res->id,
+            'op_lang*' => $variant_lang,
+            'op_parent_id*' => $product_thing->id,
+            'op_parent_res*' => $product_res->id,
+            'op_parent_wp_id*' => $parent_id,
+          ], $wc_meta, $attribute_meta);
+        }
+      }
+    }
+
+    foreach ($posts_to_update as $variation_id => $post_data) {
+      DB::table('posts')->where('ID', $variation_id)->update($post_data);
+    }
+
+    op_sync_variation_meta($meta_by_post_id);
+    op_sync_variation_wpml_rows($variation_wpml_groups, $wanted_variation_ids);
+
+    foreach ($parent_attribute_terms as $parent_id => $taxonomy_terms) {
+      $product_attributes = [];
+      foreach ($taxonomy_terms as $taxonomy => $terms) {
+        wp_set_object_terms((int) $parent_id, array_keys($terms), $taxonomy, false);
+        $first = reset($terms);
+        $product_attributes[$taxonomy] = [
+          'name' => $taxonomy,
+          'value' => '',
+          'position' => (int) ($first['position'] ?? 0),
+          'is_visible' => !empty($first['attribute']->visible) ? 1 : 0,
+          'is_variation' => 1,
+          'is_taxonomy' => 1,
+        ];
+      }
+      update_post_meta((int) $parent_id, '_product_attributes', $product_attributes);
+      update_post_meta((int) $parent_id, '_default_attributes', []);
+      foreach (WooCommerceFieldMap::commerceMetaKeys() as $meta_key) {
+        delete_post_meta((int) $parent_id, $meta_key);
+      }
+      wp_set_object_terms((int) $parent_id, 'variable', 'product_type');
+    }
+
+    $simple_parent_ids = array_keys(array_filter($parent_variation_counts, static function ($variation_count) {
+      return $variation_count < 1;
+    }));
+    foreach ($simple_parent_ids as $parent_id) {
+      op_reset_managed_variation_parents([(int) $parent_id], $managed_attribute_taxonomies);
+    }
+
+    $stale_variation_ids = array_values(array_diff(array_values($current_variations), $wanted_variation_ids));
+    op_delete_product_variations($stale_variation_ids);
+
+    $total_variations += count($wanted_variation_ids);
+    op_record("imported " . count($wanted_variation_ids) . " WooCommerce variations for {$product_res->label}");
+  }
+
+  return $total_variations;
 }
 
 function op_gen_model(object $schema, object $res)
@@ -3799,6 +4467,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
       }
       $post_ids = $query->pluck('ID');
       if ($post_ids->isEmpty()) break;
+      op_delete_product_variations_for_parents($post_ids->all());
       if ($wpml_enabled && !empty($post_element_types)) {
         DB::table('icl_translations')
           ->whereIn('element_type', $post_element_types)

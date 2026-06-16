@@ -627,6 +627,103 @@
 
       <hr />
 
+      <h2>WooCommerce variations</h2>
+      <p v-if="!woocommerceAvailable" class="op-notice op-notice-info">
+        WooCommerce is not active. Native product variations are unavailable; OnPage relations still import normally.
+      </p>
+      <p v-if="woocommerceAvailable">
+        Configure native WooCommerce variations for product resources. Variations are generated from an OnPage relation,
+        with global <code>pa_*</code> attributes and one <code>product_variation</code> child per related record.
+      </p>
+      <p v-if="woocommerceAvailable && !productResourceRows.length"><i>No WooCommerce product resources configured.</i></p>
+
+      <div v-if="woocommerceAvailable" v-for="res in productResourceRows" class="op-content-box" style="margin-bottom: 1rem;">
+        <h3 style="margin-top: 0">{{ res.label }}</h3>
+        <table class="form-table">
+          <tbody>
+            <tr>
+              <th>Variants relation</th>
+              <td>
+                <select style="width: 20rem" :value="variationConfig(res.name).relation || ''" @input="setVariationRelation(res, $event.target.value)">
+                  <option value="">— No native WooCommerce variations —</option>
+                  <option v-for="field in relationFieldsForResource(res)" :value="field.name">{{ relationFieldLabel(field) }}</option>
+                </select>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <template v-if="variationTargetResource(res)">
+          <h4>Variation commerce fields</h4>
+          <table class="form-table">
+            <tbody>
+              <tr v-for="property in variationFields">
+                <th>{{ property.label }}</th>
+                <td>
+                  <select style="width: 20rem" :value="variationConfig(res.name).fields[property.name] || ''" @input="setVariationField(res.name, property.name, $event.target.value)">
+                    <option value="">— not set —</option>
+                    <option v-if="property.can_be_empty" value="empty">— empty —</option>
+                    <option v-for="field in variationFieldOptions(res, property)" :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h4>Variation attributes</h4>
+          <p>
+            Each row creates or reuses one global WooCommerce attribute taxonomy and uses it for variation matching.
+          </p>
+          <table v-if="variationConfig(res.name).attributes.length" class="form-table">
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value source</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(attribute, idx) in variationConfig(res.name).attributes">
+                <td>
+                  <input class="regular-text" placeholder="Label, e.g. Color" :value="attribute.label" @input="setVariationAttributeValue(res.name, idx, 'label', $event.target.value)">
+                  <br>
+                  <code>pa_</code><input style="width: 12rem" placeholder="slug" :value="attribute.slug" @input="setVariationAttributeValue(res.name, idx, 'slug', $event.target.value)">
+                  <br>
+                  <label>
+                    <input type="checkbox" :checked="attribute.visible !== false" @change="setVariationAttributeValue(res.name, idx, 'visible', $event.target.checked)">
+                    Visible on product page
+                  </label>
+                </td>
+                <td>
+                  <select style="width: 20rem" :value="attribute.field || ''" @input="setVariationAttributeField(res.name, idx, $event.target.value)">
+                    <option value="">— choose field —</option>
+                    <option v-for="field in variationAttributeFieldOptions(res)" :value="field.id">{{ field.label }}</option>
+                  </select>
+                  <select v-if="variationTargetField(res, attribute.field)?.type === 'relation'" style="width: 20rem; margin-top: .35rem;" :value="attribute.field2 || ''" @input="setVariationAttributeValue(res.name, idx, 'field2', $event.target.value)">
+                    <option value="">— related field —</option>
+                    <option v-for="field in variationRelatedFieldOptions(res, attribute.field)" :value="field.id">{{ field.label }}</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="button" class="button" value="Remove" @click="removeVariationAttribute(res.name, idx)">
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else><i>No variation attributes configured. Add at least one attribute to enable variation import.</i></p>
+          <p>
+            <input type="button" class="button" value="Add variation attribute" @click="addVariationAttribute(res.name)">
+          </p>
+        </template>
+      </div>
+
+      <div class="submit">
+        <input type="submit" class="button button-primary" value="Save Changes" :disabled="!form_unsaved || is_saving">
+        <div v-if="is_saving">Saving...</div>
+      </div>
+
+      <hr />
+
       <h2>Protected terms</h2>
       <p>
         WordPress terms listed here are never updated or deleted by the import.
@@ -1232,6 +1329,9 @@
       productFields() {
         return this.server_config?.product_fields ?? []
       },
+      variationFields() {
+        return this.server_config?.variation_fields ?? []
+      },
       postTypeOptions() {
         return this.server_config?.post_types ?? [{ name: 'product', label: 'Product' }]
       },
@@ -1254,6 +1354,13 @@
         return this.next_schema.resources
           .filter(r => this.resourceType(r.name) === 'post' && this.resourceTarget(r.name).post_type === 'product')
           .map(r => r.name)
+      },
+      productResourceRows() {
+        if (!this.next_schema) return []
+        return _.sortBy(
+          this.next_schema.resources.filter(r => this.product_resources.includes(r.name)),
+          'label'
+        )
       },
       thing_resources() {
         if (!this.next_schema) return this.server_config?.thing_resources ?? []
@@ -1281,6 +1388,9 @@
       },
       schemaResourceTypesMismatch() {
         return !!(this.server_config && this.server_config.schema_resource_types_mismatch)
+      },
+      woocommerceAvailable() {
+        return !!(this.server_config && this.server_config.woocommerce_available)
       },
       configuredResourceRows() {
         if (!this.next_schema) return []
@@ -1655,6 +1765,121 @@
         if (!rel) return '—'
         return this.parentRelationLabel(resourceName, rel)
       },
+      ensureWooCommerceVariations() {
+        if (!this.settings_form.woocommerce_variations) {
+          this.$set(this.settings_form, 'woocommerce_variations', {})
+        }
+      },
+      defaultVariationConfig() {
+        return {
+          enabled: false,
+          relation: '',
+          fields: {},
+          attributes: [],
+        }
+      },
+      variationConfig(resourceName) {
+        const configs = this.settings_form.woocommerce_variations || {}
+        const config = configs[resourceName] || {}
+        return {
+          enabled: !!config.enabled,
+          relation: config.relation || '',
+          fields: config.fields || {},
+          attributes: config.attributes || [],
+        }
+      },
+      setVariationConfig(resourceName, config) {
+        this.ensureWooCommerceVariations()
+        if (!config || !config.relation) {
+          this.$delete(this.settings_form.woocommerce_variations, resourceName)
+          return
+        }
+        this.$set(this.settings_form.woocommerce_variations, resourceName, {
+          enabled: true,
+          relation: config.relation,
+          fields: config.fields || {},
+          attributes: config.attributes || [],
+        })
+      },
+      setVariationRelation(res, relationName) {
+        if (!relationName) {
+          this.setVariationConfig(res.name, null)
+          return
+        }
+        this.setVariationConfig(res.name, {
+          enabled: true,
+          relation: relationName,
+          fields: {},
+          attributes: [],
+        })
+      },
+      variationRelationField(res) {
+        const relationName = this.variationConfig(res.name).relation
+        if (!relationName) return null
+        return this.relationFieldsForResource(res).find(f => f.name === relationName) || null
+      },
+      variationTargetResource(res) {
+        const field = this.variationRelationField(res)
+        return field ? this.schemaResourceById(field.rel_res_id) : null
+      },
+      variationTargetField(res, fieldId) {
+        const target = this.variationTargetResource(res)
+        if (!target || !fieldId) return null
+        return Object.values(target.fields || {}).find(f => f.id === fieldId) || null
+      },
+      variationFieldOptions(res, property) {
+        const target = this.variationTargetResource(res)
+        if (!target) return []
+        return Object.values(target.fields || {}).filter(f => property.types.includes(f.type))
+      },
+      variationAttributeFieldOptions(res) {
+        const target = this.variationTargetResource(res)
+        if (!target) return []
+        return Object.values(target.fields || {}).filter(f => f.type !== 'file' && f.type !== 'image')
+      },
+      variationRelatedFieldOptions(res, fieldId) {
+        const field = this.variationTargetField(res, fieldId)
+        if (!field || field.type !== 'relation') return []
+        const target = this.schemaResourceById(field.rel_res_id)
+        if (!target) return []
+        return Object.values(target.fields || {}).filter(f => f.type !== 'relation' && f.type !== 'file' && f.type !== 'image')
+      },
+      setVariationField(resourceName, fieldName, fieldId) {
+        const config = this.variationConfig(resourceName)
+        const fields = { ...config.fields }
+        if (fieldId) fields[fieldName] = fieldId
+        else delete fields[fieldName]
+        this.setVariationConfig(resourceName, { ...config, fields })
+      },
+      addVariationAttribute(resourceName) {
+        const config = this.variationConfig(resourceName)
+        const attributes = [...config.attributes, {
+          label: '',
+          slug: '',
+          field: '',
+          field2: '',
+          visible: true,
+        }]
+        this.setVariationConfig(resourceName, { ...config, attributes })
+      },
+      removeVariationAttribute(resourceName, index) {
+        const config = this.variationConfig(resourceName)
+        const attributes = config.attributes.slice()
+        attributes.splice(index, 1)
+        this.setVariationConfig(resourceName, { ...config, attributes })
+      },
+      setVariationAttributeValue(resourceName, index, key, value) {
+        const config = this.variationConfig(resourceName)
+        const attributes = config.attributes.slice()
+        attributes[index] = { ...attributes[index], [key]: value }
+        this.setVariationConfig(resourceName, { ...config, attributes })
+      },
+      setVariationAttributeField(resourceName, index, fieldId) {
+        const config = this.variationConfig(resourceName)
+        const attributes = config.attributes.slice()
+        attributes[index] = { ...attributes[index], field: fieldId, field2: '' }
+        this.setVariationConfig(resourceName, { ...config, attributes })
+      },
       schemaResourceById(id) {
         if (!this.next_schema || !id) return null
         return this.next_schema.resources.find(r => r.id === id) || null
@@ -1829,6 +2054,9 @@
         }
         if (!this.settings_form.static_terms) {
           this.$set(this.settings_form, 'static_terms', [])
+        }
+        if (!this.settings_form.woocommerce_variations) {
+          this.$set(this.settings_form, 'woocommerce_variations', {})
         }
         if (this.settings_form.disable_original_file_import === undefined) {
           this.$set(this.settings_form, 'disable_original_file_import', false)

@@ -32,6 +32,14 @@ final class WooCommerceFieldMap
         ];
     }
 
+    public static function variationAdminFields(): array
+    {
+        $excluded = ['excerpt', 'image', 'sorting'];
+        return array_values(array_filter(static::adminFields(), static function (array $field) use ($excluded): bool {
+            return !in_array($field['name'], $excluded, true);
+        }));
+    }
+
     public static function metaDefinitions(): array
     {
         $yesNo = static function ($value): string {
@@ -60,5 +68,10 @@ final class WooCommerceFieldMap
             ],
             '_virtual' => ['option' => 'virtual', 'mapper' => $yesNo],
         ];
+    }
+
+    public static function commerceMetaKeys(): array
+    {
+        return array_values(array_unique(array_merge(array_keys(static::metaDefinitions()), ['_price'])));
     }
 }
