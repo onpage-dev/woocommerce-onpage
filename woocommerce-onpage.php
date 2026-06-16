@@ -3,7 +3,7 @@
 /**
  * Plugin Name: OnPage for WooCommerce
  * Plugin URI: https://onpage.it/
- * Description: Import your products from Onpage
+ * Description: Import OnPage snapshots into WordPress
  * Version: 1.1.111
  * Author: OnPage
  * Author URI: https://onpage.it
@@ -66,14 +66,20 @@ add_filter('init', function () {
             }
           }
         }
+        $types_for_targets = op_resource_types_to_array($settings['resource_types'] ?? op_get_resource_types());
+        $settings['resource_targets'] = op_sanitize_resource_targets(
+          op_resource_targets_to_array($settings['resource_targets'] ?? []),
+          $types_for_targets
+        );
+        $target_taxonomies = op_target_taxonomies_from_settings($settings['resource_targets']);
         if (isset($settings['import_relations']) && is_array($settings['import_relations'])) {
           foreach ($settings['import_relations'] as $resource => $parent) {
             if (!is_string($resource) || $resource === '') {
               op_err('Invalid import_relations resource name');
             }
             if (op_is_fixed_parent_relation($parent)) {
-              if (!op_is_valid_fixed_parent_relation($parent)) {
-                op_err("Invalid fixed parent category for resource $resource");
+              if (!op_is_valid_fixed_parent_relation($parent, $target_taxonomies)) {
+                op_err("Invalid fixed parent term for resource $resource");
               }
               $settings['import_relations'][$resource] = op_normalize_import_relation_parent($parent);
               continue;
@@ -85,11 +91,11 @@ add_filter('init', function () {
           $types = op_resource_types_to_array($settings['resource_types'] ?? op_get_resource_types());
           $schema = op_stored_schema();
           if ($schema) {
-            $settings['import_relations'] = op_sanitize_import_relations($settings['import_relations'], $types, $schema);
+            $settings['import_relations'] = op_sanitize_import_relations($settings['import_relations'], $types, $schema, $target_taxonomies);
           }
         }
         if (isset($settings['static_terms']) && is_array($settings['static_terms'])) {
-          $settings['static_terms'] = op_sanitize_static_terms($settings['static_terms']);
+          $settings['static_terms'] = op_sanitize_static_terms($settings['static_terms'], $target_taxonomies);
         }
         if (array_key_exists('disable_original_file_import', $settings)) {
           $settings['disable_original_file_import'] = (bool) $settings['disable_original_file_import'];
@@ -136,6 +142,7 @@ add_filter('init', function () {
       case 'schema':
         $schema = op_stored_schema();
         if (!$schema) op_ret(null);
+        op_apply_resource_types($schema);
         foreach ($schema->resources as $res) {
           $res->class_name = op_name_to_class($res->name);
         }
@@ -145,6 +152,7 @@ add_filter('init', function () {
         $static_terms = op_get_db_static_terms();
         op_ret(array_merge($type_lists, [
           'resource_types' => op_get_resource_types(),
+          'resource_targets' => op_get_resource_targets(),
           'default_unmapped_resource_type' => op_get_resource_type_default(),
           'resource_types_code_hooks_active' => op_resource_types_code_hooks_active(),
           'schema_resource_types_mismatch' => op_schema_resource_types_mismatch(),
@@ -206,11 +214,12 @@ add_filter('init', function () {
         ]);
 
       case 'search-categories':
+        $taxonomy = op_request('taxonomy') ? sanitize_key((string) op_request('taxonomy')) : null;
         $ids = op_request('ids');
         if ($ids) {
-          op_ret(op_get_category_labels(is_array($ids) ? $ids : [$ids]));
+          op_ret(op_get_category_labels(is_array($ids) ? $ids : [$ids], $taxonomy ? [$taxonomy] : null));
         }
-        op_ret(op_search_product_categories((string) (op_request('q') ?? '')));
+        op_ret(op_search_product_categories((string) (op_request('q') ?? ''), 20, $taxonomy));
 
 
       case 'next-schema':
@@ -254,29 +263,48 @@ add_filter('init', function () {
 });
 
 add_filter('admin_menu', function () {
+  $importer_page = function () {
+    op_ignore_user_scopes(true);
+    op_initdb();
+    require __DIR__ . '/pages/import.php';
+  };
+  $api_token_page = function () {
+    op_ignore_user_scopes(true);
+    op_initdb();
+    require __DIR__ . '/pages/api-token.php';
+  };
+
+  $woocommerce_active = class_exists('WooCommerce') || function_exists('WC');
+  $parent_slug = $woocommerce_active ? 'woocommerce' : 'onpage-importer';
+
+  if ($woocommerce_active) {
+    add_submenu_page(
+      $parent_slug,
+      'OnPage Importer',
+      'OnPage Importer',
+      'administrator',
+      'onpage-importer',
+      $importer_page
+    );
+  } else {
+    add_menu_page(
+      'OnPage Importer',
+      'OnPage',
+      'administrator',
+      'onpage-importer',
+      $importer_page,
+      'dashicons-download',
+      56
+    );
+  }
+
   add_submenu_page(
-    'woocommerce',
-    'OnPage Importer',
-    'OnPage Importer',
-    'administrator',
-    'onpage-importer',
-    function () {
-      op_ignore_user_scopes(true);
-      op_initdb();
-      require __DIR__ . '/pages/import.php';
-    }
-  );
-  add_submenu_page(
-    'woocommerce',
+    $parent_slug,
     'OnPage Cron Import',
     'OnPage Cron Import',
     'administrator',
     'onpage-cron-import',
-    function () {
-      op_ignore_user_scopes(true);
-      op_initdb();
-      require __DIR__ . '/pages/api-token.php';
-    }
+    $api_token_page
   );
 });
 

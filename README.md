@@ -1,16 +1,16 @@
-# On Page Woocommerce Plugin
-![On Page Woocommerce Plugin](image.png "On Page Woocommerce Plugin")
+# OnPage WordPress Importer
+![OnPage WordPress Importer](image.png "OnPage WordPress Importer")
 
 # Intro
-This plugin is used to import a project snapshot into your woocommerce website. It uses the wordpress tables so you can use it the way you are used to. __All field data is saved into the object meta table.__
+This plugin is used to import an OnPage project snapshot into WordPress. It can target WooCommerce products/categories or configured custom post types and taxonomies. It uses the WordPress tables so you can use imported content the way you are used to. __All field data is saved into the object meta table.__
 You can create a project snapshot (and the corresponding token) using the __Snapshot__ feature in OnPage.
 
 ## Admin UI
 
 | Menu | Purpose |
 |------|---------|
-| **WooCommerce → OnPage Importer** | Snapshot token, run imports, field mappings, resource types, protected categories, file settings, language mapping, plugin update |
-| **WooCommerce → OnPage Cron Import** | API token for headless/cron imports, live curl and wp-cli command builder |
+| **WooCommerce → OnPage Importer** or **OnPage → OnPage Importer** | Snapshot token, run imports, field mappings, resource targets, protected terms, file settings, language mapping, plugin update |
+| **WooCommerce → OnPage Cron Import** or **OnPage → OnPage Cron Import** | API token for headless/cron imports, live curl and wp-cli command builder |
 
 Importer tabs: **Setup**, **Data Importer**, **Import settings**, **Variables**, **Update**.
 
@@ -24,15 +24,17 @@ You can view the models generated for your project in the plugin import page. Fo
 
 ## Import settings
 
-All import configuration is managed in **WooCommerce → OnPage Importer → Import settings** and stored in the database.
+All import configuration is managed in **OnPage Importer → Import settings** and stored in the database. When WooCommerce is active, the importer is shown under the WooCommerce menu; otherwise it is shown under a top-level OnPage menu.
 
 ### Resource mapping
 
-Use **WooCommerce resources** to choose, for each OnPage resource:
+Use **WordPress resources** to choose, for each OnPage resource:
 
-- **Product** — imported as a WooCommerce product (`post`)
-- **Category** — imported as a WooCommerce product category (`term`)
+- **Post / content** — imported into a selected WordPress post type. WooCommerce product fields are enabled only when the selected post type is `product`.
+- **Taxonomy term** — imported into a selected WordPress taxonomy.
 - **Hidden (thing)** — default for unlisted resources; stored in the plugin's high-performance `op_things` table (invisible to WordPress)
+
+The target post type or taxonomy must already be registered by WordPress, your theme, or another plugin before import.
 
 <details>
 <summary>Legacy theme code (deprecated)</summary>
@@ -55,12 +57,12 @@ add_filter('on_page_product_resources', function() {
 
 ### Parent relations
 
-Use the **WordPress parent** column in **WooCommerce resources** to link products and categories:
+Use the **WordPress parent** column in **WordPress resources** to link posts and terms:
 
 - **OnPage relation field** — parent resolved from imported data
-- **Fixed WordPress category** — every item assigned to one category (that category is protected automatically)
+- **Fixed WordPress term** — every item assigned to one term (that term is protected automatically)
 
-Enable **Link all parent categories** when a product has multiple category relations and you want all of them assigned (default: first only).
+Enable **Link all parent terms** when a post has multiple term relations and you want all of them assigned (default: first only).
 
 <details>
 <summary>Legacy theme code (deprecated)</summary>
@@ -76,9 +78,9 @@ add_action('op_import_relations', function() {
 
 </details>
 
-### Protected categories
+### Protected terms
 
-Use **Protected categories** for WooCommerce categories the import must never update or delete (e.g. hand-made categories not from OnPage). Use primary-language IDs; WPML translations are protected automatically.
+Use **Protected terms** for WordPress terms the import must never update or delete (e.g. hand-made categories not from OnPage). Use primary-language IDs; WPML translations are protected automatically.
 
 <details>
 <summary>Legacy theme code (deprecated)</summary>
@@ -557,7 +559,7 @@ Request method: **POST**.
 ## Other wp-cli commands
 
 ```bash
-wp onpage reset      # Delete all products and categories managed by the plugin
+wp onpage reset      # Delete all posts and terms managed by the plugin for configured targets
 wp onpage listmedia  # List imported media files
 wp onpage update     # Update the plugin
 wp onpage cleanmeta  # Delete orphaned meta

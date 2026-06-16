@@ -360,7 +360,7 @@
 
     <div v-if="staticTermsCodeHooksActive" class="op-notice op-header-notice">
       <strong>Remove theme code:</strong>
-      Protected categories are now managed in <strong>Import settings</strong> and stored in the database.
+      Protected terms are now managed in <strong>Import settings</strong> and stored in the database.
       Please remove <code>add_filter('op_static_terms', …)</code> from your theme <code>functions.php</code> —
       the code hook is ignored and this notice will stay until you remove it.
     </div>
@@ -476,10 +476,10 @@
       <br>
       <ul>
         <li>
-          {{ res.c_count }} categories
+          {{ res.c_count }} terms
         </li>
         <li>
-          {{ res.p_count }} products
+          {{ res.p_count }} posts
         </li>
         <li>
           {{ res.t_count }} other items
@@ -512,25 +512,25 @@
       <div style="display: flex; flex-direction: column; gap: 1rem">
         <label>
           <input type="checkbox" v-model="settings_form.maintain_user_prods_and_cats" />
-          Maintain user created categories and products
+          Maintain user-created posts and terms for configured targets
         </label>
 
         <label>
           <input type="checkbox" v-model="settings_form.link_all_parent_categories" />
-          Link all parent categories for products only (when a product has multiple categories in the relation, assign all of them).
+          Link all parent terms for posts only (when a post has multiple terms in the relation, assign all of them).
           <br />
-          <i>If unchecked, only the first parent category is linked (default). Category hierarchy still uses a single parent.</i>
+          <i>If unchecked, only the first parent term is linked (default). Term hierarchy still uses a single parent.</i>
         </label>
 
         <label>
           <input type="checkbox" v-model="settings_form.disable_product_status_update" />
-          Disable product publishing when UPDATING existing products.
+          Disable post publishing when UPDATING existing posts.
           <br />
-          (products in the "draft" or "trash" status will not be automatically re-published).
+          (posts in the "draft" or "trash" status will not be automatically re-published).
         </label>
 
         <div v-if="settings_form.disable_product_status_update">
-          Default product status for NEW products:
+          Default post status for NEW posts:
           <br />
           <select placeholder="Default: Active" style="width: 20rem" :value="settings_form[`disable_product_status_update_default_status`] || null" @input="$set(settings_form, `disable_product_status_update_default_status`, $event.target.value || null)">
             <option :value="null">Default: publish</option>
@@ -561,9 +561,9 @@
 
         <label>
           <input type="checkbox" v-model="settings_form.enable_imported_at_meta" />
-          Store <code>op_imported_at</code> meta on imported products
+          Store <code>op_imported_at</code> meta on imported posts
           <br />
-          <i>Also updates <code>post_modified</code> when existing products change during import.</i>
+          <i>Also updates <code>post_modified</code> when existing posts change during import.</i>
         </label>
 
         <div class="submit">
@@ -576,14 +576,14 @@
 
       <hr />
 
-      <h2>WooCommerce resources</h2>
+      <h2>WordPress resources</h2>
       <p>
-        Configure which OnPage resources are imported into WooCommerce and how they link to WordPress parents.
+        Configure which OnPage resources are imported into WordPress and how they link to WordPress parents.
         All other resources
         <strong>({{ hiddenResourceCount }} of {{ next_schema.resources.length }})</strong>
         use the hidden high-performance table automatically.
-        Parent linking uses one OnPage relation field per resource (category hierarchy or product→category assignment);
-        see <strong>Link all parent categories</strong> above when a product has multiple category relations.
+        Parent linking uses one OnPage relation field per resource (term hierarchy or post-to-term assignment);
+        see <strong>Link all parent terms</strong> above when a post has multiple term relations.
       </p>
 
       <table v-if="configuredResourceRows.length" class="form-table">
@@ -591,6 +591,7 @@
           <tr>
             <th>Resource</th>
             <th>Import as</th>
+            <th>WordPress target</th>
             <th>WordPress parent</th>
             <th></th>
           </tr>
@@ -602,6 +603,7 @@
               <br /><code>{{ res.name }}</code>
             </td>
             <td>{{ resourceTypeLabel(res.name) }}</td>
+            <td>{{ resourceTargetLabel(res.name) }}</td>
             <td>{{ parentLinkLabel(res.name) }}</td>
             <td>
               <div class="op-resource-actions">
@@ -612,7 +614,7 @@
           </tr>
         </tbody>
       </table>
-      <p v-else><i>No WooCommerce resources configured yet. Configure only resources that need product pages, category pages, or WordPress hierarchy.</i></p>
+      <p v-else><i>No WordPress resources configured yet. Configure only resources that need public pages or WordPress hierarchy.</i></p>
 
       <p>
         <input type="button" class="button button-primary" value="Configure resource" @click="openResourceModal()" :disabled="!resourceModalAvailableResources.length">
@@ -625,17 +627,17 @@
 
       <hr />
 
-      <h2>Protected categories</h2>
+      <h2>Protected terms</h2>
       <p>
-        WooCommerce categories listed here are never updated or deleted by the import.
-        Fixed parent categories configured under WooCommerce resources are protected automatically too.
-        Use primary-language category IDs; all WPML translations are protected automatically.
+        WordPress terms listed here are never updated or deleted by the import.
+        Fixed parent terms configured under WordPress resources are protected automatically too.
+        Use primary-language term IDs; all WPML translations are protected automatically.
       </p>
 
       <table v-if="staticTermRows.length" class="form-table">
         <thead>
           <tr>
-            <th>Category</th>
+            <th>Term</th>
             <th>ID</th>
             <th></th>
           </tr>
@@ -644,7 +646,7 @@
           <tr v-for="row in staticTermRows">
             <td>
               <strong>{{ row.name }}</strong>
-              <br /><code>{{ row.slug }}</code>
+              <br /><code>{{ row.slug }}</code><span v-if="row.taxonomy"> · {{ row.taxonomy }}</span>
             </td>
             <td>{{ row.id }}</td>
             <td>
@@ -653,20 +655,20 @@
           </tr>
         </tbody>
       </table>
-      <p v-else><i>No protected categories configured.</i></p>
+      <p v-else><i>No protected terms configured.</i></p>
 
       <div class="op-static-term-search">
         <input
           class="regular-text"
           type="search"
-          placeholder="Search categories to protect…"
+          placeholder="Search terms to protect…"
           v-model="static_term_search"
           @input="queueStaticTermSearch"
         >
         <ul v-if="static_term_results.length" class="op-static-term-results">
           <li v-for="cat in static_term_results" @click="addStaticTerm(cat)">
             <strong>{{ cat.name }}</strong>
-            <br /><code>{{ cat.slug }}</code> · ID {{ cat.id }}
+            <br /><code>{{ cat.slug }}</code> · {{ cat.taxonomy }} · ID {{ cat.id }}
           </li>
         </ul>
         <p v-if="static_term_searching"><i>Searching…</i></p>
@@ -978,10 +980,10 @@
     </div>
     <div class="op-panel-box ">
       <h1 class="danger">Danger zone</h1>
-      <i>This will delete all the product categories and the products! Use at your own risk!</i>
+      <i>This will delete all posts and terms managed by OnPage for the configured targets. Use at your own risk!</i>
       <br>
       <br>
-      <input v-if="!is_deleting" type="button" class="button button-danger" value="Reset products" @click="deleteData()">
+      <input v-if="!is_deleting" type="button" class="button button-danger" value="Reset imported data" @click="deleteData()">
       <i v-else>Cleaning up...</i>
     </div>
   </div>
@@ -999,7 +1001,7 @@
         </div>
 
         <div v-if="resource_modal.step === 1">
-          <p>Choose which OnPage resource should be imported into WooCommerce.</p>
+          <p>Choose which OnPage resource should be imported into WordPress.</p>
           <select style="width: 100%" v-model="resource_modal.resource_name">
             <option :value="null" disabled>Select a resource...</option>
             <option v-for="res in resourceModalStepResources" :value="res.name">{{ res.label }} ({{ res.name }})</option>
@@ -1012,15 +1014,31 @@
             be imported?
           </p>
           <label class="op-wizard-type-option" :selected="resource_modal.type === 'post' || undefined" @click="resource_modal.type = 'post'">
-            <strong>Product</strong>
+            <strong>Post / content</strong>
             <br />
-            <span>Creates WooCommerce products — use for sellable items with their own product pages.</span>
+            <span>Creates WordPress posts in a selected post type — use for records with their own pages.</span>
           </label>
           <label class="op-wizard-type-option" :selected="resource_modal.type === 'term' || undefined" @click="resource_modal.type = 'term'">
-            <strong>Category</strong>
+            <strong>Taxonomy term</strong>
             <br />
-            <span>Creates WooCommerce product categories — use for taxonomy pages and category hierarchy.</span>
+            <span>Creates WordPress terms in a selected taxonomy — use for grouping, filters, and hierarchy.</span>
           </label>
+          <div v-if="resource_modal.type === 'post'" style="margin-top: 1rem;">
+            <label>
+              WordPress post type
+              <select style="width: 100%; margin-top: 0.35rem;" v-model="resource_modal.post_type">
+                <option v-for="postType in postTypeOptions" :value="postType.name">{{ postType.label }} ({{ postType.name }})</option>
+              </select>
+            </label>
+          </div>
+          <div v-if="resource_modal.type === 'term'" style="margin-top: 1rem;">
+            <label>
+              WordPress taxonomy
+              <select style="width: 100%; margin-top: 0.35rem;" v-model="resource_modal.taxonomy">
+                <option v-for="taxonomy in taxonomyOptions" :value="taxonomy.name">{{ taxonomy.label }} ({{ taxonomy.name }})</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <div v-if="resource_modal.step === 3">
@@ -1036,7 +1054,7 @@
           </label>
           <label style="display: block; margin-bottom: 1rem;">
             <input type="radio" v-model="resource_modal.parent_mode" value="fixed">
-            Fixed WordPress category (auto-protected)
+            Fixed WordPress term (auto-protected)
           </label>
 
           <div v-if="resource_modal.parent_mode === 'relation'">
@@ -1045,13 +1063,13 @@
               <option v-for="field in resourceModalRelationFields" :value="field.name">{{ relationFieldLabel(field) }}</option>
             </select>
             <p v-if="!resourceModalAllRelationFields.length"><i>This resource has no relation fields in the snapshot.</i></p>
-            <p v-else-if="!resourceModalRelationFields.length"><i>No valid parent relations: configure the target resource as a WooCommerce category first, then pick a relation that points to it.</i></p>
-            <p v-else-if="resource_modal.type === 'term'"><i>Category hierarchy: parent must be another configured WooCommerce category.</i></p>
-            <p v-else><i>Product categories: relation must point to a configured WooCommerce category.</i></p>
+            <p v-else-if="!resourceModalRelationFields.length"><i>No valid parent relations: configure the target resource as a taxonomy term first, then pick a relation that points to it.</i></p>
+            <p v-else-if="resource_modal.type === 'term'"><i>Term hierarchy: parent must be another configured taxonomy-term resource.</i></p>
+            <p v-else><i>Post taxonomy assignment: relation must point to a configured taxonomy-term resource.</i></p>
           </div>
 
           <div v-else>
-            <p><i>Every imported item is assigned to one WordPress category. That category is never updated or deleted by the import.</i></p>
+            <p><i>Every imported item is assigned to one WordPress term. That term is never updated or deleted by the import.</i></p>
             <p v-if="resource_modal.fixed_category_id">
               <strong>{{ resourceModalFixedCategoryLabel }}</strong>
               <br /><code>ID {{ resource_modal.fixed_category_id }}</code>
@@ -1062,14 +1080,14 @@
               <input
                 class="regular-text"
                 type="search"
-                placeholder="Search categories…"
+                :placeholder="'Search ' + fixedParentTaxonomyLabel + '…'"
                 v-model="resource_modal.fixed_category_search"
                 @input="queueFixedParentSearch"
               >
               <ul v-if="resource_modal.fixed_category_results.length" class="op-static-term-results">
                 <li v-for="cat in resource_modal.fixed_category_results" @click="selectFixedParentCategory(cat)">
                   <strong>{{ cat.name }}</strong>
-                  <br /><code>{{ cat.slug }}</code> · ID {{ cat.id }}
+                  <br /><code>{{ cat.slug }}</code> · {{ cat.taxonomy }} · ID {{ cat.id }}
                 </li>
               </ul>
               <p v-if="resource_modal.fixed_category_searching"><i>Searching…</i></p>
@@ -1214,10 +1232,27 @@
       productFields() {
         return this.server_config?.product_fields ?? []
       },
+      postTypeOptions() {
+        return this.server_config?.post_types ?? [{ name: 'product', label: 'Product' }]
+      },
+      taxonomyOptions() {
+        return this.server_config?.taxonomies ?? [{ name: 'product_cat', label: 'Product categories' }]
+      },
+      configuredTermTaxonomies() {
+        const names = this.next_schema
+          ? this.next_schema.resources
+              .filter(r => this.resourceType(r.name) === 'term')
+              .map(r => this.resourceTarget(r.name).taxonomy)
+          : Object.entries(this.settings_form.resource_targets || {})
+              .filter(([, target]) => target && target.storage === 'term')
+              .map(([, target]) => target.taxonomy)
+
+        return [...new Set(names.filter(Boolean))]
+      },
       product_resources() {
         if (!this.next_schema) return this.server_config?.product_resources ?? []
         return this.next_schema.resources
-          .filter(r => this.resourceType(r.name) === 'post')
+          .filter(r => this.resourceType(r.name) === 'post' && this.resourceTarget(r.name).post_type === 'product')
           .map(r => r.name)
       },
       thing_resources() {
@@ -1289,7 +1324,22 @@
       resourceModalFixedCategoryLabel() {
         if (!this.resource_modal || !this.resource_modal.fixed_category_id) return ''
         const label = this.resource_modal.fixed_category_label
-        return label ? label.name : `Category #${this.resource_modal.fixed_category_id}`
+        return label ? label.name : `Term #${this.resource_modal.fixed_category_id}`
+      },
+      fixedParentTaxonomy() {
+        if (!this.resource_modal) return 'product_cat'
+        if (this.resource_modal.type === 'term') return this.resource_modal.taxonomy || 'product_cat'
+        const field = this.resource_modal.relation_name
+          ? this.resourceModalRelationFields.find(f => f.name === this.resource_modal.relation_name)
+          : null
+        if (!field) return this.configuredTermTaxonomies[0] || 'product_cat'
+        const target = this.schemaResourceById(field.rel_res_id)
+        return target ? this.resourceTarget(target.name).taxonomy : 'product_cat'
+      },
+      fixedParentTaxonomyLabel() {
+        const taxonomy = this.fixedParentTaxonomy
+        const opt = this.taxonomyOptions.find(t => t.name === taxonomy)
+        return opt ? opt.label : taxonomy
       },
       staticTermRows() {
         const ids = this.settings_form.static_terms || []
@@ -1297,8 +1347,9 @@
           const label = this.static_term_labels[id]
           return {
             id,
-            name: label ? label.name : `Category #${id}`,
+            name: label ? label.name : `Term #${id}`,
             slug: label ? label.slug : '',
+            taxonomy: label ? label.taxonomy : '',
           }
         })
       },
@@ -1434,23 +1485,76 @@
       },
       resourceTypeLabel(name) {
         const t = this.resourceType(name)
-        if (t === 'post') return 'Product'
-        if (t === 'term') return 'Category'
+        if (t === 'post') return 'Post / content'
+        if (t === 'term') return 'Taxonomy term'
         return 'Hidden (high performance)'
+      },
+      resourceTarget(name) {
+        const type = this.resourceType(name)
+        const targets = this.settings_form.resource_targets || {}
+        const target = targets[name] || {}
+        if (type === 'post') {
+          return {
+            storage: 'post',
+            post_type: target.post_type || 'product',
+            wc_mode: (target.post_type || 'product') === 'product' ? 'simple' : 'none',
+          }
+        }
+        if (type === 'term') {
+          return {
+            storage: 'term',
+            taxonomy: target.taxonomy || 'product_cat',
+          }
+        }
+        return { storage: 'thing' }
+      },
+      resourceTargetLabel(name) {
+        const target = this.resourceTarget(name)
+        if (target.storage === 'post') {
+          const opt = this.postTypeOptions.find(p => p.name === target.post_type)
+          return (opt ? opt.label : target.post_type) + ' (' + target.post_type + ')'
+        }
+        if (target.storage === 'term') {
+          const opt = this.taxonomyOptions.find(t => t.name === target.taxonomy)
+          return (opt ? opt.label : target.taxonomy) + ' (' + target.taxonomy + ')'
+        }
+        return 'Hidden table'
       },
       schemaResourceByName(name) {
         if (!this.next_schema || !name) return null
         return this.next_schema.resources.find(r => r.name === name) || null
       },
+      ensureResourceTargets() {
+        if (!this.settings_form.resource_targets) {
+          this.$set(this.settings_form, 'resource_targets', {})
+        }
+      },
       setResourceType(name, type) {
         if (!this.settings_form.resource_types) {
           this.$set(this.settings_form, 'resource_types', {})
         }
+        this.ensureResourceTargets()
         if (type === 'thing') {
           this.$delete(this.settings_form.resource_types, name)
+          this.$delete(this.settings_form.resource_targets, name)
           return
         }
         this.$set(this.settings_form.resource_types, name, type)
+      },
+      setResourceTarget(name, target) {
+        this.ensureResourceTargets()
+        if (target.storage === 'post') {
+          this.$set(this.settings_form.resource_targets, name, {
+            storage: 'post',
+            post_type: target.post_type || 'product',
+            wc_mode: (target.post_type || 'product') === 'product' ? 'simple' : 'none',
+          })
+        } else if (target.storage === 'term') {
+          this.$set(this.settings_form.resource_targets, name, {
+            storage: 'term',
+            taxonomy: target.taxonomy || 'product_cat',
+          })
+        }
       },
       removeConfiguredResource(name) {
         this.setResourceType(name, 'thing')
@@ -1538,7 +1642,7 @@
       },
       parentRelationLabel(resourceName, relationName) {
         if (typeof relationName === 'number' || (/^\d+$/).test(String(relationName))) {
-          return 'Fixed WordPress category #' + relationName
+          return 'Fixed WordPress term #' + relationName
         }
         const res = this.schemaResourceByName(resourceName)
         if (!res) return relationName
@@ -1605,6 +1709,8 @@
             step: 2,
             resource_name: res.name,
             type: this.resourceType(res.name),
+            post_type: this.resourceTarget(res.name).post_type || 'product',
+            taxonomy: this.resourceTarget(res.name).taxonomy || 'product_cat',
             parent_mode: isFixed ? 'fixed' : 'relation',
             relation_name: isFixed ? null : (rel || null),
             fixed_category_id: isFixed ? parseInt(rel, 10) : null,
@@ -1622,6 +1728,8 @@
           step: 1,
           resource_name: null,
           type: 'post',
+          post_type: 'product',
+          taxonomy: 'product_cat',
           parent_mode: 'relation',
           relation_name: null,
           fixed_category_id: null,
@@ -1641,6 +1749,17 @@
         this.sanitizeResourceModalRelation()
         const name = this.resource_modal.resource_name
         this.setResourceType(name, this.resource_modal.type)
+        if (this.resource_modal.type === 'post') {
+          this.setResourceTarget(name, {
+            storage: 'post',
+            post_type: this.resource_modal.post_type || 'product',
+          })
+        } else if (this.resource_modal.type === 'term') {
+          this.setResourceTarget(name, {
+            storage: 'term',
+            taxonomy: this.resource_modal.taxonomy || 'product_cat',
+          })
+        }
         if (this.resource_modal.parent_mode === 'fixed' && this.resource_modal.fixed_category_id) {
           this.setImportRelation(name, this.resource_modal.fixed_category_id)
         } else if (this.resource_modal.relation_name) {
@@ -1652,7 +1771,7 @@
       },
       loadFixedParentLabel(id) {
         if (!id || !this.resource_modal) return
-        axios.post('?op-api=search-categories', {}, { params: { ids: [id] } })
+        axios.post('?op-api=search-categories', {}, { params: { ids: [id], taxonomy: this.fixedParentTaxonomy } })
           .then(res => {
             const label = res.data && res.data[id]
             if (label && this.resource_modal) {
@@ -1678,7 +1797,7 @@
           return
         }
         this.resource_modal.fixed_category_searching = true
-        axios.post('?op-api=search-categories', {}, { params: { q } })
+        axios.post('?op-api=search-categories', {}, { params: { q, taxonomy: this.fixedParentTaxonomy } })
           .then(res => {
             if (!this.resource_modal) return
             this.resource_modal.fixed_category_results = res.data || []
@@ -1704,6 +1823,9 @@
       syncResourceTypesFromSchema() {
         if (!this.settings_form.resource_types) {
           this.$set(this.settings_form, 'resource_types', {})
+        }
+        if (!this.settings_form.resource_targets) {
+          this.$set(this.settings_form, 'resource_targets', {})
         }
         if (!this.settings_form.static_terms) {
           this.$set(this.settings_form, 'static_terms', [])
@@ -2066,7 +2188,7 @@
       deleteData() {
         if (this.is_deleting) return null
 
-        if (!confirm("This will erase all the data you manage with woocommerce, do you want to proceed?")) {
+        if (!confirm("This will erase all posts and terms managed by OnPage for the configured targets. Do you want to proceed?")) {
           return null
         }
 

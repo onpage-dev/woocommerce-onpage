@@ -224,6 +224,18 @@ function op_get_resource_types(): array
   return op_resource_types_to_array(op_getopt('resource_types'));
 }
 
+function op_get_resource_targets(): array
+{
+  return op_resource_targets_to_array(op_getopt('resource_targets'));
+}
+
+function op_resource_targets_to_array($targets): array
+{
+  if (is_array($targets)) return $targets;
+  if (is_object($targets)) return (array) $targets;
+  return [];
+}
+
 function op_get_resource_type_default(): string
 {
   return op_getopt('resource_types_migrated_from') === 'legacy' ? 'term' : 'thing';
@@ -272,11 +284,12 @@ function op_migrate_resource_types(): void
 function op_apply_resource_types(object $schema_json): void
 {
   $types = op_get_resource_types();
+  $targets = op_get_resource_targets();
   $default = op_get_resource_type_default();
 
   foreach ($schema_json->resources as $res) {
     $type = $types[$res->name] ?? $default;
-    $target = op_normalize_resource_target($type, $res->name);
+    $target = op_normalize_resource_target($type, $res->name, $targets[$res->name] ?? []);
 
     $res->target = (object) $target->toArray();
     $res->is_thing = $target->isThing();
@@ -297,10 +310,10 @@ function op_apply_resource_types(object $schema_json): void
   }
 }
 
-function op_normalize_resource_target(string $type, string $resource_name = ''): ResourceTarget
+function op_normalize_resource_target(string $type, string $resource_name = '', $config = []): ResourceTarget
 {
   try {
-    return ResourceTarget::fromLegacyType($type);
+    return ResourceTarget::fromConfig($type, is_object($config) ? (array) $config : (array) $config);
   } catch (\InvalidArgumentException $e) {
     throw new \Exception("Invalid type for resource $resource_name: $type");
   }
@@ -415,11 +428,12 @@ function op_resource_types_code_hooks_active(): bool
 function op_resource_type_name_lists(?array $types = null): array
 {
   $types = $types ?? op_get_resource_types();
+  $targets = op_get_resource_targets();
   $product = [];
   $term = [];
   $thing = [];
   foreach ($types as $name => $type) {
-    $storage = op_normalize_resource_target($type, $name)->storage();
+    $storage = op_normalize_resource_target($type, $name, $targets[$name] ?? [])->storage();
     if ($storage === ResourceTarget::STORAGE_POST) $product[] = $name;
     elseif ($storage === ResourceTarget::STORAGE_TERM) $term[] = $name;
     elseif ($storage === ResourceTarget::STORAGE_THING) $thing[] = $name;
@@ -429,7 +443,76 @@ function op_resource_type_name_lists(?array $types = null): array
     'term_resources' => $term,
     'thing_resources' => $thing,
     'product_fields' => array_values(WooCommerceFieldMap::adminFields()),
+    'post_types' => op_registered_post_type_options(),
+    'taxonomies' => op_registered_taxonomy_options(),
   ];
+}
+
+function op_registered_post_type_options(): array
+{
+  $post_types = get_post_types(['show_ui' => true], 'objects');
+  $out = [];
+  foreach ($post_types as $name => $post_type) {
+    if (in_array($name, ['attachment', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation'], true)) continue;
+    $out[] = [
+      'name' => $name,
+      'label' => $post_type->label ?: $name,
+    ];
+  }
+  if (!isset($post_types['product'])) {
+    $out[] = ['name' => 'product', 'label' => 'Product'];
+  }
+  usort($out, function ($a, $b) {
+    return strcmp($a['label'], $b['label']);
+  });
+  return $out;
+}
+
+function op_registered_taxonomy_options(): array
+{
+  $taxonomies = get_taxonomies(['show_ui' => true], 'objects');
+  $out = [];
+  foreach ($taxonomies as $name => $taxonomy) {
+    if (in_array($name, ['nav_menu', 'link_category', 'post_format'], true)) continue;
+    $out[] = [
+      'name' => $name,
+      'label' => $taxonomy->label ?: $name,
+    ];
+  }
+  if (!isset($taxonomies['product_cat'])) {
+    $out[] = ['name' => 'product_cat', 'label' => 'Product categories'];
+  }
+  usort($out, function ($a, $b) {
+    return strcmp($a['label'], $b['label']);
+  });
+  return $out;
+}
+
+function op_sanitize_resource_targets(array $targets, array $types): array
+{
+  $out = [];
+  foreach ($targets as $name => $target) {
+    if (!is_string($name) || $name === '') continue;
+    $target = is_object($target) ? (array) $target : (array) $target;
+    $storage = $types[$name] ?? null;
+    if ($storage === ResourceTarget::STORAGE_POST) {
+      $post_type = isset($target['post_type']) ? sanitize_key((string) $target['post_type']) : 'product';
+      if (!$post_type) $post_type = 'product';
+      $out[$name] = [
+        'storage' => ResourceTarget::STORAGE_POST,
+        'post_type' => $post_type,
+        'wc_mode' => $post_type === 'product' ? ResourceTarget::WC_MODE_SIMPLE : ResourceTarget::WC_MODE_NONE,
+      ];
+    } elseif ($storage === ResourceTarget::STORAGE_TERM) {
+      $taxonomy = isset($target['taxonomy']) ? sanitize_key((string) $target['taxonomy']) : 'product_cat';
+      if (!$taxonomy) $taxonomy = 'product_cat';
+      $out[$name] = [
+        'storage' => ResourceTarget::STORAGE_TERM,
+        'taxonomy' => $taxonomy,
+      ];
+    }
+  }
+  return $out;
 }
 
 function op_schema_resource_types_mismatch(): bool
@@ -439,11 +522,17 @@ function op_schema_resource_types_mismatch(): bool
 
   $types = op_get_resource_types();
   if (empty($types)) return false;
+  $targets = op_get_resource_targets();
 
   $default = op_get_resource_type_default();
   foreach ($schema->resources as $res) {
     $db_type = $types[$res->name] ?? $default;
     if (($res->op_type ?? null) !== $db_type) return true;
+    $current_target = op_normalize_resource_target($db_type, $res->name, $targets[$res->name] ?? [])->toArray();
+    $stored_target = isset($res->target) && is_object($res->target) ? (array) $res->target : [];
+    foreach (['post_type', 'taxonomy', 'wc_mode'] as $key) {
+      if (($stored_target[$key] ?? null) !== ($current_target[$key] ?? null)) return true;
+    }
   }
   return false;
 }
@@ -455,7 +544,7 @@ function op_resource_types_admin_notice(): void
 
   echo '<div class="notice notice-warning"><p>';
   echo '<strong>OnPage:</strong> Resource import types have been migrated to ';
-  echo '<a href="' . esc_url(admin_url('admin.php?page=onpage-importer')) . '">WooCommerce → OnPage Importer → Import settings</a>. ';
+  echo '<a href="' . esc_url(admin_url('admin.php?page=onpage-importer')) . '">OnPage Importer → Import settings</a>. ';
   echo 'Please remove <code>add_filter(\'op_resource_types\', …)</code> ';
   echo '(and any legacy <code>on_page_product_resources</code> hook) from your theme <code>functions.php</code> — ';
   echo 'this config is now stored in the database and the code hook is ignored.';
@@ -476,17 +565,17 @@ function op_is_fixed_parent_relation($parent): bool
 
 function op_normalize_import_relation_parent($parent)
 {
-  if (op_is_fixed_parent_relation($parent)) {
-    return op_primary_lang_term_id((int) $parent);
-  }
-  return $parent;
+  return op_is_fixed_parent_relation($parent) ? (int) $parent : $parent;
 }
 
-function op_is_valid_fixed_parent_relation($parent): bool
+function op_is_valid_fixed_parent_relation($parent, $taxonomy = null): bool
 {
   if (!op_is_fixed_parent_relation($parent)) return false;
-  $term = get_term(op_primary_lang_term_id((int) $parent), 'product_cat');
-  return $term && !is_wp_error($term);
+  foreach (op_static_term_taxonomies($taxonomy) as $candidate_taxonomy) {
+    $term = get_term(op_primary_lang_term_id((int) $parent, $candidate_taxonomy), $candidate_taxonomy);
+    if ($term && !is_wp_error($term)) return true;
+  }
+  return false;
 }
 
 function op_normalize_import_relations(array $relations): array
@@ -554,13 +643,13 @@ function op_is_valid_parent_relation(string $resource_name, string $relation_nam
   return ($resource_types[$target->name] ?? null) === 'term';
 }
 
-function op_sanitize_import_relations(array $relations, array $resource_types, ?object $schema): array
+function op_sanitize_import_relations(array $relations, array $resource_types, ?object $schema, array $target_taxonomies = null): array
 {
   if (!$schema) return $relations;
 
   foreach ($relations as $resource_name => $parent) {
     if (op_is_fixed_parent_relation($parent)) {
-      if (!op_is_valid_fixed_parent_relation($parent)) {
+      if (!op_is_valid_fixed_parent_relation($parent, $target_taxonomies)) {
         unset($relations[$resource_name]);
       } else {
         $relations[$resource_name] = op_normalize_import_relation_parent($parent);
@@ -575,10 +664,29 @@ function op_sanitize_import_relations(array $relations, array $resource_types, ?
   return $relations;
 }
 
-function op_primary_lang_term_id(int $term_id): int
+function op_primary_lang_term_id(int $term_id, string $taxonomy = 'product_cat'): int
 {
   if (!op_wpml_enabled()) return $term_id;
-  return (int) apply_filters('wpml_object_id', $term_id, 'product_cat', true, op_wpml_default());
+  return (int) apply_filters('wpml_object_id', $term_id, $taxonomy, true, op_wpml_default());
+}
+
+function op_static_term_taxonomies($preferred = null): array
+{
+  if (is_array($preferred)) return array_values(array_filter($preferred));
+  if ($preferred) return [$preferred];
+  return op_schema_target_taxonomies();
+}
+
+function op_target_taxonomies_from_settings(array $targets): array
+{
+  $taxonomies = [];
+  foreach ($targets as $target) {
+    $target = is_object($target) ? (array) $target : (array) $target;
+    if (($target['storage'] ?? null) !== ResourceTarget::STORAGE_TERM) continue;
+    $taxonomy = isset($target['taxonomy']) ? sanitize_key((string) $target['taxonomy']) : null;
+    if ($taxonomy) $taxonomies[] = $taxonomy;
+  }
+  return array_values(array_unique($taxonomies)) ?: ['product_cat'];
 }
 
 function op_static_terms_to_array($terms): array
@@ -604,15 +712,18 @@ function op_migrate_static_terms(): void
   }
 }
 
-function op_sanitize_static_terms(array $ids): array
+function op_sanitize_static_terms(array $ids, array $taxonomies = null): array
 {
   $out = [];
   foreach ($ids as $id) {
     if (!is_numeric($id)) continue;
-    $primary = op_primary_lang_term_id((int) $id);
-    $term = get_term($primary, 'product_cat');
-    if (!$term || is_wp_error($term)) continue;
-    $out[$primary] = $primary;
+    foreach (op_static_term_taxonomies($taxonomies) as $taxonomy) {
+      $primary = op_primary_lang_term_id((int) $id, $taxonomy);
+      $term = get_term($primary, $taxonomy);
+      if (!$term || is_wp_error($term)) continue;
+      $out[$primary] = $primary;
+      break;
+    }
   }
   return array_values($out);
 }
@@ -980,45 +1091,59 @@ function op_wpml_locale_hints(): array
   return op_wpml_configured_locales();
 }
 
-function op_search_product_categories(string $search, int $limit = 20): array
+function op_search_product_categories(string $search, int $limit = 20, string $taxonomy = null): array
 {
+  $taxonomies = op_static_term_taxonomies($taxonomy);
+  $out = [];
+  $per_taxonomy_limit = max(1, (int) ceil($limit / max(1, count($taxonomies))));
+  foreach ($taxonomies as $taxonomy) {
   $args = [
-    'taxonomy' => 'product_cat',
+    'taxonomy' => $taxonomy,
     'hide_empty' => false,
-    'number' => $limit,
+      'number' => $per_taxonomy_limit,
   ];
   if ($search !== '') {
     $args['search'] = $search;
   }
 
   $terms = get_terms($args);
-  if (is_wp_error($terms) || !$terms) return [];
+    if (is_wp_error($terms) || !$terms) continue;
 
-  $out = [];
   foreach ($terms as $term) {
-    $primary_id = op_primary_lang_term_id((int) $term->term_id);
+      $primary_id = op_primary_lang_term_id((int) $term->term_id, $taxonomy);
     if (isset($out[$primary_id])) continue;
-    $primary = get_term($primary_id, 'product_cat');
+      $primary = get_term($primary_id, $taxonomy);
     if (!$primary || is_wp_error($primary)) continue;
     $out[$primary_id] = [
       'id' => $primary_id,
       'name' => $primary->name,
       'slug' => $primary->slug,
+        'taxonomy' => $taxonomy,
     ];
+  }
   }
   return array_values($out);
 }
 
-function op_get_category_labels(array $ids): array
+function op_get_category_labels(array $ids, array $taxonomies = null): array
 {
   $out = [];
-  foreach (op_sanitize_static_terms($ids) as $id) {
-    $term = get_term($id, 'product_cat');
-    if (!$term || is_wp_error($term)) continue;
+  foreach (op_sanitize_static_terms($ids, $taxonomies) as $id) {
+    $term = null;
+    $taxonomy = null;
+    foreach (op_static_term_taxonomies($taxonomies) as $candidate_taxonomy) {
+      $term = get_term($id, $candidate_taxonomy);
+      if ($term && !is_wp_error($term)) {
+        $taxonomy = $candidate_taxonomy;
+        break;
+      }
+    }
+    if (!$term || is_wp_error($term) || !$taxonomy) continue;
     $out[$id] = [
       'id' => $id,
       'name' => $term->name,
       'slug' => $term->slug,
+      'taxonomy' => $taxonomy,
     ];
   }
   return $out;
@@ -1099,16 +1224,17 @@ function op_dir($dir)
 }
 
 /**
- * WPML-aware function to set product terms across all languages.
+ * WPML-aware function to set post terms across all languages.
  * Falls back to standard wp_set_post_terms if WPML is not active.
  *
- * @param int $product_id Product ID (in default language if WPML is active)
+ * @param int $post_id Post ID (in default language if WPML is active)
  * @param int|array $term_ids Term IDs (in default language if WPML is active)
  * @param string $taxonomy Taxonomy name
  * @param bool $append Whether to append or replace terms
+ * @param string $post_type Source post type
  * @return array{updated: bool, result: array|WP_Error} Array with 'updated' flag and result
  */
-function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'product_cat', $append = false)
+function op_set_product_terms_wpml_safe($post_id, $term_ids, $taxonomy = 'product_cat', $append = false, $post_type = 'product')
 {
   // Normalize term_ids to array
   $term_ids = (array)$term_ids;
@@ -1119,7 +1245,7 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
   if (!$wpml_active) {
     // FAST PATH: No WPML - check if terms already match (unless appending)
     if (!$append) {
-      $current_terms = wp_get_post_terms($product_id, $taxonomy, ['fields' => 'ids']);
+      $current_terms = wp_get_post_terms($post_id, $taxonomy, ['fields' => 'ids']);
       sort($current_terms);
       $sorted_term_ids = $term_ids;
       sort($sorted_term_ids);
@@ -1130,7 +1256,7 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
       }
     }
 
-    $result = wp_set_post_terms($product_id, $term_ids, $taxonomy, $append);
+    $result = wp_set_post_terms($post_id, $term_ids, $taxonomy, $append);
     return ['updated' => true, 'result' => $result];
   }
 
@@ -1138,7 +1264,7 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
   $languages = apply_filters('wpml_active_languages', []);
 
   if (empty($languages)) {
-    $result = wp_set_post_terms($product_id, $term_ids, $taxonomy, $append);
+    $result = wp_set_post_terms($post_id, $term_ids, $taxonomy, $append);
     return ['updated' => true, 'result' => $result];
   }
 
@@ -1147,8 +1273,8 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
   $translations_map = [];
 
   foreach ($languages as $lang_code => $lang_data) {
-    $translated_product_id = apply_filters('wpml_object_id', $product_id, 'product', false, $lang_code);
-    if (!$translated_product_id) continue;
+    $translated_post_id = apply_filters('wpml_object_id', $post_id, $post_type, false, $lang_code);
+    if (!$translated_post_id) continue;
 
     // Translate term IDs
     $translated_term_ids = [];
@@ -1159,17 +1285,16 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
       }
     }
 
-    if (empty($translated_term_ids)) continue;
+    if (empty($translated_term_ids) && !empty($term_ids)) continue;
 
-    // Store translation map
     $translations_map[$lang_code] = [
-      'product_id' => $translated_product_id,
+      'post_id' => $translated_post_id,
       'expected_terms' => $translated_term_ids
     ];
 
     // Fast check: compare current vs expected (only if not appending)
     if (!$append && !$needs_update) {
-      $current_terms = wp_get_post_terms($translated_product_id, $taxonomy, ['fields' => 'ids']);
+      $current_terms = wp_get_post_terms($translated_post_id, $taxonomy, ['fields' => 'ids']);
       sort($current_terms);
       $sorted_translated = $translated_term_ids;
       sort($sorted_translated);
@@ -1214,15 +1339,15 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
     // Update only languages that need it
     $result = null;
     foreach ($translations_map as $lang_code => $data) {
-      $translated_product_id = $data['product_id'];
+      $translated_post_id = $data['post_id'];
       $translated_term_ids = $data['expected_terms'];
 
       // Set the terms (respect $append parameter)
-      $result = wp_set_post_terms($translated_product_id, $translated_term_ids, $taxonomy, $append);
+      $result = wp_set_post_terms($translated_post_id, $translated_term_ids, $taxonomy, $append);
 
       // Quick pollution check - only if we suspect issues (and not appending)
       if (!$append) {
-        $assigned_terms = wp_get_post_terms($translated_product_id, $taxonomy, ['fields' => 'ids']);
+        $assigned_terms = wp_get_post_terms($translated_post_id, $taxonomy, ['fields' => 'ids']);
 
         // Fast check: if count matches and terms match, skip pollution check
         if (count($assigned_terms) === count($translated_term_ids)) {
@@ -1237,9 +1362,12 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
         // Only do expensive language check if counts don't match
         $correct_terms = [];
         foreach ($assigned_terms as $assigned_term_id) {
+          $assigned_term = get_term($assigned_term_id, $taxonomy);
+          if (!$assigned_term || is_wp_error($assigned_term)) continue;
+
           $term_lang = apply_filters('wpml_element_language_code', null, [
-            'element_id' => $assigned_term_id,
-            'element_type' => $taxonomy
+            'element_id' => $assigned_term->term_taxonomy_id,
+            'element_type' => "tax_{$taxonomy}"
           ]);
 
           if ($term_lang === $lang_code) {
@@ -1249,11 +1377,11 @@ function op_set_product_terms_wpml_safe($product_id, $term_ids, $taxonomy = 'pro
 
         // Only update if cleanup is needed
         if (count($correct_terms) !== count($assigned_terms)) {
-          wp_set_post_terms($translated_product_id, $correct_terms, $taxonomy, false);
+          wp_set_post_terms($translated_post_id, $correct_terms, $taxonomy, false);
         }
       }
 
-      clean_post_cache($translated_product_id);
+      clean_post_cache($translated_post_id);
     }
 
     return ['updated' => true, 'result' => $result];
@@ -1692,13 +1820,13 @@ function op_import_snapshot(bool $force_slug_regen = false, string $restore_prev
   op_record("done");
 
 
-  op_record('Deleting old categories...');
+  op_record('Deleting old terms...');
   $disabled_count = op_disable_old_categories($context);
-  op_record("deleted $disabled_count categories");
+  op_record("deleted $disabled_count terms");
 
-  op_record('Disabling old products...');
+  op_record('Disabling old posts...');
   $disabled_count = op_disable_old_products($context);
-  op_record("disabled $disabled_count products");
+  op_record("disabled $disabled_count posts");
 
   op_record('Deleting old things...');
   $disabled_count = op_delete_old_things($context);
@@ -1934,7 +2062,7 @@ function op_link_imported_data($schema)
       $term_sync_taxonomies[$taxonomy] = true;
     }
 
-    // Static parent -> static category id
+    // Static parent -> fixed term id.
     if (is_numeric($parent_relation)) {
       $parent_term_id = (int) $parent_relation;
       foreach ($class::query()->get() as $child_term) {
@@ -1945,11 +2073,11 @@ function op_link_imported_data($schema)
         }
 
         if ($res->op_type === 'post') {
-          $ret = wp_set_object_terms($child_term->id, [$resolved_parent_term_id], $taxonomy, false);
+          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term_id], $taxonomy, false, $post_type);
           $post_sync_types[$post_type] = true;
 
-          if ($ret instanceof \WP_Error) {
-            op_err("Error while setting Product parent", ['wp_err' => $ret]);
+          if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
+            op_err("Error while setting post parent term", ['wp_err' => $ret['result']]);
           }
         } else if ($res->op_type === 'term') {
 
@@ -1978,16 +2106,16 @@ function op_link_imported_data($schema)
       $error_items = 0;
 
       foreach ($terms as $child_term) {
-        // Products: when option is on, link all related parent categories; otherwise first only (retrocompatible)
+        // Posts: when option is on, link all related parent terms; otherwise first only (retrocompatible).
         if ($res->op_type === 'post' && $link_all_parent_categories) {
           $parent_ids = [];
           foreach ($child_term->$parent_relation as $p) {
             $parent_ids[] = $p->id;
           }
           if (empty($parent_ids)) {
-            $ret = op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy);
+            $ret = op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy, false, $post_type);
             if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
-              op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+              op_err("Error while setting post parent term", ['wp_err' => $ret['result']]);
               $error_items++;
             } elseif (is_array($ret) && isset($ret['updated'])) {
               if ($ret['updated']) {
@@ -2000,10 +2128,10 @@ function op_link_imported_data($schema)
             }
             continue;
           }
-          $ret = op_set_product_terms_wpml_safe($child_term->id, $parent_ids, $taxonomy);
+          $ret = op_set_product_terms_wpml_safe($child_term->id, $parent_ids, $taxonomy, false, $post_type);
           $post_sync_types[$post_type] = true;
           if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
-            op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+            op_err("Error while setting post parent term", ['wp_err' => $ret['result']]);
             $error_items++;
           } elseif (is_array($ret) && isset($ret['updated'])) {
             if ($ret['updated']) {
@@ -2019,10 +2147,10 @@ function op_link_imported_data($schema)
 
         $parent_term = $child_term->$parent_relation->first();
 
-        // No parent relation: set NULL as parent category (original behavior)
+        // No parent relation: clear the assigned parent term.
         if (!$parent_term) {
           if ($res->op_type === 'post') {
-            op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy);
+            op_set_product_terms_wpml_safe($child_term->id, [], $taxonomy, false, $post_type);
             $post_sync_types[$post_type] = true;
           } else if ($res->op_type === 'term') {
             wp_update_term($child_term->id, $taxonomy, [
@@ -2036,11 +2164,11 @@ function op_link_imported_data($schema)
         }
 
         if ($res->op_type === 'post') {
-          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term->id], $taxonomy);
+          $ret = op_set_product_terms_wpml_safe($child_term->id, [$parent_term->id], $taxonomy, false, $post_type);
           $post_sync_types[$post_type] = true;
 
           if (is_array($ret) && isset($ret['result']) && $ret['result'] instanceof \WP_Error) {
-            op_err("Error while setting Product parent", ['wp_err' => $ret['result']]);
+            op_err("Error while setting post parent term", ['wp_err' => $ret['result']]);
             $error_items++;
           } elseif (is_array($ret) && isset($ret['updated'])) {
             // Use explicit 'updated' flag from function
@@ -2244,11 +2372,16 @@ function op_ensure_term_taxonomy_row(object $res, object $php_class, int $object
     return null;
   }
 
-  $tax_id = @DB::table('term_taxonomy')->where('term_id', $object_id)->first()->term_taxonomy_id;
+  $taxonomy = op_resource_target_taxonomy($res);
+  $tax_id = @DB::table('term_taxonomy')
+    ->where('term_id', $object_id)
+    ->where('taxonomy', $taxonomy)
+    ->first()
+    ->term_taxonomy_id;
   if (!$tax_id) {
     $tax_id = DB::table('term_taxonomy')->insertGetId([
       'term_id' => $object_id,
-      'taxonomy' => op_resource_target_taxonomy($res),
+      'taxonomy' => $taxonomy,
       'parent' => 0,
       'count' => 1,
     ]);
@@ -3654,7 +3787,7 @@ function op_reset_data(callable $post_scope = null, callable $term_scope = null)
   ini_set('memory_limit', '1G');
   set_time_limit(30);
   try {
-    // Delete products
+    // Delete imported posts for configured target post types.
     while (true) {
       $query = \OpLib\Post::query()
         ->unfiltered()

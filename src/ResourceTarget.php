@@ -57,6 +57,36 @@ final class ResourceTarget
         throw new \InvalidArgumentException("Invalid legacy resource type: {$type}");
     }
 
+    public static function fromConfig(string $storage, array $config = []): self
+    {
+        $legacy = self::fromLegacyType($storage);
+        if ($legacy->isThing()) {
+            return $legacy;
+        }
+
+        if ($legacy->isPost()) {
+            $postType = self::validSlug($config['post_type'] ?? null) ?: $legacy->postType();
+            $wcMode = $postType === 'product' ? self::WC_MODE_SIMPLE : self::WC_MODE_NONE;
+            if (($config['wc_mode'] ?? null) === self::WC_MODE_NONE) {
+                $wcMode = self::WC_MODE_NONE;
+            }
+            return new self(self::STORAGE_POST, $postType, null, $wcMode, "post_{$postType}");
+        }
+
+        $taxonomy = self::validSlug($config['taxonomy'] ?? null) ?: $legacy->taxonomy();
+        return new self(self::STORAGE_TERM, null, $taxonomy, self::WC_MODE_NONE, "tax_{$taxonomy}");
+    }
+
+    private static function validSlug($slug): ?string
+    {
+        if (!is_string($slug) || $slug === '') {
+            return null;
+        }
+
+        $clean = sanitize_key($slug);
+        return $clean === $slug ? $slug : null;
+    }
+
     public function storage(): string
     {
         return $this->storage;
