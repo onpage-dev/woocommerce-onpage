@@ -966,7 +966,7 @@ function op_delete_orphan_meta()
 
 function op_disable_old_products(array $imported_items): int
 {
-  $posts_to_remove = OpLib\Post::pluck('ID')->flip();
+  $posts_to_remove = OpLib\Post::withAnyStatus()->pluck('ID')->flip();
   foreach ($imported_items as $res_id => $res_items) {
     $res = collect(op_schema()->resources)->firstWhere('id', $res_id);
     if ($res->op_type !== 'post') continue;
@@ -979,7 +979,7 @@ function op_disable_old_products(array $imported_items): int
 
   // Set posts as trashed
   foreach ($posts_to_remove->keys()->chunk(1000) as $chunk) {
-    OpLib\Post::whereIn('ID', $chunk)->update([
+    OpLib\Post::withAnyStatus()->whereIn('ID', $chunk)->update([
       'post_status' => 'trash',
     ]);
   }
@@ -1253,6 +1253,46 @@ function op_locale_to_lang(string $locale)
   return $locale;
 }
 
+function op_resolve_icl_trid(
+  string $icl_type,
+  int &$next_trid,
+  object $res,
+  object $thing,
+  array $langs,
+  array $current_objects,
+  string $base_table_key
+): int {
+  $primary_lang = $langs[0];
+  $existing = @$current_objects["{$thing->id}-{$primary_lang}"];
+  if ($existing) {
+    $element_id = $res->is_product
+      ? $existing->{$base_table_key}
+      : DB::table('term_taxonomy')->where('term_id', $existing->{$base_table_key})->value('term_taxonomy_id');
+    if ($element_id) {
+      $existing_trid = DB::table('icl_translations')
+        ->where('element_type', $icl_type)
+        ->where('element_id', $element_id)
+        ->value('trid');
+      if ($existing_trid) {
+        return (int) $existing_trid;
+      }
+    }
+  }
+  return ++$next_trid;
+}
+
+function op_flush_icl_translations(string $icl_type, int $trid, array $rows): void
+{
+  if (!$trid || !count($rows)) {
+    return;
+  }
+  DB::table('icl_translations')
+    ->where('element_type', $icl_type)
+    ->where('trid', $trid)
+    ->delete();
+  DB::table('icl_translations')->insert($rows);
+}
+
 function op_import_resource(object $db, object $res, array $res_data, array $langs, string $imported_at, array &$all_items, array &$new_items, array &$items_with_default_slug, object $schema_json, bool $force_slug_regen = false)
 {
   $php_class = $res->php_class;
@@ -1282,27 +1322,41 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
   // Start inserting
   $object_ids = [];
 
-  $icl_translations = [];
   $all_meta = [];
-  $all_icl_object_ids = [];
   $current_objects = [];
   $base_class::$only_reserverd = true;
-  foreach ($base_class::whereRes($res->id)->get() as $x) {
-    $current_objects["{$x->getId()}-{$x->getLang()}"] = $x;
+  $existing_query = $base_class::whereRes($res->id);
+  if ($res->is_product) {
+    $existing_query->withAnyStatus();
+  }
+  foreach ($existing_query->get() as $x) {
+    $key = "{$x->getId()}-{$x->getLang()}";
+    if (!$res->is_product) {
+      $current_objects[$key] = $x;
+      continue;
+    }
+    if (!isset($current_objects[$key])) {
+      $current_objects[$key] = $x;
+      continue;
+    }
+    // Multiple product orphans for the same op_id+lang: prefer publish, else newest wp id.
+    $existing = $current_objects[$key];
+    if ($existing->post_status !== 'publish' && $x->post_status === 'publish') {
+      $current_objects[$key] = $x;
+    } elseif ($x->{$base_table_key} > $existing->{$base_table_key}) {
+      $current_objects[$key] = $x;
+    }
   }
   $base_class::$only_reserverd = false;
   // op_record('mapped $current_objects');
 
-  $icl_trid = op_wpml_enabled() ? DB::table('icl_translations')->max('trid') + 2 : 0;
+  $next_trid = op_wpml_enabled() ? (int) DB::table('icl_translations')->max('trid') : 0;
 
 
-  // This function writes several arrays to the database in chunks
+  // This function writes meta arrays to the database in chunks
   $sync = function () use (
-    $icl_type,
     $php_metaclass,
     $base_tablemeta_ref,
-    &$all_icl_object_ids,
-    &$icl_translations,
     &$all_meta,
     &$object_ids
   ) {
@@ -1311,24 +1365,8 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
     $time_start = microtime(true);
     $time = microtime(true);
 
-    if ($icl_type) {
-      DB::table('icl_translations')
-        ->where('element_type', $icl_type)
-        ->whereIn('element_id', $all_icl_object_ids)
-        ->delete();
-      $all_icl_object_ids = [];
-
-      $times['delete_icl'] = number_format(microtime(true) - $time, 2);
-      $time = microtime(true);
-
-      foreach (array_chunk($icl_translations, 2000) as $chunk) {
-        DB::table('icl_translations')->insert($chunk);
-      }
-      $icl_translations = [];
-
-
-      $times['insert_icl'] = number_format(microtime(true) - $time, 2);
-      $time = microtime(true);
+    if (!count($all_meta)) {
+      return;
     }
 
     // Delete old meta values
@@ -1424,7 +1462,10 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       $sync();
     }
     $icl_primary_id = null;
-    $icl_trid++;
+    $thing_trid = $icl_type
+      ? op_resolve_icl_trid($icl_type, $next_trid, $res, $thing, $langs, $current_objects, $base_table_key)
+      : 0;
+    $thing_icl_translations = [];
 
     // Create the item in each language - first language is the primary one
     foreach ($php_class->isThing() ? [null] : $langs as $lang) {
@@ -1684,7 +1725,6 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
       // If this is the primary language
       if ($icl_type) {
         $icl_object_id = $res->is_product ? $object_id : $tax_id;
-        $all_icl_object_ids[] = $icl_object_id;
         if (!$icl_object_id) {
           op_err("cannot get taxonomy id: $object_id-$tax_id");
         }
@@ -1696,26 +1736,30 @@ function op_import_resource(object $db, object $res, array $res_data, array $lan
           // Recreate the metadata
 
           // Create icl translation
-          $icl_translations[] = [
+          $thing_icl_translations[] = [
             'element_id' => $icl_object_id,
             'element_type' => $icl_type,
             'language_code' => $lang,
-            'trid' => $icl_trid,
+            'trid' => $thing_trid,
             'source_language_code' => null,
           ];
         } else {
           // No metadata for the secondary items - only the essentials
-          $icl_translations[] = [
+          $thing_icl_translations[] = [
             'element_id' => $icl_object_id,
             'element_type' => $icl_type,
             'language_code' => $lang,
-            'trid' => $icl_trid,
+            'trid' => $thing_trid,
             'source_language_code' => $icl_deflang,
           ];
         }
       } // end icl
       // op_record("- end lang");
     } // end langs cycle
+
+    if ($icl_type) {
+      op_flush_icl_translations($icl_type, $thing_trid, $thing_icl_translations);
+    }
   } // end $thing->data cycle
 
   $sync();
