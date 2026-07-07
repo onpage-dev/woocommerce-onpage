@@ -1253,22 +1253,45 @@ function op_resolve_icl_trid(
   array $current_objects,
   string $base_table_key
 ): int {
-  $primary_lang = $langs[0];
-  $existing = @$current_objects["{$thing->id}-{$primary_lang}"];
-  if ($existing) {
+  foreach ($langs as $lang) {
+    $existing = @$current_objects["{$thing->id}-{$lang}"];
+    if (!$existing) {
+      continue;
+    }
     $element_id = $res->is_product
       ? $existing->{$base_table_key}
       : DB::table('term_taxonomy')->where('term_id', $existing->{$base_table_key})->value('term_taxonomy_id');
-    if ($element_id) {
-      $existing_trid = DB::table('icl_translations')
-        ->where('element_type', $icl_type)
-        ->where('element_id', $element_id)
-        ->value('trid');
-      if ($existing_trid) {
-        return (int) $existing_trid;
-      }
+    if (!$element_id) {
+      continue;
+    }
+    $existing_trid = DB::table('icl_translations')
+      ->where('element_type', $icl_type)
+      ->where('element_id', $element_id)
+      ->value('trid');
+    if ($existing_trid) {
+      return (int) $existing_trid;
     }
   }
+
+  foreach ($current_objects as $key => $existing) {
+    if (strpos($key, "{$thing->id}-") !== 0) {
+      continue;
+    }
+    $element_id = $res->is_product
+      ? $existing->{$base_table_key}
+      : DB::table('term_taxonomy')->where('term_id', $existing->{$base_table_key})->value('term_taxonomy_id');
+    if (!$element_id) {
+      continue;
+    }
+    $existing_trid = DB::table('icl_translations')
+      ->where('element_type', $icl_type)
+      ->where('element_id', $element_id)
+      ->value('trid');
+    if ($existing_trid) {
+      return (int) $existing_trid;
+    }
+  }
+
   return ++$next_trid;
 }
 
@@ -1277,9 +1300,14 @@ function op_flush_icl_translations(string $icl_type, int $trid, array $rows): vo
   if (!$trid || !count($rows)) {
     return;
   }
+  $element_ids = array_values(array_unique(array_column($rows, 'element_id')));
   DB::table('icl_translations')
     ->where('element_type', $icl_type)
     ->where('trid', $trid)
+    ->delete();
+  DB::table('icl_translations')
+    ->where('element_type', $icl_type)
+    ->whereIn('element_id', $element_ids)
     ->delete();
   DB::table('icl_translations')->insert($rows);
 }
