@@ -1,4 +1,8 @@
 log.txt
+import-log.txt
+import.lock
+.DS_Store
+__MACOSX/
 .git/
 vendor/
 storage/
